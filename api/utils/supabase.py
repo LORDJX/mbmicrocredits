@@ -2,7 +2,7 @@
 Utilidad singleton para crear el cliente de Supabase en Python.
 
 - Paquete correcto en PyPI: 'supabase' (no 'supabase-py').
-- Import oficial: from supabase import create_client, Client [Docs Python Supabase].
+- Import oficial: from supabase import create_client, Client
 - Variables de entorno esperadas:
     SUPABASE_URL o NEXT_PUBLIC_SUPABASE_URL
     SUPABASE_SERVICE_ROLE_KEY (recomendado para backend) o SUPABASE_ANON_KEY
