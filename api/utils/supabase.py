@@ -1,46 +1,46 @@
 """
 Utilidad singleton para crear el cliente de Supabase en Python.
 
-Requiere las variables de entorno:
-- SUPABASE_URL (o NEXT_PUBLIC_SUPABASE_URL como respaldo)
-- SUPABASE_SERVICE_ROLE_KEY (o SUPABASE_ANON_KEY como respaldo; preferido: SERVICE_ROLE para operaciones del servidor)
+- Paquete correcto en PyPI: 'supabase' (no 'supabase-py').
+- Variables de entorno esperadas:
+    SUPABASE_URL o NEXT_PUBLIC_SUPABASE_URL
+    SUPABASE_SERVICE_ROLE_KEY (recomendado para backend) o SUPABASE_ANON_KEY
 
-Ejemplo de uso:
+Uso:
     from api.utils.supabase import get_supabase
     supabase = get_supabase()
-    data = supabase.table("follow_ups").select("*").limit(1).execute()
-
-Nota: Asegúrate de tener instalado el paquete 'supabase' (no 'supabase-py') vía requirements.txt.
+    resp = supabase.table("follow_ups").select("*").limit(1).execute()
 """
 
 from __future__ import annotations
 
 import os
-from typing import Optional
+from typing import Optional, Union
 
-from supabase import Client, create_client
+from supabase import Client, create_client  # paquete: 'supabase'
 
+# Singleton en módulo
 _SUPABASE_CLIENT: Optional[Client] = None
 
 
-def _load_env(key: str, fallback_key: str | None = None) -> Optional[str]:
-    value = os.environ.get(key)
-    if not value and fallback_key:
-        value = os.environ.get(fallback_key)
-    return value
+def _env(key: str, fallback: Union[str, None] = None) -> Optional[str]:
+    val = os.getenv(key)
+    if (not val) and fallback:
+        val = os.getenv(fallback)
+    return val
 
 
 def get_supabase() -> Client:
     """
-    Devuelve un cliente singleton de Supabase.
-    Lanza RuntimeError si faltan variables de entorno necesarias.
+    Devuelve un cliente Supabase singleton.
+    Lanza RuntimeError si faltan variables de entorno.
     """
     global _SUPABASE_CLIENT
     if _SUPABASE_CLIENT is not None:
         return _SUPABASE_CLIENT
 
-    url = _load_env("SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_URL")
-    key = _load_env("SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_ANON_KEY")
+    url = _env("SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_URL")
+    key = _env("SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_ANON_KEY")
 
     if not url:
         raise RuntimeError(
@@ -57,15 +57,11 @@ def get_supabase() -> Client:
 
 def health_check() -> dict:
     """
-    Intenta realizar una operación simple para comprobar conectividad.
-    No falla el proceso; devuelve un dict con el resultado para logging.
+    Prueba rápida de inicialización de cliente (sin tocar red).
+    Útil para logs durante el build/deploy.
     """
     try:
-        client = get_supabase()
-        # Consulta mínima a una RPC inexistente solo para confirmar reachability del endpoint.
-        # Alternativamente, comenta esto si prefieres no tocar la red en el build.
-        # resp = client.rpc("pg_version").execute()
-        # return {"ok": True, "details": str(resp)}
+        _ = get_supabase()
         return {"ok": True, "details": "Cliente inicializado"}
     except Exception as e:
         return {"ok": False, "error": str(e)}
