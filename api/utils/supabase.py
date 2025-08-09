@@ -1,5 +1,5 @@
 """
-Utilidad singleton para crear el cliente de Supabase en Python.
+Helper singleton para crear el cliente de Supabase en Python.
 
 - Paquete correcto en PyPI: 'supabase' (no 'supabase-py').
 - Import oficial: from supabase import create_client, Client
