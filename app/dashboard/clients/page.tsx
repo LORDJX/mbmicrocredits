@@ -489,14 +489,19 @@ export default function ClientsPage() {
                 <Label className="text-right">Referido por</Label>
                 <div className="col-span-3">
                   <Select
-                    value={currentClient.referred_by || ""}
-                    onValueChange={(val) => setCurrentClient((prev) => ({ ...(prev || {}), referred_by: val || "" }))}
+                    value={currentClient.referred_by ?? undefined}
+                    onValueChange={(val) =>
+                      setCurrentClient((prev) => ({
+                        ...(prev || {}),
+                        referred_by: val === "__none__" ? undefined : val,
+                      }))
+                    }
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Seleccionar cliente (opcional)" />
                     </SelectTrigger>
                     <SelectContent className="max-h-72">
-                      <SelectItem key="none" value="">
+                      <SelectItem key="none" value="__none__">
                         Ninguno
                       </SelectItem>
                       {clientsForReferrals.map((c) => (
@@ -669,14 +674,16 @@ export default function ClientsPage() {
               <Label className="text-right">Referido por</Label>
               <div className="col-span-3">
                 <Select
-                  value={(newClient.referred_by as string) || ""}
-                  onValueChange={(val) => setNewClient((prev) => ({ ...(prev || {}), referred_by: val || "" }))}
+                  value={(newClient.referred_by as string | undefined) ?? undefined}
+                  onValueChange={(val) =>
+                    setNewClient((prev) => ({ ...(prev || {}), referred_by: val === "__none__" ? undefined : val }))
+                  }
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Seleccionar cliente (opcional)" />
                   </SelectTrigger>
                   <SelectContent className="max-h-72">
-                    <SelectItem key="none" value="">
+                    <SelectItem key="none" value="__none__">
                       Ninguno
                     </SelectItem>
                     {clientsForReferrals.map((c) => (
