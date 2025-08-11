@@ -1,13 +1,24 @@
 "use client"
 
 import { CardDescription } from "@/components/ui/card"
-
 import { useEffect, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { DollarSign, Users, Handshake, CreditCard, TrendingUp, TrendingDown } from "lucide-react"
+import { DollarSign, Users, CreditCard } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+import { AppHeader } from "@/components/app-header"
+import {
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+  LineChart,
+  Line,
+} from "recharts"
 
-// Definición de tipos para las métricas (usaremos datos mock por ahora)
 interface ReportMetrics {
   totalLoans: number
   totalLoanAmount: number
@@ -19,21 +30,39 @@ interface ReportMetrics {
   netBalance: number
 }
 
+const loanTypeData = [
+  { name: "Semanal", value: 45, amount: 67500 },
+  { name: "Quincenal", value: 35, amount: 52500 },
+  { name: "Mensual", value: 45, amount: 30000 },
+]
+
+const transactionTrendData = [
+  { month: "Ene", ingresos: 12000, egresos: 3000 },
+  { month: "Feb", ingresos: 15000, egresos: 4000 },
+  { month: "Mar", ingresos: 18000, egresos: 3500 },
+  { month: "Abr", ingresos: 22000, egresos: 5000 },
+  { month: "May", ingresos: 25000, egresos: 4500 },
+  { month: "Jun", ingresos: 28000, egresos: 6000 },
+]
+
+const COLORS = ["#8884d8", "#82ca9d", "#ffc658"]
+
 export default function ReportsPage() {
   const [metrics, setMetrics] = useState<ReportMetrics | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const { toast } = useToast()
 
+  const handlePrint = () => {
+    window.print()
+  }
+
   useEffect(() => {
-    // Simular la carga de datos
     const fetchReportData = async () => {
       setLoading(true)
       setError(null)
       try {
-        // Aquí iría la lógica real para obtener datos de tu API
-        // Por ahora, usamos datos mock
-        await new Promise((resolve) => setTimeout(resolve, 1000)) // Simular retardo de red
+        await new Promise((resolve) => setTimeout(resolve, 1000))
 
         const mockData: ReportMetrics = {
           totalLoans: 125,
@@ -79,134 +108,145 @@ export default function ReportsPage() {
   }
 
   return (
-    <div className="p-4 space-y-6">
-      <Card className="bg-gray-800 text-gray-100 border border-gray-700 shadow-lg">
-        <CardHeader>
-          <CardTitle className="text-2xl font-bold text-gray-50">Informes y Estadísticas</CardTitle>
-          <CardDescription className="text-gray-400">
-            Resumen de las métricas clave de tu negocio de microcréditos.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {metrics && (
-            <>
-              <Card className="bg-gray-700 border border-gray-600 text-gray-100">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium text-gray-300">Total Préstamos</CardTitle>
-                  <CreditCard className="h-4 w-4 text-gray-400" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-gray-50">{metrics.totalLoans}</div>
-                  <p className="text-xs text-gray-400">Préstamos activos y finalizados</p>
-                </CardContent>
-              </Card>
+    <div className="min-h-screen bg-gray-900">
+      <AppHeader title="Informe de situación Financiera" showPrintButton={true} onPrint={handlePrint} />
 
-              <Card className="bg-gray-700 border border-gray-600 text-gray-100">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium text-gray-300">Monto Total Préstamos</CardTitle>
-                  <DollarSign className="h-4 w-4 text-gray-400" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-gray-50">${metrics.totalLoanAmount.toLocaleString()}</div>
-                  <p className="text-xs text-gray-400">Monto total desembolsado</p>
-                </CardContent>
-              </Card>
-
-              <Card className="bg-gray-700 border border-gray-600 text-gray-100">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium text-gray-300">Total Clientes</CardTitle>
-                  <Users className="h-4 w-4 text-gray-400" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-gray-50">{metrics.totalClients}</div>
-                  <p className="text-xs text-gray-400">Clientes registrados</p>
-                </CardContent>
-              </Card>
-
-              <Card className="bg-gray-700 border border-gray-600 text-gray-100">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium text-gray-300">Total Socios</CardTitle>
-                  <Handshake className="h-4 w-4 text-gray-400" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-gray-50">{metrics.totalPartners}</div>
-                  <p className="text-xs text-gray-400">Socios activos</p>
-                </CardContent>
-              </Card>
-
-              <Card className="bg-gray-700 border border-gray-600 text-gray-100">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium text-gray-300">Capital de Socios</CardTitle>
-                  <DollarSign className="h-4 w-4 text-gray-400" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-gray-50">${metrics.totalPartnerCapital.toLocaleString()}</div>
-                  <p className="text-xs text-gray-400">Capital total aportado por socios</p>
-                </CardContent>
-              </Card>
-
-              <Card className="bg-gray-700 border border-gray-600 text-gray-100">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium text-gray-300">Total Ingresos</CardTitle>
-                  <TrendingUp className="h-4 w-4 text-green-400" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-green-400">${metrics.totalIncome.toLocaleString()}</div>
-                  <p className="text-xs text-gray-400">Ingresos totales registrados</p>
-                </CardContent>
-              </Card>
-
-              <Card className="bg-gray-700 border border-gray-600 text-gray-100">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium text-gray-300">Total Egresos</CardTitle>
-                  <TrendingDown className="h-4 w-4 text-red-400" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-red-400">${metrics.totalExpenses.toLocaleString()}</div>
-                  <p className="text-xs text-gray-400">Egresos totales registrados</p>
-                </CardContent>
-              </Card>
-
-              <Card className="bg-gray-700 border border-gray-600 text-gray-100">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium text-gray-300">Balance Neto</CardTitle>
-                  <DollarSign className="h-4 w-4 text-gray-400" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-gray-50">${metrics.netBalance.toLocaleString()}</div>
-                  <p className="text-xs text-gray-400">Ingresos - Egresos</p>
-                </CardContent>
-              </Card>
-            </>
-          )}
-        </CardContent>
-      </Card>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="p-4 space-y-6">
         <Card className="bg-gray-800 text-gray-100 border border-gray-700 shadow-lg">
           <CardHeader>
-            <CardTitle className="text-xl font-bold text-gray-50">Gráfico de Préstamos por Tipo</CardTitle>
-            <CardDescription className="text-gray-400">Distribución de préstamos por categoría.</CardDescription>
+            <CardTitle className="text-2xl font-bold text-gray-50">Métricas Principales</CardTitle>
+            <CardDescription className="text-gray-400">
+              Resumen de las métricas clave de tu negocio de microcréditos.
+            </CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="h-64 bg-gray-700 rounded-md flex items-center justify-center text-gray-400">
-              [Placeholder para Gráfico de Barras/Circular]
-            </div>
+          <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {metrics && (
+              <>
+                <Card className="bg-gray-700 border border-gray-600 text-gray-100">
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium text-gray-300">Total Préstamos</CardTitle>
+                    <CreditCard className="h-4 w-4 text-gray-400" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-gray-50">{metrics.totalLoans}</div>
+                    <p className="text-xs text-gray-400">Préstamos activos y finalizados</p>
+                  </CardContent>
+                </Card>
+
+                <Card className="bg-gray-700 border border-gray-600 text-gray-100">
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium text-gray-300">Monto Total Préstamos</CardTitle>
+                    <DollarSign className="h-4 w-4 text-gray-400" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-gray-50">${metrics.totalLoanAmount.toLocaleString()}</div>
+                    <p className="text-xs text-gray-400">Monto total desembolsado</p>
+                  </CardContent>
+                </Card>
+
+                <Card className="bg-gray-700 border border-gray-600 text-gray-100">
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium text-gray-300">Total Clientes</CardTitle>
+                    <Users className="h-4 w-4 text-gray-400" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-gray-50">{metrics.totalClients}</div>
+                    <p className="text-xs text-gray-400">Clientes registrados</p>
+                  </CardContent>
+                </Card>
+
+                <Card className="bg-gray-700 border border-gray-600 text-gray-100">
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium text-gray-300">Balance Neto</CardTitle>
+                    <DollarSign className="h-4 w-4 text-gray-400" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-gray-50">${metrics.netBalance.toLocaleString()}</div>
+                    <p className="text-xs text-gray-400">Ingresos - Egresos</p>
+                  </CardContent>
+                </Card>
+              </>
+            )}
           </CardContent>
         </Card>
 
-        <Card className="bg-gray-800 text-gray-100 border border-gray-700 shadow-lg">
-          <CardHeader>
-            <CardTitle className="text-xl font-bold text-gray-50">Tendencia de Transacciones</CardTitle>
-            <CardDescription className="text-gray-400">Ingresos y egresos a lo largo del tiempo.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="h-64 bg-gray-700 rounded-md flex items-center justify-center text-gray-400">
-              [Placeholder para Gráfico de Líneas]
-            </div>
-          </CardContent>
-        </Card>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <Card className="bg-gray-800 text-gray-100 border border-gray-700 shadow-lg">
+            <CardHeader>
+              <CardTitle className="text-xl font-bold text-gray-50">Préstamos por Tipo</CardTitle>
+              <CardDescription className="text-gray-400">Distribución de préstamos por categoría.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={300}>
+                <PieChart>
+                  <Pie
+                    data={loanTypeData}
+                    cx="50%"
+                    cy="50%"
+                    labelLine={false}
+                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                    outerRadius={80}
+                    fill="#8884d8"
+                    dataKey="value"
+                  >
+                    {loanTypeData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-gray-800 text-gray-100 border border-gray-700 shadow-lg">
+            <CardHeader>
+              <CardTitle className="text-xl font-bold text-gray-50">Tendencia de Transacciones</CardTitle>
+              <CardDescription className="text-gray-400">Ingresos y egresos a lo largo del tiempo.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={300}>
+                <LineChart data={transactionTrendData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                  <XAxis dataKey="month" stroke="#9CA3AF" />
+                  <YAxis stroke="#9CA3AF" />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: "#374151",
+                      border: "1px solid #6B7280",
+                      borderRadius: "6px",
+                    }}
+                  />
+                  <Line type="monotone" dataKey="ingresos" stroke="#10B981" strokeWidth={2} />
+                  <Line type="monotone" dataKey="egresos" stroke="#EF4444" strokeWidth={2} />
+                </LineChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+        </div>
       </div>
+
+      <style jsx global>{`
+        @media print {
+          .no-print {
+            display: none !important;
+          }
+          body {
+            background: white !important;
+            color: black !important;
+          }
+          .bg-gray-800, .bg-gray-700, .bg-gray-900 {
+            background: white !important;
+            color: black !important;
+          }
+          .text-gray-50, .text-gray-100, .text-gray-300 {
+            color: black !important;
+          }
+          .border-gray-700, .border-gray-600 {
+            border-color: #ccc !important;
+          }
+        }
+      `}</style>
     </div>
   )
 }

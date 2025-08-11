@@ -74,3 +74,57 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Adding print styles for PDF generation */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+
+  body {
+    background: white !important;
+    color: black !important;
+    font-size: 12pt;
+    line-height: 1.4;
+  }
+
+  .bg-gray-800,
+  .bg-gray-700,
+  .bg-gray-900 {
+    background: white !important;
+    color: black !important;
+    border: 1px solid #ccc !important;
+  }
+
+  .text-gray-50,
+  .text-gray-100,
+  .text-gray-300,
+  .text-gray-400 {
+    color: black !important;
+  }
+
+  .border-gray-700,
+  .border-gray-600 {
+    border-color: #ccc !important;
+  }
+
+  .shadow-lg {
+    box-shadow: none !important;
+  }
+
+  @page {
+    margin: 1in;
+    size: A4;
+  }
+
+  h1,
+  h2,
+  h3 {
+    page-break-after: avoid;
+  }
+
+  .card {
+    page-break-inside: avoid;
+    margin-bottom: 1rem;
+  }
+}
