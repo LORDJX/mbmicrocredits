@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -17,10 +17,10 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { MoreHorizontal, Search, PlusCircle, AlertCircle } from "lucide-react"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { MoreHorizontal, Search, PlusCircle, AlertCircle, Upload } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 
-// Tipos
 interface Client {
   id: string
   client_code: string
@@ -33,13 +33,19 @@ interface Client {
   referred_by: string | null
   status: string | null
   observations: string | null
+  // legacy
   dni_photo_url: string | null
+  // nuevas columnas
+  dni_front_url: string | null
+  dni_back_url: string | null
   created_at: string
   updated_at: string | null
   deleted_at: string | null
 }
 
-const initialNewClientState = {
+type PartialClient = Partial<Client>
+
+const initialNewClientState: PartialClient = {
   first_name: "",
   last_name: "",
   dni: "",
@@ -49,6 +55,8 @@ const initialNewClientState = {
   referred_by: "",
   status: "activo",
   observations: "",
+  dni_front_url: null,
+  dni_back_url: null,
 }
 
 interface FormErrors {
@@ -69,18 +77,38 @@ const getErrorMessage = async (response: Response, defaultMessage: string): Prom
   }
 }
 
+async function uploadImage(file: File, hint: string, clientId?: string): Promise<string> {
+  const form = new FormData()
+  form.append("file", file)
+  form.append("hint", hint)
+  if (clientId) form.append("clientId", clientId)
+  const res = await fetch("/api/upload", { method: "POST", body: form })
+  if (!res.ok) {
+    throw new Error(await getErrorMessage(res, "Error al subir imagen"))
+  }
+  const json = await res.json()
+  return json.url as string
+}
+
 export default function ClientsPage() {
   const [clients, setClients] = useState<Client[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
-  const [currentClient, setCurrentClient] = useState<Client | null>(null)
-  const [newClient, setNewClient] = useState(initialNewClientState)
+  const [currentClient, setCurrentClient] = useState<PartialClient | null>(null)
+  const [newClient, setNewClient] = useState<PartialClient>(initialNewClientState)
   const [searchTerm, setSearchTerm] = useState("")
   const [formErrors, setFormErrors] = useState<FormErrors>({})
   const { toast } = useToast()
   const router = useRouter()
+
+  // Archivos de fotos (creación)
+  const [newFrontFile, setNewFrontFile] = useState<File | null>(null)
+  const [newBackFile, setNewBackFile] = useState<File | null>(null)
+  // Archivos de fotos (edición)
+  const [editFrontFile, setEditFrontFile] = useState<File | null>(null)
+  const [editBackFile, setEditBackFile] = useState<File | null>(null)
 
   const fetchClients = async () => {
     setLoading(true)
@@ -114,12 +142,13 @@ export default function ClientsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchTerm])
 
-  const validateForm = (clientData: Partial<Client>): boolean => {
+  const validateForm = (clientData: PartialClient): boolean => {
     const errors: FormErrors = {}
-    if (!clientData.first_name?.trim()) errors.first_name = "El nombre es obligatorio."
-    if (!clientData.last_name?.trim()) errors.last_name = "El apellido es obligatorio."
-    if (!clientData.dni?.trim()) errors.dni = "El DNI es obligatorio."
-    if (clientData.email && !/\S+@\S+\.\S+/.test(clientData.email)) errors.email = "Correo electrónico inválido."
+    if (!clientData.first_name?.toString().trim()) errors.first_name = "El nombre es obligatorio."
+    if (!clientData.last_name?.toString().trim()) errors.last_name = "El apellido es obligatorio."
+    if (!clientData.dni?.toString().trim()) errors.dni = "El DNI es obligatorio."
+    if (clientData.email && !/\S+@\S+\.\S+/.test(String(clientData.email)))
+      errors.email = "Correo electrónico inválido."
     setFormErrors(errors)
     return Object.keys(errors).length === 0
   }
@@ -127,6 +156,8 @@ export default function ClientsPage() {
   const handleEditClick = (client: Client) => {
     setCurrentClient(client)
     setFormErrors({})
+    setEditFrontFile(null)
+    setEditBackFile(null)
     setIsEditDialogOpen(true)
   }
 
@@ -141,10 +172,21 @@ export default function ClientsPage() {
       return
     }
     try {
+      // Subir imágenes si fueron seleccionadas
+      const payload: Record<string, any> = { ...currentClient }
+      if (editFrontFile) {
+        payload.dni_front_url = await uploadImage(editFrontFile, "dni-front", currentClient.id)
+        // opcional: mantener legacy
+        payload.dni_photo_url = payload.dni_front_url
+      }
+      if (editBackFile) {
+        payload.dni_back_url = await uploadImage(editBackFile, "dni-back", currentClient.id)
+      }
+
       const response = await fetch(`/api/clients/${currentClient.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(currentClient),
+        body: JSON.stringify(payload),
       })
       if (!response.ok) throw new Error(await getErrorMessage(response, "Error al actualizar cliente"))
       toast({ title: "Éxito", description: "Cliente actualizado correctamente." })
@@ -166,28 +208,29 @@ export default function ClientsPage() {
       return
     }
     try {
+      const payload: Record<string, any> = { ...newClient }
+
+      // Subir imágenes si se eligieron
+      if (newFrontFile) {
+        payload.dni_front_url = await uploadImage(newFrontFile, "dni-front")
+        payload.dni_photo_url = payload.dni_front_url // legacy opcional
+      }
+      if (newBackFile) {
+        payload.dni_back_url = await uploadImage(newBackFile, "dni-back")
+      }
+
       const response = await fetch("/api/clients/", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(newClient),
+        body: JSON.stringify(payload),
       })
       if (!response.ok) throw new Error(await getErrorMessage(response, "Error al crear cliente"))
       toast({ title: "Éxito", description: "Cliente creado correctamente." })
       setIsCreateDialogOpen(false)
       setNewClient(initialNewClientState)
       setFormErrors({})
-      fetchClients()
-    } catch (err: any) {
-      toast({ title: "Error", description: err.message, variant: "destructive" })
-    }
-  }
-
-  const handleDeleteClient = async (clientId: string) => {
-    if (!window.confirm("¿Estás seguro de que quieres eliminar (soft delete) este cliente?")) return
-    try {
-      const response = await fetch(`/api/clients/${clientId}`, { method: "DELETE" })
-      if (!response.ok) throw new Error(await getErrorMessage(response, "Error al eliminar cliente"))
-      toast({ title: "Éxito", description: "Cliente eliminado (soft delete) correctamente." })
+      setNewFrontFile(null)
+      setNewBackFile(null)
       fetchClients()
     } catch (err: any) {
       toast({ title: "Error", description: err.message, variant: "destructive" })
@@ -195,7 +238,7 @@ export default function ClientsPage() {
   }
 
   const handleInputChange = (
-    e: React.ChangeEvent<HTMLInputElement>,
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
     setter: React.Dispatch<React.SetStateAction<any>>,
   ) => {
     const { name, value } = e.target
@@ -204,6 +247,24 @@ export default function ClientsPage() {
       setFormErrors((prev) => ({ ...prev, [name]: undefined }))
     }
   }
+
+  const handleDeleteClient = async (clientId: string) => {
+    try {
+      const response = await fetch(`/api/clients/${clientId}`, {
+        method: "DELETE",
+      })
+      if (!response.ok) throw new Error(await getErrorMessage(response, "Error al eliminar cliente"))
+      toast({ title: "Éxito", description: "Cliente eliminado correctamente." })
+      fetchClients()
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" })
+    }
+  }
+
+  const clientsForReferrals = useMemo(
+    () => clients.map((c) => ({ id: c.id, label: `${c.first_name} ${c.last_name}`.trim() || c.client_code })),
+    [clients],
+  )
 
   if (loading && clients.length === 0) {
     return (
@@ -243,6 +304,8 @@ export default function ClientsPage() {
               onClick={() => {
                 setIsCreateDialogOpen(true)
                 setFormErrors({})
+                setNewFrontFile(null)
+                setNewBackFile(null)
               }}
               className="bg-gradient-to-r from-primary/80 to-primary text-primary-foreground font-semibold shadow-md transition-all hover:shadow-lg hover:shadow-primary/20"
             >
@@ -271,6 +334,7 @@ export default function ClientsPage() {
                   <TableHead>DNI</TableHead>
                   <TableHead>Teléfono</TableHead>
                   <TableHead>Email</TableHead>
+                  <TableHead>Referido por</TableHead>
                   <TableHead>Estado</TableHead>
                   <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
@@ -285,6 +349,7 @@ export default function ClientsPage() {
                     <TableCell>{client.dni || "N/A"}</TableCell>
                     <TableCell>{client.phone || "N/A"}</TableCell>
                     <TableCell>{client.email || "N/A"}</TableCell>
+                    <TableCell>{client.referred_by || "—"}</TableCell>
                     <TableCell>
                       <span
                         className={`px-2 py-1 rounded-full text-xs font-semibold ${
@@ -330,7 +395,7 @@ export default function ClientsPage() {
       {/* Diálogo de Edición */}
       {currentClient && (
         <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-          <DialogContent className="sm:max-w-[600px] bg-card text-card-foreground border-border">
+          <DialogContent className="sm:max-w-[700px] bg-card text-card-foreground border-border">
             <DialogHeader>
               <DialogTitle>Editar Cliente</DialogTitle>
               <DialogDescription>Actualiza los datos del cliente y guarda los cambios.</DialogDescription>
@@ -343,7 +408,7 @@ export default function ClientsPage() {
                 <Input
                   id="first_name"
                   name="first_name"
-                  value={currentClient.first_name}
+                  value={currentClient.first_name || ""}
                   onChange={(e) => handleInputChange(e, setCurrentClient)}
                   className="col-span-3"
                 />
@@ -357,7 +422,7 @@ export default function ClientsPage() {
                 <Input
                   id="last_name"
                   name="last_name"
-                  value={currentClient.last_name}
+                  value={currentClient.last_name || ""}
                   onChange={(e) => handleInputChange(e, setCurrentClient)}
                   className="col-span-3"
                 />
@@ -419,30 +484,82 @@ export default function ClientsPage() {
                 />
               </div>
 
+              {/* Referido por (desplegable de clientes) */}
               <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="status" className="text-right">
-                  Estado
+                <Label className="text-right">Referido por</Label>
+                <div className="col-span-3">
+                  <Select
+                    value={currentClient.referred_by || ""}
+                    onValueChange={(val) => setCurrentClient((prev) => ({ ...(prev || {}), referred_by: val || "" }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Seleccionar cliente (opcional)" />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-72">
+                      <SelectItem key="none" value="">
+                        Ninguno
+                      </SelectItem>
+                      {clientsForReferrals.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {/* Observaciones (4 renglones) */}
+              <div className="grid grid-cols-4 items-start gap-4">
+                <Label htmlFor="observations" className="text-right mt-2">
+                  Observaciones
                 </Label>
-                <Input
-                  id="status"
-                  name="status"
-                  value={currentClient.status || ""}
+                <textarea
+                  id="observations"
+                  name="observations"
+                  rows={4}
+                  value={currentClient.observations || ""}
                   onChange={(e) => handleInputChange(e, setCurrentClient)}
-                  className="col-span-3"
+                  className="col-span-3 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  placeholder="Notas u observaciones del cliente..."
                 />
               </div>
 
+              {/* Fotos DNI: frente y reverso */}
               <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="observations" className="text-right">
-                  Observaciones
-                </Label>
-                <Input
-                  id="observations"
-                  name="observations"
-                  value={currentClient.observations || ""}
-                  onChange={(e) => handleInputChange(e, setCurrentClient)}
-                  className="col-span-3"
-                />
+                <Label className="text-right">Foto DNI frente</Label>
+                <div className="col-span-3 flex items-center gap-3">
+                  <Input
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    onChange={(e) => setEditFrontFile(e.target.files?.[0] ?? null)}
+                  />
+                  <Button type="button" variant="secondary" className="gap-2" asChild>
+                    <label>
+                      <Upload className="h-4 w-4" />
+                      <span className="cursor-pointer">Elegir archivo</span>
+                    </label>
+                  </Button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label className="text-right">Foto DNI reverso</Label>
+                <div className="col-span-3 flex items-center gap-3">
+                  <Input
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    onChange={(e) => setEditBackFile(e.target.files?.[0] ?? null)}
+                  />
+                  <Button type="button" variant="secondary" className="gap-2" asChild>
+                    <label>
+                      <Upload className="h-4 w-4" />
+                      <span className="cursor-pointer">Elegir archivo</span>
+                    </label>
+                  </Button>
+                </div>
               </div>
 
               <DialogFooter className="mt-2">
@@ -458,7 +575,7 @@ export default function ClientsPage() {
 
       {/* Diálogo de Creación */}
       <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-        <DialogContent className="sm:max-w-[600px] bg-card text-card-foreground border-border">
+        <DialogContent className="sm:max-w-[700px] bg-card text-card-foreground border-border">
           <DialogHeader>
             <DialogTitle>Crear Nuevo Cliente</DialogTitle>
             <DialogDescription>Completa la información del nuevo cliente.</DialogDescription>
@@ -471,7 +588,7 @@ export default function ClientsPage() {
               <Input
                 id="new_first_name"
                 name="first_name"
-                value={newClient.first_name}
+                value={newClient.first_name || ""}
                 onChange={(e) => handleInputChange(e, setNewClient)}
                 className="col-span-3"
               />
@@ -485,7 +602,7 @@ export default function ClientsPage() {
               <Input
                 id="new_last_name"
                 name="last_name"
-                value={newClient.last_name}
+                value={newClient.last_name || ""}
                 onChange={(e) => handleInputChange(e, setNewClient)}
                 className="col-span-3"
               />
@@ -499,7 +616,7 @@ export default function ClientsPage() {
               <Input
                 id="new_dni"
                 name="dni"
-                value={newClient.dni}
+                value={newClient.dni || ""}
                 onChange={(e) => handleInputChange(e, setNewClient)}
                 className="col-span-3"
               />
@@ -514,7 +631,7 @@ export default function ClientsPage() {
                 id="new_email"
                 name="email"
                 type="email"
-                value={newClient.email}
+                value={newClient.email || ""}
                 onChange={(e) => handleInputChange(e, setNewClient)}
                 className="col-span-3"
               />
@@ -528,7 +645,7 @@ export default function ClientsPage() {
               <Input
                 id="new_phone"
                 name="phone"
-                value={newClient.phone}
+                value={newClient.phone || ""}
                 onChange={(e) => handleInputChange(e, setNewClient)}
                 className="col-span-3"
               />
@@ -541,10 +658,88 @@ export default function ClientsPage() {
               <Input
                 id="new_address"
                 name="address"
-                value={newClient.address}
+                value={newClient.address || ""}
                 onChange={(e) => handleInputChange(e, setNewClient)}
                 className="col-span-3"
               />
+            </div>
+
+            {/* Referido por (desplegable de clientes) */}
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label className="text-right">Referido por</Label>
+              <div className="col-span-3">
+                <Select
+                  value={(newClient.referred_by as string) || ""}
+                  onValueChange={(val) => setNewClient((prev) => ({ ...(prev || {}), referred_by: val || "" }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar cliente (opcional)" />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-72">
+                    <SelectItem key="none" value="">
+                      Ninguno
+                    </SelectItem>
+                    {clientsForReferrals.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Observaciones (4 renglones) */}
+            <div className="grid grid-cols-4 items-start gap-4">
+              <Label htmlFor="new_observations" className="text-right mt-2">
+                Observaciones
+              </Label>
+              <textarea
+                id="new_observations"
+                name="observations"
+                rows={4}
+                value={newClient.observations || ""}
+                onChange={(e) => handleInputChange(e, setNewClient)}
+                className="col-span-3 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                placeholder="Notas u observaciones del cliente..."
+              />
+            </div>
+
+            {/* Fotos DNI: frente y reverso */}
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label className="text-right">Foto DNI frente</Label>
+              <div className="col-span-3 flex items-center gap-3">
+                <Input
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={(e) => setNewFrontFile(e.target.files?.[0] ?? null)}
+                />
+                <Button type="button" variant="secondary" className="gap-2" asChild>
+                  <label>
+                    <Upload className="h-4 w-4" />
+                    <span className="cursor-pointer">Elegir archivo</span>
+                  </label>
+                </Button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label className="text-right">Foto DNI reverso</Label>
+              <div className="col-span-3 flex items-center gap-3">
+                <Input
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={(e) => setNewBackFile(e.target.files?.[0] ?? null)}
+                />
+                <Button type="button" variant="secondary" className="gap-2" asChild>
+                  <label>
+                    <Upload className="h-4 w-4" />
+                    <span className="cursor-pointer">Elegir archivo</span>
+                  </label>
+                </Button>
+              </div>
             </div>
 
             <DialogFooter className="mt-2">
@@ -555,6 +750,8 @@ export default function ClientsPage() {
                   setIsCreateDialogOpen(false)
                   setFormErrors({})
                   setNewClient(initialNewClientState)
+                  setNewFrontFile(null)
+                  setNewBackFile(null)
                 }}
               >
                 Cancelar

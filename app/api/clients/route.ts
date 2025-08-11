@@ -15,37 +15,35 @@ function getAdminClient() {
   return createClient(url, serviceKey)
 }
 
+const baseSelect = `
+  id,
+  client_code,
+  first_name,
+  last_name,
+  dni,
+  address,
+  phone,
+  email,
+  referred_by,
+  status,
+  observations,
+  dni_photo_url,
+  dni_front_url,
+  dni_back_url,
+  created_at,
+  updated_at,
+  deleted_at
+`
+
 export async function GET(request: Request) {
   try {
     const supabase = getAdminClient()
     const { searchParams } = new URL(request.url)
     const search = (searchParams.get("search") || "").trim()
 
-    let query = supabase
-      .from("clients")
-      .select(
-        `
-        id,
-        client_code,
-        first_name,
-        last_name,
-        dni,
-        address,
-        phone,
-        email,
-        referred_by,
-        status,
-        observations,
-        dni_photo_url,
-        created_at,
-        updated_at,
-        deleted_at
-      `,
-      )
-      .order("created_at", { ascending: false })
+    let query = supabase.from("clients").select(baseSelect).order("created_at", { ascending: false })
 
     if (search) {
-      // Busca por nombre, apellido o DNI
       query = query.or(`first_name.ilike.%${search}%,last_name.ilike.%${search}%,dni.ilike.%${search}%`)
     }
 
@@ -69,7 +67,6 @@ export async function POST(request: Request) {
     const supabase = getAdminClient()
     const body = await request.json()
 
-    // Campos permitidos al crear
     const insertData = {
       first_name: body.first_name ?? "",
       last_name: body.last_name ?? "",
@@ -80,32 +77,12 @@ export async function POST(request: Request) {
       referred_by: body.referred_by ?? null,
       status: body.status ?? "activo",
       observations: body.observations ?? null,
-      // client_code: puede ser generado por trigger en la BD si existe.
+      dni_photo_url: body.dni_photo_url ?? null, // legacy opcional
+      dni_front_url: body.dni_front_url ?? null,
+      dni_back_url: body.dni_back_url ?? null,
     }
 
-    const { data, error, status } = await supabase
-      .from("clients")
-      .insert(insertData)
-      .select(
-        `
-        id,
-        client_code,
-        first_name,
-        last_name,
-        dni,
-        address,
-        phone,
-        email,
-        referred_by,
-        status,
-        observations,
-        dni_photo_url,
-        created_at,
-        updated_at,
-        deleted_at
-      `,
-      )
-      .single()
+    const { data, error, status } = await supabase.from("clients").insert(insertData).select(baseSelect).single()
 
     if (error) {
       return NextResponse.json(

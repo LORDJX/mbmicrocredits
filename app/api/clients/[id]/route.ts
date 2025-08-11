@@ -15,33 +15,31 @@ function getAdminClient() {
   return createClient(url, serviceKey)
 }
 
+const baseSelect = `
+  id,
+  client_code,
+  first_name,
+  last_name,
+  dni,
+  address,
+  phone,
+  email,
+  referred_by,
+  status,
+  observations,
+  dni_photo_url,
+  dni_front_url,
+  dni_back_url,
+  created_at,
+  updated_at,
+  deleted_at
+`
+
 export async function GET(_request: NextRequest, { params }: { params: { id: string } }) {
   try {
     const supabase = getAdminClient()
     const { id } = params
-    const { data, error, status } = await supabase
-      .from("clients")
-      .select(
-        `
-        id,
-        client_code,
-        first_name,
-        last_name,
-        dni,
-        address,
-        phone,
-        email,
-        referred_by,
-        status,
-        observations,
-        dni_photo_url,
-        created_at,
-        updated_at,
-        deleted_at
-      `,
-      )
-      .eq("id", id)
-      .single()
+    const { data, error, status } = await supabase.from("clients").select(baseSelect).eq("id", id).single()
 
     if (error) {
       return NextResponse.json(
@@ -75,7 +73,9 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
       "referred_by",
       "status",
       "observations",
-      "dni_photo_url",
+      "dni_photo_url", // legacy (opcional)
+      "dni_front_url",
+      "dni_back_url",
     ]
     for (const key of allowed) {
       if (key in body) updateData[key] = body[key]
@@ -85,25 +85,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
       .from("clients")
       .update(updateData)
       .eq("id", id)
-      .select(
-        `
-        id,
-        client_code,
-        first_name,
-        last_name,
-        dni,
-        address,
-        phone,
-        email,
-        referred_by,
-        status,
-        observations,
-        dni_photo_url,
-        created_at,
-        updated_at,
-        deleted_at
-      `,
-      )
+      .select(baseSelect)
       .single()
 
     if (error) {
@@ -124,7 +106,6 @@ export async function DELETE(_request: NextRequest, { params }: { params: { id: 
   try {
     const supabase = getAdminClient()
     const { id } = params
-    // Soft delete: marcamos deleted_at
     const deletedAt = new Date().toISOString()
 
     const { data, error, status } = await supabase
