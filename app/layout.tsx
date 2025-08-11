@@ -1,12 +1,14 @@
-import type { Metadata } from 'next'
-import { GeistSans } from 'geist/font/sans'
-import { GeistMono } from 'geist/font/mono'
-import './globals.css'
+import type React from "react"
+import type { Metadata } from "next"
+import { GeistSans } from "geist/font/sans"
+import { GeistMono } from "geist/font/mono"
+import "./globals.css"
+import SiteHeader from "@/components/site-header"
 
 export const metadata: Metadata = {
-  title: 'v0 App',
-  description: 'Created with v0',
-  generator: 'v0.dev',
+  title: "BM Microcredits",
+  description: "Gestión de microcréditos",
+  generator: "v0.dev",
 }
 
 export default function RootLayout({
@@ -15,7 +17,7 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en">
+    <html lang="es">
       <head>
         <style>{`
 html {
@@ -25,7 +27,10 @@ html {
 }
         `}</style>
       </head>
-      <body>{children}</body>
+      <body className="min-h-screen bg-gray-50 text-gray-900">
+        <SiteHeader />
+        <main className="mx-auto max-w-7xl px-4 py-6">{children}</main>
+      </body>
     </html>
   )
 }

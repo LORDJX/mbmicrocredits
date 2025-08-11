@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
@@ -18,9 +17,10 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { MoreHorizontal, PlusCircle, Search } from "lucide-react"
+import { MoreHorizontal, PlusCircle, Search, Printer } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
-import { NewLoanForm } from "./new-loan-form" // Importar el nuevo componente
+import { NewLoanForm } from "./new-loan-form"
+import { openPrintWindowForLoan, type Frequency } from "@/lib/print-loan"
 
 // Información del cliente anidada
 interface ClientInfo {
@@ -35,16 +35,17 @@ interface Loan {
   loan_code: string
   client_id: string
   amount: number
+  total_to_return?: number | null
   installments: number
-  loan_type: string | null
-  interest_rate: number | null
-  start_date: string | null // Formato ISO string
-  end_date: string | null // Formato ISO string
+  loan_type: Frequency | null // Semanal | Quincenal | Mensual
+  interest_rate?: number | null // ya no editable, solo referencia si llega del backend
+  start_date: string | null // ISO
+  end_date: string | null // ISO
   status: string | null
   created_at: string
   updated_at: string
   deleted_at: string | null
-  clients: ClientInfo | null // Cliente asociado
+  clients: ClientInfo | null
 }
 
 export default function LoansPage() {
@@ -52,15 +53,15 @@ export default function LoansPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
-  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false) // Estado para el diálogo de creación
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [currentLoan, setCurrentLoan] = useState<Loan | null>(null)
-  const [searchTerm, setSearchTerm] = useState("") // Estado para el término de búsqueda
+  const [searchTerm, setSearchTerm] = useState("")
   const { toast } = useToast()
   const router = useRouter()
 
   useEffect(() => {
     fetchLoans()
-  }, [searchTerm]) // Volver a cargar préstamos cuando cambie el término de búsqueda
+  }, [searchTerm])
 
   const fetchLoans = async () => {
     setLoading(true)
@@ -74,7 +75,7 @@ export default function LoansPage() {
         try {
           const errorData = JSON.parse(errorText)
           errorMessage = errorData.detail || errorMessage
-        } catch (jsonError) {
+        } catch {
           errorMessage = `Error al cargar préstamos: ${response.status} ${response.statusText}. Respuesta no JSON: ${errorText.substring(0, 100)}...`
         }
         throw new Error(errorMessage)
@@ -117,9 +118,9 @@ export default function LoansPage() {
         body: JSON.stringify({
           client_id: currentLoan.client_id,
           amount: currentLoan.amount,
+          total_to_return: currentLoan.total_to_return ?? undefined,
           installments: currentLoan.installments,
           loan_type: currentLoan.loan_type,
-          interest_rate: currentLoan.interest_rate,
           start_date: currentLoan.start_date,
           end_date: currentLoan.end_date,
           status: currentLoan.status,
@@ -132,7 +133,7 @@ export default function LoansPage() {
         try {
           const errorData = JSON.parse(errorText)
           errorMessage = errorData.detail || errorMessage
-        } catch (jsonError) {
+        } catch {
           errorMessage = `Error al actualizar préstamo: ${response.status} ${response.statusText}. Respuesta no JSON: ${errorText.substring(0, 100)}...`
         }
         throw new Error(errorMessage)
@@ -143,7 +144,7 @@ export default function LoansPage() {
         description: "Préstamo actualizado correctamente.",
       })
       setIsEditDialogOpen(false)
-      fetchLoans() // Volver a cargar la lista para ver los cambios
+      fetchLoans()
     } catch (err: any) {
       console.error("Error al guardar préstamo:", err.message)
       setError("Error al guardar préstamo: " + err.message)
@@ -161,33 +162,29 @@ export default function LoansPage() {
     if (!window.confirm("¿Estás seguro de que quieres eliminar (soft delete) este préstamo?")) {
       return
     }
-
     setLoading(true)
     setError(null)
-
     try {
       const response = await fetch(`/api/loans/${loanId}`, {
         method: "DELETE",
         cache: "no-store",
       })
-
       if (!response.ok) {
         const errorText = await response.text()
         let errorMessage = `Error al eliminar préstamo: ${response.status} ${response.statusText}`
         try {
           const errorData = JSON.parse(errorText)
           errorMessage = errorData.detail || errorMessage
-        } catch (jsonError) {
+        } catch {
           errorMessage = `Error al eliminar préstamo: ${response.status} ${response.statusText}. Respuesta no JSON: ${errorText.substring(0, 100)}...`
         }
         throw new Error(errorMessage)
       }
-
       toast({
         title: "Éxito",
         description: "Préstamo eliminado (soft delete) correctamente.",
       })
-      fetchLoans() // Volver a cargar la lista para ver los cambios
+      fetchLoans()
     } catch (err: any) {
       console.error("Error al eliminar préstamo:", err.message)
       setError("Error al eliminar préstamo: " + err.message)
@@ -201,10 +198,17 @@ export default function LoansPage() {
     }
   }
 
+  const computedRate = (loan: Loan): number | null => {
+    if (loan.amount > 0 && loan.total_to_return && loan.total_to_return > 0) {
+      return (loan.total_to_return / loan.amount - 1) * 100
+    }
+    if (loan.interest_rate != null) return loan.interest_rate
+    return null
+  }
+
   if (loading && loans.length === 0) {
-    // Mostrar cargando solo en la carga inicial
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-900 text-gray-100">
+      <div className="flex min-h-[50vh] items-center justify-center">
         <p>Cargando préstamos...</p>
       </div>
     )
@@ -212,27 +216,24 @@ export default function LoansPage() {
 
   if (error) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-900 text-red-400">
+      <div className="flex min-h-[50vh] items-center justify-center text-red-600">
         <p>{error}</p>
       </div>
     )
   }
 
   return (
-    <div className="p-4">
-      <Card className="bg-gray-800 text-gray-100 border border-gray-700 shadow-lg">
+    <div className="space-y-4">
+      <Card className="bg-white text-gray-900 border border-gray-200 shadow-sm">
         <CardHeader>
-          <div className="flex justify-between items-start">
+          <div className="flex items-start justify-between">
             <div>
-              <CardTitle className="text-2xl font-bold text-gray-50">Gestión de Préstamos</CardTitle>
-              <CardDescription className="text-gray-400">
+              <CardTitle className="text-2xl font-bold">Gestión de Préstamos</CardTitle>
+              <CardDescription className="text-gray-500">
                 Lista de todos los préstamos registrados y su estado.
               </CardDescription>
             </div>
-            <Button
-              onClick={() => setIsCreateDialogOpen(true)}
-              className="bg-gray-600 hover:bg-gray-700 text-gray-50 font-semibold"
-            >
+            <Button onClick={() => setIsCreateDialogOpen(true)} className="bg-gray-700 text-gray-50 hover:bg-gray-800">
               <PlusCircle className="mr-2 h-4 w-4" />
               Crear Préstamo
             </Button>
@@ -243,90 +244,116 @@ export default function LoansPage() {
               placeholder="Buscar por código de préstamo, cliente..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full bg-gray-700 border-gray-600 text-gray-100 placeholder:text-gray-400 focus:ring-gray-500 focus:border-gray-500 pl-10"
+              className="w-full pl-10"
             />
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
           </div>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
             <Table className="min-w-full">
               <TableHeader>
-                <TableRow className="bg-gray-700 hover:bg-gray-700 border-gray-600">
-                  <TableHead className="text-gray-300">Código Préstamo</TableHead>
-                  <TableHead className="text-gray-300">Cliente</TableHead>
-                  <TableHead className="text-gray-300">Monto</TableHead>
-                  <TableHead className="text-gray-300">Cuotas</TableHead>
-                  <TableHead className="text-gray-300">Tipo</TableHead>
-                  <TableHead className="text-gray-300">Tasa Interés</TableHead>
-                  <TableHead className="text-gray-300">Fecha Inicio</TableHead>
-                  <TableHead className="text-gray-300">Fecha Fin</TableHead>
-                  <TableHead className="text-gray-300">Estado</TableHead>
-                  <TableHead className="text-gray-300">Acciones</TableHead>
+                <TableRow>
+                  <TableHead className="text-gray-600">Código Préstamo</TableHead>
+                  <TableHead className="text-gray-600">Cliente</TableHead>
+                  <TableHead className="text-gray-600">Monto</TableHead>
+                  <TableHead className="text-gray-600">Monto a devolver</TableHead>
+                  <TableHead className="text-gray-600">Cuotas</TableHead>
+                  <TableHead className="text-gray-600">Tipo de préstamo</TableHead>
+                  <TableHead className="text-gray-600">Tasa calculada</TableHead>
+                  <TableHead className="text-gray-600">Inicio</TableHead>
+                  <TableHead className="text-gray-600">Fin</TableHead>
+                  <TableHead className="text-gray-600">Estado</TableHead>
+                  <TableHead className="text-gray-600">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {loans.map((loan) => (
-                  <TableRow key={loan.id} className="border-gray-700 hover:bg-gray-700/50">
-                    <TableCell className="font-medium text-gray-200">{loan.loan_code}</TableCell>
-                    <TableCell className="text-gray-300">
-                      {loan.clients
-                        ? `${loan.clients.first_name} ${loan.clients.last_name} (${loan.clients.client_code})`
-                        : loan.client_id}
-                    </TableCell>
-                    <TableCell className="text-gray-300">${loan.amount.toFixed(2)}</TableCell>
-                    <TableCell className="text-gray-300">{loan.installments}</TableCell>
-                    <TableCell className="text-gray-300">{loan.loan_type || "N/A"}</TableCell>
-                    <TableCell className="text-gray-300">
-                      {loan.interest_rate ? `${loan.interest_rate}%` : "N/A"}
-                    </TableCell>
-                    <TableCell className="text-gray-300">
-                      {loan.start_date ? new Date(loan.start_date).toLocaleDateString() : "N/A"}
-                    </TableCell>
-                    <TableCell className="text-gray-300">
-                      {loan.end_date ? new Date(loan.end_date).toLocaleDateString() : "N/A"}
-                    </TableCell>
-                    <TableCell>
-                      <span
-                        className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                          loan.deleted_at
-                            ? "bg-red-600 text-red-50"
-                            : loan.status === "activo"
-                              ? "bg-green-600 text-green-50"
-                              : "bg-yellow-600 text-yellow-50"
-                        }`}
-                      >
-                        {loan.deleted_at ? "Eliminado" : loan.status || "N/A"}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" className="h-8 w-8 p-0 text-gray-400 hover:text-gray-50">
-                            <span className="sr-only">Abrir menú</span>
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="bg-gray-700 border border-gray-600 text-gray-100">
-                          <DropdownMenuItem
-                            onClick={() => handleEditClick(loan)}
-                            className="hover:bg-gray-600 focus:bg-gray-600 cursor-pointer"
+                {loans.map((loan) => {
+                  const rate = computedRate(loan)
+                  const clientLabel = loan.clients
+                    ? `${loan.clients.first_name} ${loan.clients.last_name} (${loan.clients.client_code})`
+                    : loan.client_id
+
+                  return (
+                    <TableRow key={loan.id} className="hover:bg-gray-50">
+                      <TableCell className="font-medium">{loan.loan_code}</TableCell>
+                      <TableCell>{clientLabel}</TableCell>
+                      <TableCell>${loan.amount.toFixed(2)}</TableCell>
+                      <TableCell>
+                        {loan.total_to_return != null ? `$${loan.total_to_return.toFixed(2)}` : "N/D"}
+                      </TableCell>
+                      <TableCell>{loan.installments}</TableCell>
+                      <TableCell>{loan.loan_type || "N/A"}</TableCell>
+                      <TableCell>{rate != null ? `${rate.toFixed(2)}%` : "N/A"}</TableCell>
+                      <TableCell>{loan.start_date ? new Date(loan.start_date).toLocaleDateString() : "N/A"}</TableCell>
+                      <TableCell>{loan.end_date ? new Date(loan.end_date).toLocaleDateString() : "N/A"}</TableCell>
+                      <TableCell>
+                        <span
+                          className={`rounded-full px-2 py-1 text-xs font-semibold ${
+                            loan.deleted_at
+                              ? "bg-red-100 text-red-700"
+                              : loan.status === "activo"
+                                ? "bg-green-100 text-green-700"
+                                : "bg-yellow-100 text-yellow-700"
+                          }`}
+                        >
+                          {loan.deleted_at ? "Eliminado" : loan.status || "N/A"}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-gray-600 hover:text-gray-900"
+                            title="Imprimir PDF"
+                            onClick={() => {
+                              const amountToReturn =
+                                loan.total_to_return != null
+                                  ? loan.total_to_return
+                                  : loan.amount * (1 + (loan.interest_rate ?? 0) / 100)
+                              const freq = (loan.loan_type ?? "Mensual") as Frequency
+                              openPrintWindowForLoan({
+                                logoSrc: "/images/logo-bm.png",
+                                companyName: "BM Microcredits",
+                                loanCode: loan.loan_code,
+                                clientLabel,
+                                amountToReturn,
+                                installments: loan.installments,
+                                startDateISO: loan.start_date ?? new Date().toISOString(),
+                                frequency: freq,
+                              })
+                            }}
                           >
-                            Editar
-                          </DropdownMenuItem>
-                          {!loan.deleted_at && (
-                            <DropdownMenuItem
-                              onClick={() => handleDeleteLoan(loan.id)}
-                              className="hover:bg-red-700 focus:bg-red-700 text-red-300 hover:text-red-50 focus:text-red-50 cursor-pointer"
-                            >
-                              Eliminar (Soft Delete)
-                            </DropdownMenuItem>
-                          )}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                            <Printer className="h-4 w-4" />
+                          </Button>
+
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" className="h-8 w-8 p-0">
+                                <span className="sr-only">Abrir menú</span>
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => handleEditClick(loan)} className="cursor-pointer">
+                                Editar
+                              </DropdownMenuItem>
+                              {!loan.deleted_at && (
+                                <DropdownMenuItem
+                                  onClick={() => handleDeleteLoan(loan.id)}
+                                  className="cursor-pointer text-red-600 focus:text-red-700"
+                                >
+                                  Eliminar (Soft Delete)
+                                </DropdownMenuItem>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
               </TableBody>
             </Table>
           </div>
@@ -335,12 +362,10 @@ export default function LoansPage() {
 
       {/* Diálogo de Creación de Préstamo */}
       <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-        <DialogContent className="sm:max-w-2xl bg-gray-800 text-gray-100 border border-gray-700 shadow-lg">
+        <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
-            <DialogTitle className="text-gray-50">Crear Nuevo Préstamo</DialogTitle>
-            <DialogDescription className="text-gray-400">
-              Completa la información para registrar un nuevo préstamo.
-            </DialogDescription>
+            <DialogTitle>Crear Nuevo Préstamo</DialogTitle>
+            <DialogDescription>Completa la información para registrar un nuevo préstamo.</DialogDescription>
           </DialogHeader>
           <NewLoanForm
             onSuccess={() => {
@@ -355,28 +380,28 @@ export default function LoansPage() {
       {/* Diálogo de Edición de Préstamo */}
       {currentLoan && (
         <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-          <DialogContent className="sm:max-w-[425px] bg-gray-800 text-gray-100 border border-gray-700 shadow-lg">
+          <DialogContent className="sm:max-w-[425px]">
             <DialogHeader>
-              <DialogTitle className="text-gray-50">Editar Préstamo</DialogTitle>
-              <DialogDescription className="text-gray-400">
+              <DialogTitle>Editar Préstamo</DialogTitle>
+              <DialogDescription>
                 Realiza cambios en la información del préstamo aquí. Haz clic en guardar cuando hayas terminado.
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleSaveLoan} className="grid gap-4 py-4">
               <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="client_id" className="text-right text-gray-300">
+                <Label htmlFor="client_id" className="text-right">
                   ID Cliente
                 </Label>
                 <Input
                   id="client_id"
                   value={currentLoan.client_id}
                   onChange={(e) => setCurrentLoan({ ...currentLoan, client_id: e.target.value })}
-                  className="col-span-3 bg-gray-700 border-gray-600 text-gray-100 placeholder:text-gray-400"
+                  className="col-span-3"
                   disabled
                 />
               </div>
               <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="amount" className="text-right text-gray-300">
+                <Label htmlFor="amount" className="text-right">
                   Monto
                 </Label>
                 <Input
@@ -385,11 +410,29 @@ export default function LoansPage() {
                   step="0.01"
                   value={currentLoan.amount}
                   onChange={(e) => setCurrentLoan({ ...currentLoan, amount: Number.parseFloat(e.target.value) })}
-                  className="col-span-3 bg-gray-700 border-gray-600 text-gray-100 placeholder:text-gray-400"
+                  className="col-span-3"
                 />
               </div>
               <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="installments" className="text-right text-gray-300">
+                <Label htmlFor="total_to_return" className="text-right">
+                  Monto a devolver
+                </Label>
+                <Input
+                  id="total_to_return"
+                  type="number"
+                  step="0.01"
+                  value={currentLoan.total_to_return ?? ""}
+                  onChange={(e) =>
+                    setCurrentLoan({
+                      ...currentLoan,
+                      total_to_return: e.target.value ? Number.parseFloat(e.target.value) : null,
+                    })
+                  }
+                  className="col-span-3"
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="installments" className="text-right">
                   Cuotas
                 </Label>
                 <Input
@@ -397,36 +440,26 @@ export default function LoansPage() {
                   type="number"
                   step="1"
                   value={currentLoan.installments}
-                  onChange={(e) => setCurrentLoan({ ...currentLoan, installments: Number.parseInt(e.target.value) })}
-                  className="col-span-3 bg-gray-700 border-gray-600 text-gray-100 placeholder:text-gray-400"
+                  onChange={(e) =>
+                    setCurrentLoan({ ...currentLoan, installments: Number.parseInt(e.target.value || "0", 10) })
+                  }
+                  className="col-span-3"
                 />
               </div>
               <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="loan_type" className="text-right text-gray-300">
-                  Tipo de Préstamo
+                <Label htmlFor="loan_type" className="text-right">
+                  Tipo de préstamo
                 </Label>
                 <Input
                   id="loan_type"
                   value={currentLoan.loan_type || ""}
-                  onChange={(e) => setCurrentLoan({ ...currentLoan, loan_type: e.target.value })}
-                  className="col-span-3 bg-gray-700 border-gray-600 text-gray-100 placeholder:text-gray-400"
+                  onChange={(e) => setCurrentLoan({ ...currentLoan, loan_type: e.target.value as Frequency })}
+                  className="col-span-3"
+                  placeholder="Semanal | Quincenal | Mensual"
                 />
               </div>
               <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="interest_rate" className="text-right text-gray-300">
-                  Tasa de Interés (%)
-                </Label>
-                <Input
-                  id="interest_rate"
-                  type="number"
-                  step="0.01"
-                  value={currentLoan.interest_rate || ""}
-                  onChange={(e) => setCurrentLoan({ ...currentLoan, interest_rate: Number.parseFloat(e.target.value) })}
-                  className="col-span-3 bg-gray-700 border-gray-600 text-gray-100 placeholder:text-gray-400"
-                />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="start_date" className="text-right text-gray-300">
+                <Label htmlFor="start_date" className="text-right">
                   Fecha Inicio
                 </Label>
                 <Input
@@ -434,11 +467,11 @@ export default function LoansPage() {
                   type="date"
                   value={currentLoan.start_date ? currentLoan.start_date.split("T")[0] : ""}
                   onChange={(e) => setCurrentLoan({ ...currentLoan, start_date: e.target.value })}
-                  className="col-span-3 bg-gray-700 border-gray-600 text-gray-100 placeholder:text-gray-400"
+                  className="col-span-3"
                 />
               </div>
               <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="end_date" className="text-right text-gray-300">
+                <Label htmlFor="end_date" className="text-right">
                   Fecha Fin
                 </Label>
                 <Input
@@ -446,34 +479,14 @@ export default function LoansPage() {
                   type="date"
                   value={currentLoan.end_date ? currentLoan.end_date.split("T")[0] : ""}
                   onChange={(e) => setCurrentLoan({ ...currentLoan, end_date: e.target.value })}
-                  className="col-span-3 bg-gray-700 border-gray-600 text-gray-100 placeholder:text-gray-400"
+                  className="col-span-3"
                 />
               </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="status" className="text-right text-gray-300">
-                  Estado
-                </Label>
-                <Input
-                  id="status"
-                  value={currentLoan.status || ""}
-                  onChange={(e) => setCurrentLoan({ ...currentLoan, status: e.target.value })}
-                  className="col-span-3 bg-gray-700 border-gray-600 text-gray-100 placeholder:text-gray-400"
-                />
-              </div>
-              <DialogFooter className="mt-4">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setIsEditDialogOpen(false)}
-                  className="bg-gray-700 border-gray-600 text-gray-100 hover:bg-gray-600 hover:text-gray-50"
-                >
+              <DialogFooter className="mt-2">
+                <Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(false)}>
                   Cancelar
                 </Button>
-                <Button
-                  type="submit"
-                  className="bg-gray-600 hover:bg-gray-700 text-gray-50 font-semibold"
-                  disabled={loading}
-                >
+                <Button type="submit" className="bg-gray-700 text-gray-50 hover:bg-gray-800" disabled={loading}>
                   {loading ? "Guardando..." : "Guardar cambios"}
                 </Button>
               </DialogFooter>
