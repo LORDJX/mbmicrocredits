@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { supabase } from "@/lib/supabaseClient"
-import { LogIn } from 'lucide-react'
+import { LogIn } from "lucide-react"
 
 export default function LoginPage() {
   const [email, setEmail] = useState("")
@@ -87,12 +87,6 @@ export default function LoginPage() {
               {loading ? "Iniciando sesión..." : "Entrar"}
             </Button>
           </form>
-          <div className="mt-6 text-center text-sm text-muted-foreground">
-            ¿No tienes una cuenta?{" "}
-            <Link href="/register" className="font-semibold text-primary hover:underline">
-              Regístrate aquí
-            </Link>
-          </div>
         </CardContent>
       </Card>
     </div>
