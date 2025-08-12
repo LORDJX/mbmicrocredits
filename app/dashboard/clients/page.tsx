@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useState, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -18,7 +18,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { MoreHorizontal, Search, PlusCircle, AlertCircle, Upload } from "lucide-react"
+import { MoreHorizontal, Search, PlusCircle, AlertCircle, Camera, X } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 
 interface Client {
@@ -90,6 +90,140 @@ async function uploadImage(file: File, hint: string, clientId?: string): Promise
   return json.url as string
 }
 
+interface CameraCaptureProps {
+  isOpen: boolean
+  onClose: () => void
+  onCapture: (file: File) => void
+  title: string
+}
+
+function CameraCapture({ isOpen, onClose, onCapture, title }: CameraCaptureProps) {
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const [stream, setStream] = useState<MediaStream | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  const startCamera = async () => {
+    try {
+      setError(null)
+      const mediaStream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: "environment", // Cámara trasera en móviles
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+        },
+      })
+      setStream(mediaStream)
+      if (videoRef.current) {
+        videoRef.current.srcObject = mediaStream
+      }
+    } catch (err) {
+      console.error("Error accessing camera:", err)
+      setError("No se pudo acceder a la cámara. Verifica los permisos.")
+    }
+  }
+
+  const stopCamera = () => {
+    if (stream) {
+      stream.getTracks().forEach((track) => track.stop())
+      setStream(null)
+    }
+  }
+
+  const capturePhoto = () => {
+    if (!videoRef.current || !canvasRef.current) return
+
+    const video = videoRef.current
+    const canvas = canvasRef.current
+    const context = canvas.getContext("2d")
+
+    if (!context) return
+
+    // Configurar el canvas con las dimensiones del video
+    canvas.width = video.videoWidth
+    canvas.height = video.videoHeight
+
+    // Dibujar el frame actual del video en el canvas
+    context.drawImage(video, 0, 0, canvas.width, canvas.height)
+
+    // Convertir a blob y crear archivo
+    canvas.toBlob(
+      (blob) => {
+        if (blob) {
+          const file = new File([blob], `dni-${Date.now()}.jpg`, { type: "image/jpeg" })
+          onCapture(file)
+          onClose()
+        }
+      },
+      "image/jpeg",
+      0.8,
+    )
+  }
+
+  useEffect(() => {
+    if (isOpen) {
+      startCamera()
+    } else {
+      stopCamera()
+    }
+
+    return () => stopCamera()
+  }, [isOpen])
+
+  if (!isOpen) return null
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-[600px] bg-card text-card-foreground border-border">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Camera className="h-5 w-5" />
+            {title}
+          </DialogTitle>
+          <DialogDescription>Posiciona el DNI dentro del marco y presiona capturar</DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          {error ? (
+            <div className="text-center p-8 text-destructive">
+              <AlertCircle className="mx-auto h-12 w-12 mb-4" />
+              <p>{error}</p>
+              <Button onClick={startCamera} className="mt-4">
+                Intentar de nuevo
+              </Button>
+            </div>
+          ) : (
+            <div className="relative bg-black rounded-lg overflow-hidden">
+              <video ref={videoRef} autoPlay playsInline muted className="w-full h-64 object-cover" />
+              <div className="absolute inset-4 border-2 border-white/50 rounded-lg pointer-events-none">
+                <div className="absolute top-0 left-0 w-6 h-6 border-t-2 border-l-2 border-white"></div>
+                <div className="absolute top-0 right-0 w-6 h-6 border-t-2 border-r-2 border-white"></div>
+                <div className="absolute bottom-0 left-0 w-6 h-6 border-b-2 border-l-2 border-white"></div>
+                <div className="absolute bottom-0 right-0 w-6 h-6 border-b-2 border-r-2 border-white"></div>
+              </div>
+            </div>
+          )}
+
+          <canvas ref={canvasRef} className="hidden" />
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            <X className="h-4 w-4 mr-2" />
+            Cancelar
+          </Button>
+          {!error && (
+            <Button onClick={capturePhoto}>
+              <Camera className="h-4 w-4 mr-2" />
+              Capturar
+            </Button>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 export default function ClientsPage() {
   const [clients, setClients] = useState<Client[]>([])
   const [loading, setLoading] = useState(true)
@@ -109,6 +243,16 @@ export default function ClientsPage() {
   // Archivos de fotos (edición)
   const [editFrontFile, setEditFrontFile] = useState<File | null>(null)
   const [editBackFile, setEditBackFile] = useState<File | null>(null)
+
+  const [cameraOpen, setCameraOpen] = useState<{
+    isOpen: boolean
+    type: "new-front" | "new-back" | "edit-front" | "edit-back"
+    title: string
+  }>({
+    isOpen: false,
+    type: "new-front",
+    title: "",
+  })
 
   const fetchClients = async () => {
     setLoading(true)
@@ -259,6 +403,31 @@ export default function ClientsPage() {
     } catch (err: any) {
       toast({ title: "Error", description: err.message, variant: "destructive" })
     }
+  }
+
+  const handleCameraCapture = (file: File) => {
+    switch (cameraOpen.type) {
+      case "new-front":
+        setNewFrontFile(file)
+        break
+      case "new-back":
+        setNewBackFile(file)
+        break
+      case "edit-front":
+        setEditFrontFile(file)
+        break
+      case "edit-back":
+        setEditBackFile(file)
+        break
+    }
+    toast({
+      title: "Foto capturada",
+      description: "La imagen se ha capturado correctamente.",
+    })
+  }
+
+  const openCamera = (type: typeof cameraOpen.type, title: string) => {
+    setCameraOpen({ isOpen: true, type, title })
   }
 
   const clientsForReferrals = useMemo(
@@ -530,41 +699,58 @@ export default function ClientsPage() {
                 />
               </div>
 
-              {/* Fotos DNI: frente y reverso */}
               <div className="grid grid-cols-4 items-center gap-4">
                 <Label className="text-right">Foto DNI frente</Label>
-                <div className="col-span-3 flex items-center gap-3">
+                <div className="col-span-3 flex items-center gap-2">
                   <Input
                     type="file"
                     accept="image/*"
                     capture="environment"
                     onChange={(e) => setEditFrontFile(e.target.files?.[0] ?? null)}
+                    className="flex-1"
                   />
-                  <Button type="button" variant="secondary" className="gap-2" asChild>
-                    <label>
-                      <Upload className="h-4 w-4" />
-                      <span className="cursor-pointer">Elegir archivo</span>
-                    </label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => openCamera("edit-front", "Capturar DNI Frente")}
+                    className="gap-1 px-3"
+                  >
+                    <Camera className="h-4 w-4" />
                   </Button>
                 </div>
+                {editFrontFile && (
+                  <div className="col-start-2 col-span-3 text-sm text-muted-foreground">
+                    Archivo seleccionado: {editFrontFile.name}
+                  </div>
+                )}
               </div>
 
               <div className="grid grid-cols-4 items-center gap-4">
                 <Label className="text-right">Foto DNI reverso</Label>
-                <div className="col-span-3 flex items-center gap-3">
+                <div className="col-span-3 flex items-center gap-2">
                   <Input
                     type="file"
                     accept="image/*"
                     capture="environment"
                     onChange={(e) => setEditBackFile(e.target.files?.[0] ?? null)}
+                    className="flex-1"
                   />
-                  <Button type="button" variant="secondary" className="gap-2" asChild>
-                    <label>
-                      <Upload className="h-4 w-4" />
-                      <span className="cursor-pointer">Elegir archivo</span>
-                    </label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => openCamera("edit-back", "Capturar DNI Reverso")}
+                    className="gap-1 px-3"
+                  >
+                    <Camera className="h-4 w-4" />
                   </Button>
                 </div>
+                {editBackFile && (
+                  <div className="col-start-2 col-span-3 text-sm text-muted-foreground">
+                    Archivo seleccionado: {editBackFile.name}
+                  </div>
+                )}
               </div>
 
               <DialogFooter className="mt-2">
@@ -712,41 +898,58 @@ export default function ClientsPage() {
               />
             </div>
 
-            {/* Fotos DNI: frente y reverso */}
             <div className="grid grid-cols-4 items-center gap-4">
               <Label className="text-right">Foto DNI frente</Label>
-              <div className="col-span-3 flex items-center gap-3">
+              <div className="col-span-3 flex items-center gap-2">
                 <Input
                   type="file"
                   accept="image/*"
                   capture="environment"
                   onChange={(e) => setNewFrontFile(e.target.files?.[0] ?? null)}
+                  className="flex-1"
                 />
-                <Button type="button" variant="secondary" className="gap-2" asChild>
-                  <label>
-                    <Upload className="h-4 w-4" />
-                    <span className="cursor-pointer">Elegir archivo</span>
-                  </label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => openCamera("new-front", "Capturar DNI Frente")}
+                  className="gap-1 px-3"
+                >
+                  <Camera className="h-4 w-4" />
                 </Button>
               </div>
+              {newFrontFile && (
+                <div className="col-start-2 col-span-3 text-sm text-muted-foreground">
+                  Archivo seleccionado: {newFrontFile.name}
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-4 items-center gap-4">
               <Label className="text-right">Foto DNI reverso</Label>
-              <div className="col-span-3 flex items-center gap-3">
+              <div className="col-span-3 flex items-center gap-2">
                 <Input
                   type="file"
                   accept="image/*"
                   capture="environment"
                   onChange={(e) => setNewBackFile(e.target.files?.[0] ?? null)}
+                  className="flex-1"
                 />
-                <Button type="button" variant="secondary" className="gap-2" asChild>
-                  <label>
-                    <Upload className="h-4 w-4" />
-                    <span className="cursor-pointer">Elegir archivo</span>
-                  </label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => openCamera("new-back", "Capturar DNI Reverso")}
+                  className="gap-1 px-3"
+                >
+                  <Camera className="h-4 w-4" />
                 </Button>
               </div>
+              {newBackFile && (
+                <div className="col-start-2 col-span-3 text-sm text-muted-foreground">
+                  Archivo seleccionado: {newBackFile.name}
+                </div>
+              )}
             </div>
 
             <DialogFooter className="mt-2">
@@ -768,6 +971,13 @@ export default function ClientsPage() {
           </form>
         </DialogContent>
       </Dialog>
+
+      <CameraCapture
+        isOpen={cameraOpen.isOpen}
+        onClose={() => setCameraOpen((prev) => ({ ...prev, isOpen: false }))}
+        onCapture={handleCameraCapture}
+        title={cameraOpen.title}
+      />
     </>
   )
 }
