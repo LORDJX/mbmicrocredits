@@ -1,8 +1,6 @@
-@import "tailwindcss";
-
-@theme inline {
-  --font-sans: var(--font-inter);
-}
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
 @layer base {
   :root {
