@@ -36,7 +36,7 @@ interface Partner {
 // Estado inicial para el nuevo socio
 const initialNewPartnerState = {
   name: "",
-  capital: 0,
+  capital: "", // Cambiar de 0 a string vacío para permitir entrada manual
 }
 
 // Tipos para errores de formulario
@@ -157,7 +157,9 @@ export default function PartnersPage() {
     if (!newPartner.name.trim()) {
       errors.name = "El nombre es obligatorio."
     }
-    if (newPartner.capital <= 0) {
+    const capitalValue =
+      typeof newPartner.capital === "string" ? Number.parseFloat(newPartner.capital) : newPartner.capital
+    if (!newPartner.capital || isNaN(capitalValue) || capitalValue <= 0) {
       errors.capital = "El capital debe ser un número mayor que cero."
     }
     setFormErrors(errors)
@@ -179,12 +181,17 @@ export default function PartnersPage() {
     setError(null)
 
     try {
+      const capitalValue =
+        typeof newPartner.capital === "string" ? Number.parseFloat(newPartner.capital) : newPartner.capital
       const response = await fetch("/api/partners", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(newPartner),
+        body: JSON.stringify({
+          ...newPartner,
+          capital: capitalValue,
+        }),
       })
 
       if (!response.ok) {
@@ -481,14 +488,17 @@ export default function PartnersPage() {
                   id="new_capital"
                   type="number"
                   step="0.01"
+                  min="0.01"
+                  placeholder="Ej: 15000.50" // Agregar placeholder con ejemplo de formato
                   value={newPartner.capital}
                   onChange={(e) => {
-                    setNewPartner({ ...newPartner, capital: Number.parseFloat(e.target.value) || 0 })
+                    setNewPartner({ ...newPartner, capital: e.target.value }) // Mantener como string para permitir entrada vacía
                     if (formErrors.capital) setFormErrors({ ...formErrors, capital: undefined })
                   }}
                   className="bg-gray-700 border-gray-600 text-gray-100 placeholder:text-gray-400"
                 />
                 {formErrors.capital && <p className="text-red-500 text-xs mt-1">{formErrors.capital}</p>}
+                <p className="text-gray-500 text-xs mt-1">Ingrese el monto con hasta 2 decimales (ej: 15000.50)</p>
               </div>
             </div>
             <DialogFooter className="mt-4">
