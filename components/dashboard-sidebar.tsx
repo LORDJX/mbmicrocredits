@@ -12,6 +12,7 @@ import {
   LogOut,
   ChevronDown,
   User2,
+  FileText,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -39,7 +40,8 @@ const navItems = [
   { title: "Préstamos", href: "/dashboard/loans", icon: CreditCard },
   { title: "Transacciones", href: "/dashboard/transactions", icon: DollarSign },
   { title: "Seguimientos", href: "/dashboard/followups", icon: CalendarCheck },
-  { title: "Informes", href: "/dashboard/reports", icon: BarChart2 },
+  { title: "Resumen para Socios", href: "/dashboard/resumen", icon: FileText },
+  { title: "Informe de situación Financiera", href: "/dashboard/reports", icon: BarChart2 },
 ]
 
 export function DashboardSidebar() {
