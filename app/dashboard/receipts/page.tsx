@@ -59,6 +59,8 @@ export default function ReceiptsPage() {
   const [clients, setClients] = useState<Client[]>([])
   const [activeLoans, setActiveLoans] = useState<Loan[]>([])
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
+  const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false)
+  const [selectedReceipt, setSelectedReceipt] = useState<Receipt | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
 
@@ -72,13 +74,11 @@ export default function ReceiptsPage() {
     observations: "",
   })
 
-  // Load initial data
   useEffect(() => {
     fetchReceipts()
     fetchClients()
   }, [])
 
-  // Load active loans when client is selected
   useEffect(() => {
     if (newReceipt.client_id) {
       fetchActiveLoans(newReceipt.client_id)
@@ -113,13 +113,15 @@ export default function ReceiptsPage() {
 
   const fetchActiveLoans = async (clientId: string) => {
     try {
-      const response = await fetch(`/api/loans?client_id=${clientId}&status=active`)
+      const response = await fetch(`/api/loans?client_id=${clientId}`)
       if (response.ok) {
         const data = await response.json()
-        setActiveLoans(data)
+        const activeLoansForClient = data.filter((loan: Loan) => loan.status === "active" || loan.status === "Activo")
+        setActiveLoans(activeLoansForClient)
       }
     } catch (error) {
       console.error("Error fetching active loans:", error)
+      setActiveLoans([])
     }
   }
 
@@ -178,7 +180,6 @@ export default function ReceiptsPage() {
     try {
       let receiptFileUrl = ""
 
-      // Upload file if selected
       if (selectedFile) {
         const formData = new FormData()
         formData.append("file", selectedFile)
@@ -240,6 +241,112 @@ export default function ReceiptsPage() {
     }
   }
 
+  const handleViewDetail = (receipt: Receipt) => {
+    setSelectedReceipt(receipt)
+    setIsDetailDialogOpen(true)
+  }
+
+  const handlePrintReceipt = (receipt: Receipt) => {
+    const printWindow = window.open("", "_blank")
+    if (!printWindow) return
+
+    const printContent = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Detalle de Recibo - ${receipt.id}</title>
+          <style>
+            body { font-family: Arial, sans-serif; margin: 20px; }
+            .header { text-align: center; margin-bottom: 30px; }
+            .logo { width: 80px; height: 80px; margin: 0 auto 20px; }
+            .title { font-size: 24px; font-weight: bold; color: #333; }
+            .subtitle { color: #666; margin-top: 5px; }
+            .content { max-width: 600px; margin: 0 auto; }
+            .section { margin-bottom: 20px; }
+            .section-title { font-size: 18px; font-weight: bold; color: #333; margin-bottom: 10px; border-bottom: 2px solid #f0f0f0; padding-bottom: 5px; }
+            .field { display: flex; justify-content: space-between; margin-bottom: 8px; }
+            .field-label { font-weight: bold; color: #555; }
+            .field-value { color: #333; }
+            .total { background: #f8f9fa; padding: 15px; border-radius: 8px; margin-top: 20px; }
+            .total-amount { font-size: 20px; font-weight: bold; color: #2563eb; }
+            @media print {
+              body { margin: 0; }
+              .no-print { display: none; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <img src="/images/logo-bm-circular.jpg" alt="BM Microcréditos" class="logo" style="border-radius: 50%;">
+            <div class="title">BM MICROCRÉDITOS</div>
+            <div class="subtitle">Detalle de Recibo</div>
+          </div>
+          
+          <div class="content">
+            <div class="section">
+              <div class="section-title">Información General</div>
+              <div class="field">
+                <span class="field-label">ID Recibo:</span>
+                <span class="field-value">${receipt.id}</span>
+              </div>
+              <div class="field">
+                <span class="field-label">Fecha:</span>
+                <span class="field-value">${new Date(receipt.date).toLocaleDateString("es-ES")}</span>
+              </div>
+              <div class="field">
+                <span class="field-label">Cliente:</span>
+                <span class="field-value">${receipt.client_name}</span>
+              </div>
+              <div class="field">
+                <span class="field-label">Tipo de Pago:</span>
+                <span class="field-value">${receipt.payment_type}</span>
+              </div>
+            </div>
+
+            <div class="section">
+              <div class="section-title">Detalle de Pagos</div>
+              <div class="field">
+                <span class="field-label">Importe en Efectivo:</span>
+                <span class="field-value">$${receipt.cash_amount.toFixed(2)}</span>
+              </div>
+              <div class="field">
+                <span class="field-label">Importe en Transferencia:</span>
+                <span class="field-value">$${receipt.transfer_amount.toFixed(2)}</span>
+              </div>
+            </div>
+
+            ${
+              receipt.observations
+                ? `
+            <div class="section">
+              <div class="section-title">Observaciones</div>
+              <div class="field-value">${receipt.observations}</div>
+            </div>
+            `
+                : ""
+            }
+
+            <div class="total">
+              <div class="field">
+                <span class="field-label">TOTAL PAGADO:</span>
+                <span class="total-amount">$${receipt.total_amount.toFixed(2)}</span>
+              </div>
+            </div>
+
+            <div style="margin-top: 40px; text-align: center; color: #666; font-size: 12px;">
+              Generado el ${new Date().toLocaleDateString("es-ES")} a las ${new Date().toLocaleTimeString("es-ES")}
+            </div>
+          </div>
+        </body>
+      </html>
+    `
+
+    printWindow.document.write(printContent)
+    printWindow.document.close()
+    printWindow.focus()
+    printWindow.print()
+  }
+
   const selectedClient = clients.find((c) => c.id === newReceipt.client_id)
   const totalAmount =
     (Number.parseFloat(newReceipt.cash_amount) || 0) + (Number.parseFloat(newReceipt.transfer_amount) || 0)
@@ -282,7 +389,13 @@ export default function ReceiptsPage() {
                   <Label htmlFor="client">Cliente *</Label>
                   <Select
                     value={newReceipt.client_id}
-                    onValueChange={(value) => setNewReceipt((prev) => ({ ...prev, client_id: value }))}
+                    onValueChange={(value) => {
+                      setNewReceipt((prev) => ({
+                        ...prev,
+                        client_id: value,
+                        selected_loans: [],
+                      }))
+                    }}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Seleccionar cliente" />
@@ -298,31 +411,39 @@ export default function ReceiptsPage() {
                 </div>
               </div>
 
-              {selectedClient && activeLoans.length > 0 && (
+              {selectedClient && (
                 <div className="space-y-2">
                   <Label>Préstamos Activos *</Label>
-                  <Card>
-                    <CardContent className="p-4">
-                      <div className="space-y-3">
-                        {activeLoans.map((loan) => (
-                          <div key={loan.id} className="flex items-center space-x-3 p-2 border rounded">
-                            <Checkbox
-                              id={loan.id}
-                              checked={newReceipt.selected_loans.includes(loan.id)}
-                              onCheckedChange={(checked) => handleLoanSelection(loan.id, checked as boolean)}
-                            />
-                            <div className="flex-1">
-                              <div className="font-medium">{loan.loan_code}</div>
-                              <div className="text-sm text-muted-foreground">
-                                {loan.installments} cuotas de ${loan.installment_amount?.toFixed(2) || "0.00"}
+                  {activeLoans.length > 0 ? (
+                    <Card>
+                      <CardContent className="p-4">
+                        <div className="space-y-3">
+                          {activeLoans.map((loan) => (
+                            <div key={loan.id} className="flex items-center space-x-3 p-2 border rounded">
+                              <Checkbox
+                                id={loan.id}
+                                checked={newReceipt.selected_loans.includes(loan.id)}
+                                onCheckedChange={(checked) => handleLoanSelection(loan.id, checked as boolean)}
+                              />
+                              <div className="flex-1">
+                                <div className="font-medium">{loan.loan_code}</div>
+                                <div className="text-sm text-muted-foreground">
+                                  {loan.installments} cuotas de ${loan.installment_amount?.toFixed(2) || "0.00"}
+                                </div>
                               </div>
+                              <Badge variant="outline">${loan.amount.toFixed(2)}</Badge>
                             </div>
-                            <Badge variant="outline">${loan.amount.toFixed(2)}</Badge>
-                          </div>
-                        ))}
-                      </div>
-                    </CardContent>
-                  </Card>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ) : (
+                    <Card>
+                      <CardContent className="p-4 text-center text-muted-foreground">
+                        No hay préstamos activos para este cliente
+                      </CardContent>
+                    </Card>
+                  )}
                 </div>
               )}
 
@@ -433,7 +554,9 @@ export default function ReceiptsPage() {
             <TableBody>
               {receipts.map((receipt) => (
                 <TableRow key={receipt.id}>
-                  <TableCell>{new Date(receipt.date).toLocaleDateString()}</TableCell>
+                  <TableCell>
+                    {receipt.date ? new Date(receipt.date).toLocaleDateString("es-ES") : "Fecha no disponible"}
+                  </TableCell>
                   <TableCell>{receipt.client_name}</TableCell>
                   <TableCell>
                     <Badge variant={receipt.payment_type === "Total" ? "default" : "secondary"}>
@@ -444,7 +567,7 @@ export default function ReceiptsPage() {
                   <TableCell>${receipt.transfer_amount.toFixed(2)}</TableCell>
                   <TableCell className="font-medium">${receipt.total_amount.toFixed(2)}</TableCell>
                   <TableCell>
-                    <Button variant="ghost" size="sm">
+                    <Button variant="ghost" size="sm" onClick={() => handleViewDetail(receipt)}>
                       <Eye className="h-4 w-4" />
                     </Button>
                   </TableCell>
@@ -461,6 +584,73 @@ export default function ReceiptsPage() {
           </Table>
         </CardContent>
       </Card>
+
+      <Dialog open={isDetailDialogOpen} onOpenChange={setIsDetailDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Detalle del Recibo</DialogTitle>
+            <DialogDescription>Información completa del recibo de pago</DialogDescription>
+          </DialogHeader>
+
+          {selectedReceipt && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-sm font-medium text-muted-foreground">ID Recibo</Label>
+                  <p className="text-sm">{selectedReceipt.id}</p>
+                </div>
+                <div>
+                  <Label className="text-sm font-medium text-muted-foreground">Fecha</Label>
+                  <p className="text-sm">
+                    {selectedReceipt.date
+                      ? new Date(selectedReceipt.date).toLocaleDateString("es-ES")
+                      : "No disponible"}
+                  </p>
+                </div>
+                <div>
+                  <Label className="text-sm font-medium text-muted-foreground">Cliente</Label>
+                  <p className="text-sm">{selectedReceipt.client_name}</p>
+                </div>
+                <div>
+                  <Label className="text-sm font-medium text-muted-foreground">Tipo de Pago</Label>
+                  <Badge variant={selectedReceipt.payment_type === "Total" ? "default" : "secondary"}>
+                    {selectedReceipt.payment_type}
+                  </Badge>
+                </div>
+                <div>
+                  <Label className="text-sm font-medium text-muted-foreground">Importe en Efectivo</Label>
+                  <p className="text-sm font-medium">${selectedReceipt.cash_amount.toFixed(2)}</p>
+                </div>
+                <div>
+                  <Label className="text-sm font-medium text-muted-foreground">Importe en Transferencia</Label>
+                  <p className="text-sm font-medium">${selectedReceipt.transfer_amount.toFixed(2)}</p>
+                </div>
+              </div>
+
+              <div className="p-4 bg-muted rounded-lg">
+                <div className="flex justify-between items-center">
+                  <span className="font-medium">Total Pagado:</span>
+                  <span className="text-lg font-bold text-primary">${selectedReceipt.total_amount.toFixed(2)}</span>
+                </div>
+              </div>
+
+              {selectedReceipt.observations && (
+                <div>
+                  <Label className="text-sm font-medium text-muted-foreground">Observaciones</Label>
+                  <p className="text-sm mt-1 p-2 bg-muted rounded">{selectedReceipt.observations}</p>
+                </div>
+              )}
+
+              <div className="flex justify-end space-x-2 pt-4">
+                <Button variant="outline" onClick={() => setIsDetailDialogOpen(false)}>
+                  Cerrar
+                </Button>
+                <Button onClick={() => handlePrintReceipt(selectedReceipt)}>Imprimir Detalle</Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
