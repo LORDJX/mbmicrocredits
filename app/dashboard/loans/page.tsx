@@ -56,6 +56,7 @@ export default function LoansPage() {
   const [error, setError] = useState<string | null>(null)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false) // Estado para el diálogo de creación
+  const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false) // Estado para modal de detalle
   const [currentLoan, setCurrentLoan] = useState<Loan | null>(null)
   const [searchTerm, setSearchTerm] = useState("") // Estado para el término de búsqueda
   const { toast } = useToast()
@@ -346,6 +347,150 @@ export default function LoansPage() {
     printWindow.document.close()
   }
 
+  const handleDetailClick = (loan: Loan) => {
+    setCurrentLoan(loan)
+    setIsDetailDialogOpen(true)
+  }
+
+  const printLoanDetail = (loan: Loan) => {
+    const clientName = loan.clients ? `${loan.clients.first_name} ${loan.clients.last_name}` : "Cliente no encontrado"
+    const clientCode = loan.clients?.client_code || "N/A"
+
+    const printWindow = window.open("", "_blank")
+    if (!printWindow) return
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Detalle de Préstamo - ${loan.loan_code}</title>
+          <style>
+            body { font-family: Arial, sans-serif; margin: 20px; color: #333; line-height: 1.6; }
+            .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #333; padding-bottom: 20px; }
+            .logo { width: 80px; height: 80px; margin: 0 auto 10px; border-radius: 50%; }
+            .company-name { font-size: 24px; font-weight: bold; color: #d4a574; margin-bottom: 5px; }
+            .document-title { font-size: 18px; color: #666; }
+            .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 30px; }
+            .detail-section { background: #f8f9fa; padding: 20px; border-radius: 8px; border-left: 4px solid #d4a574; }
+            .section-title { font-size: 16px; font-weight: bold; color: #333; margin-bottom: 15px; border-bottom: 1px solid #ddd; padding-bottom: 5px; }
+            .detail-item { margin-bottom: 12px; display: flex; justify-content: space-between; }
+            .label { font-weight: bold; color: #666; }
+            .value { color: #333; }
+            .status-badge { padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: bold; }
+            .status-active { background: #d4edda; color: #155724; }
+            .status-inactive { background: #f8d7da; color: #721c24; }
+            @media print {
+              body { margin: 0; }
+              .no-print { display: none; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div class="logo">
+              <img src="/images/logo-bm-circular.jpg" alt="BM Microcréditos" style="width: 80px; height: 80px; border-radius: 50%;" />
+            </div>
+            <div class="company-name">BM MICROCRÉDITOS</div>
+            <div class="document-title">Detalle de Préstamo</div>
+          </div>
+          
+          <div class="detail-grid">
+            <div class="detail-section">
+              <div class="section-title">Información General</div>
+              <div class="detail-item">
+                <span class="label">Código de Préstamo:</span>
+                <span class="value">${loan.loan_code}</span>
+              </div>
+              <div class="detail-item">
+                <span class="label">Estado:</span>
+                <span class="value status-badge ${loan.status === "activo" ? "status-active" : "status-inactive"}">${loan.status || "N/A"}</span>
+              </div>
+              <div class="detail-item">
+                <span class="label">Fecha de Creación:</span>
+                <span class="value">${new Date(loan.created_at).toLocaleDateString()}</span>
+              </div>
+              <div class="detail-item">
+                <span class="label">Última Actualización:</span>
+                <span class="value">${new Date(loan.updated_at).toLocaleDateString()}</span>
+              </div>
+            </div>
+            
+            <div class="detail-section">
+              <div class="section-title">Información del Cliente</div>
+              <div class="detail-item">
+                <span class="label">Nombre Completo:</span>
+                <span class="value">${clientName}</span>
+              </div>
+              <div class="detail-item">
+                <span class="label">Código de Cliente:</span>
+                <span class="value">${clientCode}</span>
+              </div>
+              <div class="detail-item">
+                <span class="label">ID Cliente:</span>
+                <span class="value">${loan.client_id}</span>
+              </div>
+            </div>
+            
+            <div class="detail-section">
+              <div class="section-title">Detalles Financieros</div>
+              <div class="detail-item">
+                <span class="label">Monto del Préstamo:</span>
+                <span class="value">$${loan.amount.toFixed(2)}</span>
+              </div>
+              <div class="detail-item">
+                <span class="label">Monto de Cuota:</span>
+                <span class="value">$${(loan.installment_amount || 0).toFixed(2)}</span>
+              </div>
+              <div class="detail-item">
+                <span class="label">Cantidad de Cuotas:</span>
+                <span class="value">${loan.installments}</span>
+              </div>
+              <div class="detail-item">
+                <span class="label">Tasa de Interés:</span>
+                <span class="value">${calculateInterestRate(loan)}%</span>
+              </div>
+              <div class="detail-item">
+                <span class="label">Total a Cobrar:</span>
+                <span class="value">$${((loan.installment_amount || 0) * loan.installments).toFixed(2)}</span>
+              </div>
+            </div>
+            
+            <div class="detail-section">
+              <div class="section-title">Condiciones del Préstamo</div>
+              <div class="detail-item">
+                <span class="label">Tipo de Préstamo:</span>
+                <span class="value">${loan.loan_type || "N/A"}</span>
+              </div>
+              <div class="detail-item">
+                <span class="label">Modo de Entrega:</span>
+                <span class="value">${loan.delivery_mode || "N/A"}</span>
+              </div>
+              <div class="detail-item">
+                <span class="label">Fecha de Inicio:</span>
+                <span class="value">${loan.start_date ? new Date(loan.start_date).toLocaleDateString() : "N/A"}</span>
+              </div>
+              <div class="detail-item">
+                <span class="label">Fecha de Fin:</span>
+                <span class="value">${loan.end_date ? new Date(loan.end_date).toLocaleDateString() : "N/A"}</span>
+              </div>
+            </div>
+          </div>
+          
+          <script>
+            window.onload = function() {
+              window.print();
+              window.onafterprint = function() {
+                window.close();
+              }
+            }
+          </script>
+        </body>
+      </html>
+    `)
+
+    printWindow.document.close()
+  }
+
   if (loading && loans.length === 0) {
     // Mostrar cargando solo en la carga inicial
     return (
@@ -451,6 +596,12 @@ export default function LoansPage() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="bg-gray-700 border border-gray-600 text-gray-100">
+                          <DropdownMenuItem
+                            onClick={() => handleDetailClick(loan)}
+                            className="hover:bg-gray-600 focus:bg-gray-600 cursor-pointer"
+                          >
+                            Detalle
+                          </DropdownMenuItem>
                           <DropdownMenuItem
                             onClick={() => handleEditClick(loan)}
                             className="hover:bg-gray-600 focus:bg-gray-600 cursor-pointer"
@@ -658,6 +809,164 @@ export default function LoansPage() {
                 </Button>
               </DialogFooter>
             </form>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Modal de Detalle del Préstamo */}
+      {currentLoan && (
+        <Dialog open={isDetailDialogOpen} onOpenChange={setIsDetailDialogOpen}>
+          <DialogContent className="sm:max-w-4xl bg-gray-800 text-gray-100 border border-gray-700 shadow-lg max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="text-gray-50 flex items-center justify-between">
+                Detalle del Préstamo - {currentLoan.loan_code}
+                <Button
+                  onClick={() => printLoanDetail(currentLoan)}
+                  variant="outline"
+                  size="sm"
+                  className="bg-gray-700 border-gray-600 text-gray-100 hover:bg-gray-600"
+                >
+                  <Printer className="mr-2 h-4 w-4" />
+                  Imprimir
+                </Button>
+              </DialogTitle>
+              <DialogDescription className="text-gray-400">
+                Información completa del préstamo seleccionado.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-4">
+              {/* Información General */}
+              <div className="space-y-4 bg-gray-700/50 p-4 rounded-lg">
+                <h3 className="text-lg font-semibold text-gray-200 border-b border-gray-600 pb-2">
+                  Información General
+                </h3>
+                <div className="space-y-3">
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Código de Préstamo:</span>
+                    <span className="text-gray-200 font-medium">{currentLoan.loan_code}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Estado:</span>
+                    <span
+                      className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                        currentLoan.deleted_at
+                          ? "bg-red-600 text-red-50"
+                          : currentLoan.status === "activo"
+                            ? "bg-green-600 text-green-50"
+                            : "bg-yellow-600 text-yellow-50"
+                      }`}
+                    >
+                      {currentLoan.deleted_at ? "Eliminado" : currentLoan.status || "N/A"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Fecha de Creación:</span>
+                    <span className="text-gray-200">{new Date(currentLoan.created_at).toLocaleDateString()}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Última Actualización:</span>
+                    <span className="text-gray-200">{new Date(currentLoan.updated_at).toLocaleDateString()}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Información del Cliente */}
+              <div className="space-y-4 bg-gray-700/50 p-4 rounded-lg">
+                <h3 className="text-lg font-semibold text-gray-200 border-b border-gray-600 pb-2">
+                  Información del Cliente
+                </h3>
+                <div className="space-y-3">
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Nombre Completo:</span>
+                    <span className="text-gray-200 font-medium">
+                      {currentLoan.clients
+                        ? `${currentLoan.clients.first_name} ${currentLoan.clients.last_name}`
+                        : "Cliente no encontrado"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Código de Cliente:</span>
+                    <span className="text-gray-200">{currentLoan.clients?.client_code || "N/A"}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">ID Cliente:</span>
+                    <span className="text-gray-200 font-mono text-sm">{currentLoan.client_id}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Detalles Financieros */}
+              <div className="space-y-4 bg-gray-700/50 p-4 rounded-lg">
+                <h3 className="text-lg font-semibold text-gray-200 border-b border-gray-600 pb-2">
+                  Detalles Financieros
+                </h3>
+                <div className="space-y-3">
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Monto del Préstamo:</span>
+                    <span className="text-gray-200 font-bold text-lg">${currentLoan.amount.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Monto de Cuota:</span>
+                    <span className="text-gray-200 font-semibold">
+                      ${(currentLoan.installment_amount || 0).toFixed(2)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Cantidad de Cuotas:</span>
+                    <span className="text-gray-200">{currentLoan.installments}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Tasa de Interés:</span>
+                    <span className="text-gray-200 font-semibold">{calculateInterestRate(currentLoan)}%</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Total a Cobrar:</span>
+                    <span className="text-gray-200 font-bold">
+                      ${((currentLoan.installment_amount || 0) * currentLoan.installments).toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Condiciones del Préstamo */}
+              <div className="space-y-4 bg-gray-700/50 p-4 rounded-lg">
+                <h3 className="text-lg font-semibold text-gray-200 border-b border-gray-600 pb-2">
+                  Condiciones del Préstamo
+                </h3>
+                <div className="space-y-3">
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Tipo de Préstamo:</span>
+                    <span className="text-gray-200">{currentLoan.loan_type || "N/A"}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Modo de Entrega:</span>
+                    <span className="text-gray-200">{currentLoan.delivery_mode || "N/A"}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Fecha de Inicio:</span>
+                    <span className="text-gray-200">
+                      {currentLoan.start_date ? new Date(currentLoan.start_date).toLocaleDateString() : "N/A"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Fecha de Fin:</span>
+                    <span className="text-gray-200">
+                      {currentLoan.end_date ? new Date(currentLoan.end_date).toLocaleDateString() : "N/A"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button
+                onClick={() => setIsDetailDialogOpen(false)}
+                className="bg-gray-600 hover:bg-gray-700 text-gray-50"
+              >
+                Cerrar
+              </Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       )}
