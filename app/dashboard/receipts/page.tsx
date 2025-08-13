@@ -36,6 +36,13 @@ interface Client {
   last_name: string
 }
 
+interface Installment {
+  number: number
+  due_date: string
+  amount: number
+  status: "pending" | "paid" | "overdue"
+}
+
 interface Loan {
   id: string
   loan_code: string
@@ -44,6 +51,8 @@ interface Loan {
   installment_amount: number
   status: string
   client_id: string
+  start_date: string
+  loan_type: string
 }
 
 interface Receipt {
@@ -72,10 +81,15 @@ export default function ReceiptsPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [selectedDate, setSelectedDate] = useState<Date>(new Date())
 
+  const [selectedLoanId, setSelectedLoanId] = useState<string>("")
+  const [loanInstallments, setLoanInstallments] = useState<Installment[]>([])
+  const [selectedInstallments, setSelectedInstallments] = useState<number[]>([])
+
   const [newReceipt, setNewReceipt] = useState({
     date: new Date(),
     client_id: "",
     selected_loans: [] as string[],
+    selected_installments: [] as number[],
     payment_type: "",
     cash_amount: "",
     transfer_amount: "",
@@ -94,6 +108,15 @@ export default function ReceiptsPage() {
       setActiveLoans([])
     }
   }, [newReceipt.client_id])
+
+  useEffect(() => {
+    if (selectedLoanId) {
+      calculateLoanInstallments(selectedLoanId)
+    } else {
+      setLoanInstallments([])
+      setSelectedInstallments([])
+    }
+  }, [selectedLoanId])
 
   const fetchReceipts = async () => {
     try {
@@ -154,23 +177,69 @@ export default function ReceiptsPage() {
     setNewReceipt((prev) => ({ ...prev, transfer_amount: formatted }))
   }
 
-  const handleLoanSelection = (loanId: string, checked: boolean) => {
+  const handleSingleLoanSelection = (loanId: string) => {
+    setSelectedLoanId(loanId)
     setNewReceipt((prev) => ({
       ...prev,
-      selected_loans: checked ? [...prev.selected_loans, loanId] : prev.selected_loans.filter((id) => id !== loanId),
+      selected_loans: [loanId],
+      selected_installments: [],
+    }))
+    setSelectedInstallments([])
+  }
+
+  const handleInstallmentSelection = (installmentNumber: number, checked: boolean) => {
+    const newSelected = checked
+      ? [...selectedInstallments, installmentNumber]
+      : selectedInstallments.filter((num) => num !== installmentNumber)
+
+    setSelectedInstallments(newSelected)
+    setNewReceipt((prev) => ({
+      ...prev,
+      selected_installments: newSelected,
     }))
   }
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) {
-      setSelectedFile(file)
+  const calculateLoanInstallments = (loanId: string) => {
+    const loan = activeLoans.find((l) => l.id === loanId)
+    if (!loan) return
+
+    const installments: Installment[] = []
+    const startDate = new Date(loan.start_date)
+
+    let intervalDays = 30 // Default monthly
+    if (loan.loan_type === "Semanal") intervalDays = 7
+    else if (loan.loan_type === "Quincenal") intervalDays = 15
+
+    for (let i = 1; i <= loan.installments; i++) {
+      const dueDate = new Date(startDate)
+      dueDate.setDate(startDate.getDate() + intervalDays * i)
+
+      const today = new Date()
+      let status: "pending" | "paid" | "overdue" = "pending"
+
+      if (dueDate < today) {
+        status = "overdue"
+      }
+
+      installments.push({
+        number: i,
+        due_date: dueDate.toISOString().split("T")[0],
+        amount: loan.installment_amount || 0,
+        status,
+      })
     }
+
+    setLoanInstallments(installments)
   }
 
   const handleCreateReceipt = async () => {
-    if (!newReceipt.client_id || !newReceipt.payment_type || newReceipt.selected_loans.length === 0) {
-      toast.error("Por favor complete todos los campos obligatorios")
+    if (
+      !newReceipt.client_id ||
+      !newReceipt.payment_type ||
+      newReceipt.selected_loans.length === 0 ||
+      selectedInstallments.length === 0
+    ) {
+      toast.error("Por favor complete todos los campos obligatorios y seleccione al menos una cuota")
       return
     }
 
@@ -206,6 +275,7 @@ export default function ReceiptsPage() {
         receipt_date: newReceipt.date.toISOString().split("T")[0],
         client_id: newReceipt.client_id,
         selected_loans: newReceipt.selected_loans,
+        selected_installments: selectedInstallments,
         payment_type: newReceipt.payment_type,
         cash_amount: cashAmount,
         transfer_amount: transferAmount,
@@ -229,12 +299,16 @@ export default function ReceiptsPage() {
           date: new Date(),
           client_id: "",
           selected_loans: [],
+          selected_installments: [],
           payment_type: "",
           cash_amount: "",
           transfer_amount: "",
           observations: "",
         })
         setSelectedFile(null)
+        setSelectedLoanId("")
+        setSelectedInstallments([])
+        setLoanInstallments([])
         fetchReceipts()
       } else {
         const errorData = await response.json()
@@ -358,6 +432,11 @@ export default function ReceiptsPage() {
   const totalAmount =
     (Number.parseFloat(newReceipt.cash_amount) || 0) + (Number.parseFloat(newReceipt.transfer_amount) || 0)
 
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    setSelectedFile(file || null)
+  }
+
   return (
     <div className="space-y-6">
       <AppHeader title="Gestión de Recibos" />
@@ -411,7 +490,11 @@ export default function ReceiptsPage() {
                         ...prev,
                         client_id: value,
                         selected_loans: [],
+                        selected_installments: [],
                       }))
+                      setSelectedLoanId("")
+                      setSelectedInstallments([])
+                      setLoanInstallments([])
                     }}
                   >
                     <SelectTrigger>
@@ -437,10 +520,13 @@ export default function ReceiptsPage() {
                         <div className="space-y-3">
                           {activeLoans.map((loan) => (
                             <div key={loan.id} className="flex items-center space-x-3 p-2 border rounded">
-                              <Checkbox
+                              <input
+                                type="radio"
                                 id={loan.id}
-                                checked={newReceipt.selected_loans.includes(loan.id)}
-                                onCheckedChange={(checked) => handleLoanSelection(loan.id, checked as boolean)}
+                                name="selected_loan"
+                                checked={selectedLoanId === loan.id}
+                                onChange={() => handleSingleLoanSelection(loan.id)}
+                                className="h-4 w-4"
                               />
                               <div className="flex-1">
                                 <div className="font-medium">{loan.loan_code}</div>
@@ -461,6 +547,58 @@ export default function ReceiptsPage() {
                       </CardContent>
                     </Card>
                   )}
+                </div>
+              )}
+
+              {selectedLoanId && loanInstallments.length > 0 && (
+                <div className="space-y-2">
+                  <Label>Cuotas Pendientes *</Label>
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-sm">Seleccione las cuotas a las que imputar el pago</CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-4">
+                      <div className="space-y-2 max-h-60 overflow-y-auto">
+                        {loanInstallments
+                          .filter((installment) => installment.status !== "paid")
+                          .map((installment) => (
+                            <div key={installment.number} className="flex items-center space-x-3 p-2 border rounded">
+                              <Checkbox
+                                id={`installment-${installment.number}`}
+                                checked={selectedInstallments.includes(installment.number)}
+                                onCheckedChange={(checked) =>
+                                  handleInstallmentSelection(installment.number, checked as boolean)
+                                }
+                              />
+                              <div className="flex-1">
+                                <div className="font-medium">Cuota #{installment.number}</div>
+                                <div className="text-sm text-muted-foreground">
+                                  Vencimiento: {new Date(installment.due_date).toLocaleDateString("es-ES")}
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <div className="font-medium">${installment.amount.toFixed(2)}</div>
+                                <Badge
+                                  variant={installment.status === "overdue" ? "destructive" : "secondary"}
+                                  className="text-xs"
+                                >
+                                  {installment.status === "overdue" ? "Vencida" : "Pendiente"}
+                                </Badge>
+                              </div>
+                            </div>
+                          ))}
+                      </div>
+                      {selectedInstallments.length > 0 && (
+                        <div className="mt-3 p-2 bg-muted rounded">
+                          <div className="text-sm font-medium">Cuotas seleccionadas: {selectedInstallments.length}</div>
+                          <div className="text-sm text-muted-foreground">
+                            Total a imputar: $
+                            {(selectedInstallments.length * (loanInstallments[0]?.amount || 0)).toFixed(2)}
+                          </div>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
                 </div>
               )}
 
