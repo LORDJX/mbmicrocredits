@@ -229,7 +229,8 @@ export default function ReceiptsPage() {
         setSelectedFile(null)
         fetchReceipts()
       } else {
-        toast.error("Error al crear el recibo")
+        const errorData = await response.json()
+        toast.error(errorData.error || "Error al crear el recibo")
       }
     } catch (error) {
       console.error("Error creating receipt:", error)

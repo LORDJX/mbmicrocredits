@@ -44,6 +44,19 @@ export async function POST(request: NextRequest) {
       receipt_file_url,
     } = body
 
+    const { data: tableExists, error: tableCheckError } = await supabase.from("receipts").select("id").limit(1)
+
+    if (tableCheckError && tableCheckError.code === "42P01") {
+      console.error("Receipts table does not exist:", tableCheckError)
+      return NextResponse.json(
+        {
+          error:
+            "La tabla de recibos no existe. Por favor ejecute el script SQL 12-create-receipts-table.sql en su base de datos Supabase.",
+        },
+        { status: 500 },
+      )
+    }
+
     // Insert receipt
     const { data: receipt, error: receiptError } = await supabase
       .from("receipts")
@@ -63,7 +76,12 @@ export async function POST(request: NextRequest) {
 
     if (receiptError) {
       console.error("Error creating receipt:", receiptError)
-      return NextResponse.json({ error: "Error creating receipt" }, { status: 500 })
+      return NextResponse.json(
+        {
+          error: `Error creating receipt: ${receiptError.message}`,
+        },
+        { status: 500 },
+      )
     }
 
     return NextResponse.json(receipt, { status: 201 })
