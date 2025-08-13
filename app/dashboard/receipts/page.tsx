@@ -234,6 +234,7 @@ export default function ReceiptsPage() {
 
   const handleCreateReceipt = async () => {
     if (
+      !newReceipt.date ||
       !newReceipt.client_id ||
       !newReceipt.payment_type ||
       newReceipt.selected_loans.length === 0 ||
@@ -271,8 +272,10 @@ export default function ReceiptsPage() {
         }
       }
 
+      const receiptDate = newReceipt.date || new Date()
+
       const receiptData = {
-        receipt_date: newReceipt.date.toISOString().split("T")[0],
+        receipt_date: receiptDate.toISOString().split("T")[0],
         client_id: newReceipt.client_id,
         selected_loans: newReceipt.selected_loans,
         selected_installments: selectedInstallments,
@@ -283,6 +286,8 @@ export default function ReceiptsPage() {
         observations: newReceipt.observations,
         attachment_url: attachmentUrl,
       }
+
+      console.log("Sending receipt data:", receiptData) // Agregando log para debugging
 
       const response = await fetch("/api/receipts", {
         method: "POST",
@@ -312,6 +317,7 @@ export default function ReceiptsPage() {
         fetchReceipts()
       } else {
         const errorData = await response.json()
+        console.error("Error creating receipt:", errorData) // Agregando log de error
         toast.error(errorData.error || "Error al crear el recibo")
       }
     } catch (error) {
@@ -474,7 +480,10 @@ export default function ReceiptsPage() {
                       <Calendar
                         mode="single"
                         selected={newReceipt.date}
-                        onSelect={(date) => date && setNewReceipt((prev) => ({ ...prev, date }))}
+                        onSelect={(date) => {
+                          const selectedDate = date || new Date()
+                          setNewReceipt((prev) => ({ ...prev, date: selectedDate }))
+                        }}
                         initialFocus
                       />
                     </PopoverContent>
