@@ -402,6 +402,7 @@ export default function LoansPage() {
                   <TableHead className="text-gray-300">Cliente</TableHead>
                   <TableHead className="text-gray-300">Monto</TableHead>
                   <TableHead className="text-gray-300">Cuotas</TableHead>
+                  <TableHead className="text-gray-300">Monto de cuota</TableHead>
                   <TableHead className="text-gray-300">Tipo</TableHead>
                   <TableHead className="text-gray-300">Tasa Interés</TableHead>
                   <TableHead className="text-gray-300">Modo Entrega</TableHead>
@@ -421,6 +422,7 @@ export default function LoansPage() {
                     </TableCell>
                     <TableCell className="text-gray-300">${loan.amount.toFixed(2)}</TableCell>
                     <TableCell className="text-gray-300">{loan.installments}</TableCell>
+                    <TableCell className="text-gray-300">${(loan.installment_amount || 0).toFixed(2)}</TableCell>
                     <TableCell className="text-gray-300">{loan.loan_type || "N/A"}</TableCell>
                     <TableCell className="text-gray-300">{calculateInterestRate(loan)}%</TableCell>
                     <TableCell className="text-gray-300">{loan.delivery_mode || "N/A"}</TableCell>
