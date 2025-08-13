@@ -23,11 +23,8 @@ const loanSelect = `
   client_id,
   amount,
   installments,
-  installment_amount,
   loan_type,
-  delivery_mode,
   interest_rate,
-  amount_to_repay,
   start_date,
   end_date,
   status,
@@ -74,7 +71,15 @@ export async function GET(request: NextRequest) {
     if (error) {
       return NextResponse.json({ detail: `Error listando préstamos: ${error.message}` }, { status: 500 })
     }
-    return NextResponse.json(data ?? [], { status: 200 })
+
+    const loansWithCalculatedFields = (data ?? []).map((loan) => ({
+      ...loan,
+      installment_amount: loan.installments > 0 ? loan.amount / loan.installments : 0,
+      amount_to_repay: loan.amount * (1 + (loan.interest_rate || 0) / 100),
+      delivery_mode: "Efectivo", // Valor por defecto hasta que se agregue la columna
+    }))
+
+    return NextResponse.json(loansWithCalculatedFields, { status: 200 })
   } catch (e: any) {
     return NextResponse.json({ detail: `Fallo inesperado en GET /api/loans: ${e.message}` }, { status: 500 })
   }
@@ -93,11 +98,8 @@ export async function POST(request: NextRequest) {
       client_id: body.client_id,
       amount: body.amount,
       installments: body.installments,
-      installment_amount: body.installment_amount,
       loan_type: body.loan_type ?? "Semanal",
-      delivery_mode: body.delivery_mode ?? "Efectivo",
       interest_rate: body.interest_rate ?? null,
-      amount_to_repay: body.amount_to_repay ?? null,
       start_date: body.start_date ?? null,
       end_date: body.end_date ?? null,
       status: body.status ?? "activo",
@@ -108,7 +110,15 @@ export async function POST(request: NextRequest) {
     if (error) {
       return NextResponse.json({ detail: `Error creando préstamo: ${error.message}` }, { status: 500 })
     }
-    return NextResponse.json(data, { status: 201 })
+
+    const loanWithCalculatedFields = {
+      ...data,
+      installment_amount: body.installment_amount,
+      amount_to_repay: body.amount_to_repay,
+      delivery_mode: body.delivery_mode ?? "Efectivo",
+    }
+
+    return NextResponse.json(loanWithCalculatedFields, { status: 201 })
   } catch (e: any) {
     return NextResponse.json({ detail: `Fallo inesperado en POST /api/loans: ${e.message}` }, { status: 500 })
   }
