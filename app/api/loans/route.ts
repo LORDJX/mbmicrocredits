@@ -23,6 +23,9 @@ const loanSelect = `
   client_id,
   amount,
   installments,
+  installment_amount,
+  delivery_mode,
+  amount_to_repay,
   loan_type,
   interest_rate,
   start_date,
@@ -72,14 +75,15 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ detail: `Error listando préstamos: ${error.message}` }, { status: 500 })
     }
 
-    const loansWithCalculatedFields = (data ?? []).map((loan) => ({
+    const loansWithDefaults = (data ?? []).map((loan) => ({
       ...loan,
-      installment_amount: loan.installments > 0 ? loan.amount / loan.installments : 0,
-      amount_to_repay: loan.amount * (1 + (loan.interest_rate || 0) / 100),
-      delivery_mode: "Efectivo", // Valor por defecto hasta que se agregue la columna
+      // Solo calcular si no existe en la BD (para compatibilidad con registros antiguos)
+      installment_amount: loan.installment_amount ?? (loan.installments > 0 ? loan.amount / loan.installments : 0),
+      amount_to_repay: loan.amount_to_repay ?? loan.amount * (1 + (loan.interest_rate || 0) / 100),
+      delivery_mode: loan.delivery_mode ?? "Efectivo",
     }))
 
-    return NextResponse.json(loansWithCalculatedFields, { status: 200 })
+    return NextResponse.json(loansWithDefaults, { status: 200 })
   } catch (e: any) {
     return NextResponse.json({ detail: `Fallo inesperado en GET /api/loans: ${e.message}` }, { status: 500 })
   }
@@ -98,6 +102,9 @@ export async function POST(request: NextRequest) {
       client_id: body.client_id,
       amount: body.amount,
       installments: body.installments,
+      installment_amount: body.installment_amount,
+      delivery_mode: body.delivery_mode ?? "Efectivo",
+      amount_to_repay: body.amount_to_repay ?? null,
       loan_type: body.loan_type ?? "Semanal",
       interest_rate: body.interest_rate ?? null,
       start_date: body.start_date ?? null,
@@ -105,21 +112,19 @@ export async function POST(request: NextRequest) {
       status: body.status ?? "activo",
     }
 
+    console.log("Insertando préstamo con datos:", insertPayload)
+
     const { data, error } = await supabase.from("loans").insert([insertPayload]).select(loanSelect).single()
 
     if (error) {
+      console.error("Error de Supabase:", error)
       return NextResponse.json({ detail: `Error creando préstamo: ${error.message}` }, { status: 500 })
     }
 
-    const loanWithCalculatedFields = {
-      ...data,
-      installment_amount: body.installment_amount,
-      amount_to_repay: body.amount_to_repay,
-      delivery_mode: body.delivery_mode ?? "Efectivo",
-    }
-
-    return NextResponse.json(loanWithCalculatedFields, { status: 201 })
+    console.log("Préstamo creado exitosamente:", data)
+    return NextResponse.json(data, { status: 201 })
   } catch (e: any) {
+    console.error("Error inesperado:", e)
     return NextResponse.json({ detail: `Fallo inesperado en POST /api/loans: ${e.message}` }, { status: 500 })
   }
 }
