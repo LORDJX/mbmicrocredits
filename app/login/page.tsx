@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
@@ -18,21 +18,46 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
 
+  useEffect(() => {
+    const clearSession = async () => {
+      try {
+        await supabase.auth.signOut()
+      } catch (error) {
+        console.log("Error clearing session:", error)
+      }
+    }
+    clearSession()
+  }, [])
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
     setError(null)
 
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    })
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      })
 
-    if (error) {
-      setError(error.message)
-    } else {
-      router.push("/dashboard")
+      if (error) {
+        if (error.message.includes("Invalid login credentials")) {
+          setError("Credenciales inválidas. Verifica tu email y contraseña.")
+        } else if (error.message.includes("Supabase no configurado")) {
+          setError("Sistema en modo desarrollo. Contacta al administrador.")
+        } else {
+          setError(error.message)
+        }
+      } else if (data?.user) {
+        router.push("/dashboard")
+      } else {
+        setError("Error inesperado durante el login")
+      }
+    } catch (err) {
+      console.error("Login error:", err)
+      setError("Error de conexión. Intenta nuevamente.")
     }
+
     setLoading(false)
   }
 
