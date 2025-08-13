@@ -399,9 +399,8 @@ export default function LoansPage() {
                   <TableHead className="text-gray-300">Monto</TableHead>
                   <TableHead className="text-gray-300">Cuotas</TableHead>
                   <TableHead className="text-gray-300">Tipo</TableHead>
-                  <TableHead className="text-gray-300">Tasa Interés</TableHead>{" "}
-                  {/* Mantener columna pero calcular dinámicamente */}
-                  <TableHead className="text-gray-300">Modo Entrega</TableHead> {/* Nueva columna */}
+                  <TableHead className="text-gray-300">Tasa Interés</TableHead>
+                  <TableHead className="text-gray-300">Modo Entrega</TableHead>
                   <TableHead className="text-gray-300">Fecha Inicio</TableHead>
                   <TableHead className="text-gray-300">Estado</TableHead>
                   <TableHead className="text-gray-300">Acciones</TableHead>
@@ -420,7 +419,7 @@ export default function LoansPage() {
                     <TableCell className="text-gray-300">{loan.installments}</TableCell>
                     <TableCell className="text-gray-300">{loan.loan_type || "N/A"}</TableCell>
                     <TableCell className="text-gray-300">{calculateInterestRate(loan)}%</TableCell>
-                    <TableCell className="text-gray-300">{loan.delivery_mode || "N/A"}</TableCell> {/* Nueva columna */}
+                    <TableCell className="text-gray-300">{loan.delivery_mode || "N/A"}</TableCell>
                     <TableCell className="text-gray-300">
                       {loan.start_date ? new Date(loan.start_date).toLocaleDateString() : "N/A"}
                     </TableCell>
