@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/hooks/use-toast"
 import { DialogFooter } from "@/components/ui/dialog"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
@@ -33,6 +34,15 @@ interface FormData {
   loan_type: string
   delivery_mode: string
   start_date: string
+  observations: string
+}
+
+interface FormErrors {
+  client_id?: string
+  amount?: string
+  installments?: string
+  installment_amount?: string
+  start_date?: string
 }
 
 const initialFormData: FormData = {
@@ -43,14 +53,7 @@ const initialFormData: FormData = {
   loan_type: "Semanal",
   delivery_mode: "Efectivo",
   start_date: new Date().toISOString().split("T")[0],
-}
-
-interface FormErrors {
-  client_id?: string
-  amount?: string
-  installments?: string
-  installment_amount?: string
-  start_date?: string
+  observations: "",
 }
 
 const formatCurrency = (value: string): string => {
@@ -151,7 +154,7 @@ export function NewLoanForm({ onSuccess, onCancel }: NewLoanFormProps) {
     }
   }
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value, type } = e.target
 
     setFormData((prev) => ({
@@ -209,6 +212,7 @@ export function NewLoanForm({ onSuccess, onCancel }: NewLoanFormProps) {
         loan_type: formData.loan_type,
         delivery_mode: formData.delivery_mode,
         start_date: formData.start_date,
+        observations: formData.observations,
         interest_rate: interestRate,
         amount_to_repay: totalAmount,
         status: "activo",
@@ -417,6 +421,24 @@ export function NewLoanForm({ onSuccess, onCancel }: NewLoanFormProps) {
             required
           />
           {errors.start_date && <p className="text-red-500 text-xs mt-1">{errors.start_date}</p>}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-4 items-start gap-4">
+        <Label htmlFor="observations" className="text-right text-gray-300 pt-2">
+          Observaciones
+        </Label>
+        <div className="col-span-3">
+          <Textarea
+            id="observations"
+            name="observations"
+            value={formData.observations}
+            onChange={handleChange}
+            rows={3}
+            className="bg-gray-700 border-gray-600 text-gray-100 resize-none"
+            placeholder="Ingrese observaciones adicionales sobre el préstamo..."
+          />
+          <p className="text-xs text-gray-400 mt-1">Campo opcional para notas adicionales</p>
         </div>
       </div>
 
