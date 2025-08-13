@@ -83,7 +83,17 @@ export default function LoansPage() {
         throw new Error(errorMessage)
       }
       const data: Loan[] = await response.json()
-      setLoans(data)
+
+      const sortedLoans = data.sort((a, b) => {
+        // Extraer el número del código de préstamo para ordenar correctamente
+        const getNumber = (code: string) => {
+          const match = code.match(/\d+/)
+          return match ? Number.parseInt(match[0]) : 0
+        }
+        return getNumber(b.loan_code) - getNumber(a.loan_code)
+      })
+
+      setLoans(sortedLoans)
     } catch (err: any) {
       console.error("Error al cargar préstamos:", err.message)
       setError("Error al cargar préstamos: " + err.message)
@@ -483,7 +493,11 @@ export default function LoansPage() {
           <NewLoanForm
             onSuccess={() => {
               setIsCreateDialogOpen(false)
-              fetchLoans()
+              fetchLoans() // Recargar la lista después de crear
+              toast({
+                title: "Éxito",
+                description: "Préstamo creado correctamente.",
+              })
             }}
             onCancel={() => setIsCreateDialogOpen(false)}
           />

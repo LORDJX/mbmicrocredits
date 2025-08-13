@@ -177,12 +177,12 @@ export function NewLoanForm({ onSuccess, onCancel }: NewLoanFormProps) {
     setLoading(true)
     try {
       const totalAmount = formData.installment_amount * formData.installments
-      const interestRate = (totalAmount / formData.amount - 1) * 100
+      const interestRate = formData.amount > 0 ? (totalAmount / formData.amount - 1) * 100 : 0
 
       const submitData = {
         ...formData,
         interest_rate: interestRate,
-        amount_to_repay: totalAmount, // Agregar monto total a devolver
+        amount_to_repay: totalAmount,
       }
 
       const response = await fetch("/api/loans", {
@@ -206,7 +206,7 @@ export function NewLoanForm({ onSuccess, onCancel }: NewLoanFormProps) {
       setDisplayAmount("")
       setDisplayInstallmentAmount("")
 
-      onSuccess()
+      onSuccess() // Llamar callback de éxito
     } catch (error: any) {
       toast({
         title: "Error",
