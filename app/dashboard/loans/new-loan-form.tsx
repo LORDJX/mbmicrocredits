@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -26,41 +25,43 @@ interface Client {
   last_name: string
 }
 
-const initialFormData = {
+interface FormData {
+  client_id: string
+  amount: number
+  installments: number
+  installment_amount: number
+  loan_type: string
+  delivery_mode: string
+  start_date: string
+}
+
+const initialFormData: FormData = {
   client_id: "",
   amount: 0,
   installments: 1,
-  loan_type: "Semanal", // Cambiado de "Personal" a "Semanal"
-  installment_amount: 0, // Nuevo campo para monto de cuota
-  delivery_mode: "Efectivo", // Nuevo campo para modo de entrega
+  installment_amount: 0,
+  loan_type: "Semanal",
+  delivery_mode: "Efectivo",
   start_date: new Date().toISOString().split("T")[0],
-  end_date: "",
-  status: "activo",
 }
 
 interface FormErrors {
   client_id?: string
   amount?: string
   installments?: string
-  installment_amount?: string // Nuevo campo de error
+  installment_amount?: string
   start_date?: string
 }
 
 const formatCurrency = (value: string): string => {
-  // Remover caracteres no numéricos excepto punto decimal
   const numericValue = value.replace(/[^0-9.]/g, "")
-
-  // Evitar múltiples puntos decimales
   const parts = numericValue.split(".")
   if (parts.length > 2) {
     return parts[0] + "." + parts.slice(1).join("")
   }
-
-  // Limitar a 2 decimales
   if (parts[1] && parts[1].length > 2) {
     return parts[0] + "." + parts[1].substring(0, 2)
   }
-
   return numericValue
 }
 
@@ -70,7 +71,7 @@ const parseCurrency = (value: string): number => {
 }
 
 export function NewLoanForm({ onSuccess, onCancel }: NewLoanFormProps) {
-  const [formData, setFormData] = useState(initialFormData)
+  const [formData, setFormData] = useState<FormData>(initialFormData)
   const [clients, setClients] = useState<Client[]>([])
   const [loading, setLoading] = useState(false)
   const [clientsLoading, setClientsLoading] = useState(true)
@@ -84,13 +85,16 @@ export function NewLoanForm({ onSuccess, onCancel }: NewLoanFormProps) {
     const fetchClients = async () => {
       try {
         const response = await fetch("/api/clients")
-        if (!response.ok) throw new Error("No se pudieron cargar los clientes.")
+        if (!response.ok) {
+          throw new Error("Error al cargar clientes")
+        }
         const data: Client[] = await response.json()
         setClients(data)
       } catch (error: any) {
+        console.error("Error cargando clientes:", error)
         toast({
           title: "Error",
-          description: `No se pudieron cargar los clientes: ${error.message}`,
+          description: "No se pudieron cargar los clientes",
           variant: "destructive",
         })
       } finally {
@@ -102,49 +106,58 @@ export function NewLoanForm({ onSuccess, onCancel }: NewLoanFormProps) {
 
   const validateForm = (): boolean => {
     const newErrors: FormErrors = {}
+
     if (!formData.client_id) {
-      newErrors.client_id = "Debes seleccionar un cliente."
+      newErrors.client_id = "Debes seleccionar un cliente"
     }
     if (formData.amount <= 0) {
-      newErrors.amount = "El monto debe ser mayor que cero."
+      newErrors.amount = "El monto debe ser mayor que cero"
     }
     if (formData.installments <= 0 || !Number.isInteger(formData.installments)) {
-      newErrors.installments = "El número de cuotas debe ser un entero positivo."
+      newErrors.installments = "El número de cuotas debe ser un entero positivo"
     }
     if (formData.installment_amount <= 0) {
-      newErrors.installment_amount = "El monto de cuota debe ser mayor que cero."
+      newErrors.installment_amount = "El monto de cuota debe ser mayor que cero"
     }
     if (!formData.start_date) {
-      newErrors.start_date = "La fecha de inicio es obligatoria."
+      newErrors.start_date = "La fecha de inicio es obligatoria"
     }
+
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
+  }
+
+  const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const formattedValue = formatCurrency(e.target.value)
+    const numericValue = parseCurrency(formattedValue)
+
+    setDisplayAmount(formattedValue)
+    setFormData((prev) => ({ ...prev, amount: numericValue }))
+
+    if (errors.amount) {
+      setErrors((prev) => ({ ...prev, amount: undefined }))
+    }
+  }
+
+  const handleInstallmentAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const formattedValue = formatCurrency(e.target.value)
+    const numericValue = parseCurrency(formattedValue)
+
+    setDisplayInstallmentAmount(formattedValue)
+    setFormData((prev) => ({ ...prev, installment_amount: numericValue }))
+
+    if (errors.installment_amount) {
+      setErrors((prev) => ({ ...prev, installment_amount: undefined }))
+    }
   }
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type } = e.target
 
-    if (name === "amount" || name === "installment_amount") {
-      const formattedValue = formatCurrency(value)
-      const numericValue = parseCurrency(formattedValue)
-
-      setFormData((prev) => ({
-        ...prev,
-        [name]: numericValue,
-      }))
-
-      // Actualizar el valor mostrado con formato
-      if (name === "amount") {
-        setDisplayAmount(formattedValue)
-      } else if (name === "installment_amount") {
-        setDisplayInstallmentAmount(formattedValue)
-      }
-    } else {
-      setFormData((prev) => ({
-        ...prev,
-        [name]: type === "number" ? Number.parseFloat(value) || 0 : value,
-      }))
-    }
+    setFormData((prev) => ({
+      ...prev,
+      [name]: type === "number" ? Number.parseFloat(value) || 0 : value,
+    }))
 
     if (errors[name as keyof FormErrors]) {
       setErrors((prev) => ({ ...prev, [name]: undefined }))
@@ -163,54 +176,73 @@ export function NewLoanForm({ onSuccess, onCancel }: NewLoanFormProps) {
     }
   }
 
+  const resetForm = () => {
+    setFormData(initialFormData)
+    setDisplayAmount("")
+    setDisplayInstallmentAmount("")
+    setErrors({})
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+
     if (!validateForm()) {
       toast({
         title: "Error de validación",
-        description: "Por favor, corrige los errores en el formulario.",
+        description: "Por favor, corrige los errores en el formulario",
         variant: "destructive",
       })
       return
     }
 
     setLoading(true)
+
     try {
       const totalAmount = formData.installment_amount * formData.installments
       const interestRate = formData.amount > 0 ? (totalAmount / formData.amount - 1) * 100 : 0
 
       const submitData = {
-        ...formData,
+        client_id: formData.client_id,
+        amount: formData.amount,
+        installments: formData.installments,
+        installment_amount: formData.installment_amount,
+        loan_type: formData.loan_type,
+        delivery_mode: formData.delivery_mode,
+        start_date: formData.start_date,
         interest_rate: interestRate,
         amount_to_repay: totalAmount,
+        status: "activo",
       }
+
+      console.log("Enviando datos:", submitData)
 
       const response = await fetch("/api/loans", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify(submitData),
       })
 
+      const responseData = await response.json()
+      console.log("Respuesta del servidor:", responseData)
+
       if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.detail || "Error al crear el préstamo.")
+        throw new Error(responseData.detail || "Error al crear el préstamo")
       }
 
       toast({
         title: "Éxito",
-        description: "Préstamo creado correctamente.",
+        description: "Préstamo creado correctamente",
       })
 
-      setFormData(initialFormData)
-      setErrors({})
-      setDisplayAmount("")
-      setDisplayInstallmentAmount("")
-
-      onSuccess() // Llamar callback de éxito
+      resetForm()
+      onSuccess()
     } catch (error: any) {
+      console.error("Error al crear préstamo:", error)
       toast({
         title: "Error",
-        description: error.message,
+        description: error.message || "Error al crear el préstamo",
         variant: "destructive",
       })
     } finally {
@@ -245,7 +277,7 @@ export function NewLoanForm({ onSuccess, onCancel }: NewLoanFormProps) {
               <Command>
                 <CommandInput placeholder="Buscar cliente..." className="text-gray-100 placeholder:text-gray-400" />
                 <CommandList>
-                  <CommandEmpty>{clientsLoading ? "Cargando clientes..." : "Ningún cliente encontrado."}</CommandEmpty>
+                  <CommandEmpty>{clientsLoading ? "Cargando clientes..." : "Ningún cliente encontrado"}</CommandEmpty>
                   <CommandGroup>
                     {clients.map((client) => (
                       <CommandItem
@@ -281,7 +313,7 @@ export function NewLoanForm({ onSuccess, onCancel }: NewLoanFormProps) {
               name="amount"
               type="text"
               value={displayAmount}
-              onChange={handleChange}
+              onChange={handleAmountChange}
               className="bg-gray-700 border-gray-600 text-gray-100 pl-8"
               placeholder="15000.00"
               required
@@ -302,6 +334,7 @@ export function NewLoanForm({ onSuccess, onCancel }: NewLoanFormProps) {
             name="installments"
             type="number"
             step="1"
+            min="1"
             value={formData.installments}
             onChange={handleChange}
             className="bg-gray-700 border-gray-600 text-gray-100"
@@ -323,7 +356,7 @@ export function NewLoanForm({ onSuccess, onCancel }: NewLoanFormProps) {
               name="installment_amount"
               type="text"
               value={displayInstallmentAmount}
-              onChange={handleChange}
+              onChange={handleInstallmentAmountChange}
               className="bg-gray-700 border-gray-600 text-gray-100 pl-8"
               placeholder="1875.00"
               required
@@ -396,7 +429,7 @@ export function NewLoanForm({ onSuccess, onCancel }: NewLoanFormProps) {
         >
           Cancelar
         </Button>
-        <Button type="submit" className="bg-gray-600 hover:bg-gray-700 text-gray-50 font-semibold" disabled={loading}>
+        <Button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white font-semibold" disabled={loading}>
           {loading ? "Creando..." : "Crear Préstamo"}
         </Button>
       </DialogFooter>

@@ -7,8 +7,11 @@ type CreateLoanBody = {
   client_id: string
   amount: number
   installments: number
+  installment_amount: number
   loan_type?: string | null
+  delivery_mode?: string | null
   interest_rate?: number | null
+  amount_to_repay?: number | null
   start_date?: string | null
   end_date?: string | null
   status?: string | null
@@ -20,8 +23,11 @@ const loanSelect = `
   client_id,
   amount,
   installments,
+  installment_amount,
   loan_type,
+  delivery_mode,
   interest_rate,
+  amount_to_repay,
   start_date,
   end_date,
   status,
@@ -54,12 +60,11 @@ export async function GET(request: NextRequest) {
       clientIds = (clientMatches ?? []).map((c) => c.id)
     }
 
-    let query = supabase.from("loans").select(loanSelect).order("created_at", { ascending: false })
+    let query = supabase.from("loans").select(loanSelect).order("loan_code", { ascending: false })
 
     if (term && term.length > 0) {
       const orParts = [`loan_code.ilike.%${term}%`]
       if (clientIds.length > 0) {
-        // or=(loan_code.ilike.*term*,client_id.in.(uuid1,uuid2))
         orParts.push(`client_id.in.(${clientIds.join(",")})`)
       }
       query = query.or(orParts.join(","))
@@ -80,16 +85,22 @@ export async function POST(request: NextRequest) {
     const supabase = getSupabaseAdmin()
     const body = (await request.json()) as CreateLoanBody
 
+    if (!body.client_id || !body.amount || !body.installments || !body.installment_amount) {
+      return NextResponse.json({ detail: "Faltan campos requeridos" }, { status: 400 })
+    }
+
     const insertPayload = {
       client_id: body.client_id,
       amount: body.amount,
       installments: body.installments,
-      loan_type: body.loan_type ?? null,
+      installment_amount: body.installment_amount,
+      loan_type: body.loan_type ?? "Semanal",
+      delivery_mode: body.delivery_mode ?? "Efectivo",
       interest_rate: body.interest_rate ?? null,
+      amount_to_repay: body.amount_to_repay ?? null,
       start_date: body.start_date ?? null,
       end_date: body.end_date ?? null,
       status: body.status ?? "activo",
-      // loan_code: se asume que lo genera la BD mediante trigger/función
     }
 
     const { data, error } = await supabase.from("loans").insert([insertPayload]).select(loanSelect).single()
