@@ -3,90 +3,72 @@ import { supabase } from "@/lib/supabaseClient"
 
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url)
-    const clientId = searchParams.get("client_id")
-
-    let query = supabase
+    const { data: receipts, error } = await supabase
       .from("receipts")
       .select(`
         *,
         clients!inner(first_name, last_name)
       `)
-      .order("receipt_date", { ascending: false })
-
-    if (clientId) {
-      query = query.eq("client_id", clientId)
-    }
-
-    const { data, error } = await query
+      .order("created_at", { ascending: false })
 
     if (error) {
-      console.error("Error al obtener recibos:", error)
-      return NextResponse.json({ error: "Error al obtener recibos" }, { status: 500 })
+      console.error("Error fetching receipts:", error)
+      return NextResponse.json({ error: "Error fetching receipts" }, { status: 500 })
     }
 
-    const receiptsWithClientNames = data.map((receipt) => ({
-      ...receipt,
-      client_name: `${receipt.clients.first_name} ${receipt.clients.last_name}`,
-    }))
+    const formattedReceipts =
+      receipts?.map((receipt) => ({
+        ...receipt,
+        client_name: `${receipt.clients.first_name} ${receipt.clients.last_name}`,
+      })) || []
 
-    return NextResponse.json(receiptsWithClientNames)
+    return NextResponse.json(formattedReceipts)
   } catch (error) {
-    console.error("Error en GET /api/receipts:", error)
-    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 })
+    console.error("Error in receipts GET:", error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-
     const {
-      receipt_date,
+      date,
       client_id,
+      selected_loans,
       payment_type,
       cash_amount,
       transfer_amount,
       total_amount,
       observations,
-      attachment_url,
-      selected_loans,
+      receipt_file_url,
     } = body
 
-    // Validaciones básicas
-    if (!client_id || !payment_type || !selected_loans || selected_loans.length === 0) {
-      return NextResponse.json({ error: "Faltan campos obligatorios" }, { status: 400 })
-    }
-
-    if ((cash_amount || 0) === 0 && (transfer_amount || 0) === 0) {
-      return NextResponse.json({ error: "Debe ingresar al menos un importe" }, { status: 400 })
-    }
-
-    const { data, error } = await supabase
+    // Insert receipt
+    const { data: receipt, error: receiptError } = await supabase
       .from("receipts")
-      .insert([
-        {
-          receipt_date,
-          client_id,
-          payment_type,
-          cash_amount: cash_amount || 0,
-          transfer_amount: transfer_amount || 0,
-          total_amount: total_amount || 0,
-          observations: observations || "",
-          attachment_url,
-          selected_loans,
-        },
-      ])
+      .insert({
+        date,
+        client_id,
+        payment_type,
+        cash_amount,
+        transfer_amount,
+        total_amount,
+        observations,
+        receipt_file_url,
+        selected_loans: selected_loans,
+      })
       .select()
+      .single()
 
-    if (error) {
-      console.error("Error al crear recibo:", error)
-      return NextResponse.json({ error: "Error al crear recibo" }, { status: 500 })
+    if (receiptError) {
+      console.error("Error creating receipt:", receiptError)
+      return NextResponse.json({ error: "Error creating receipt" }, { status: 500 })
     }
 
-    return NextResponse.json(data[0], { status: 201 })
+    return NextResponse.json(receipt, { status: 201 })
   } catch (error) {
-    console.error("Error en POST /api/receipts:", error)
-    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 })
+    console.error("Error in receipts POST:", error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
