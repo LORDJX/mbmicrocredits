@@ -46,6 +46,29 @@ interface FormErrors {
   start_date?: string
 }
 
+const formatCurrency = (value: string): string => {
+  // Remover caracteres no numéricos excepto punto decimal
+  const numericValue = value.replace(/[^0-9.]/g, "")
+
+  // Evitar múltiples puntos decimales
+  const parts = numericValue.split(".")
+  if (parts.length > 2) {
+    return parts[0] + "." + parts.slice(1).join("")
+  }
+
+  // Limitar a 2 decimales
+  if (parts[1] && parts[1].length > 2) {
+    return parts[0] + "." + parts[1].substring(0, 2)
+  }
+
+  return numericValue
+}
+
+const parseCurrency = (value: string): number => {
+  const numericValue = value.replace(/[^0-9.]/g, "")
+  return Number.parseFloat(numericValue) || 0
+}
+
 export function NewLoanForm({ onSuccess, onCancel }: NewLoanFormProps) {
   const [formData, setFormData] = useState(initialFormData)
   const [clients, setClients] = useState<Client[]>([])
@@ -53,6 +76,8 @@ export function NewLoanForm({ onSuccess, onCancel }: NewLoanFormProps) {
   const [clientsLoading, setClientsLoading] = useState(true)
   const [openCombobox, setOpenCombobox] = useState(false)
   const [errors, setErrors] = useState<FormErrors>({})
+  const [displayAmount, setDisplayAmount] = useState("")
+  const [displayInstallmentAmount, setDisplayInstallmentAmount] = useState("")
   const { toast } = useToast()
 
   useEffect(() => {
@@ -98,10 +123,29 @@ export function NewLoanForm({ onSuccess, onCancel }: NewLoanFormProps) {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type } = e.target
-    setFormData((prev) => ({
-      ...prev,
-      [name]: type === "number" ? Number.parseFloat(value) || 0 : value,
-    }))
+
+    if (name === "amount" || name === "installment_amount") {
+      const formattedValue = formatCurrency(value)
+      const numericValue = parseCurrency(formattedValue)
+
+      setFormData((prev) => ({
+        ...prev,
+        [name]: numericValue,
+      }))
+
+      // Actualizar el valor mostrado con formato
+      if (name === "amount") {
+        setDisplayAmount(formattedValue)
+      } else if (name === "installment_amount") {
+        setDisplayInstallmentAmount(formattedValue)
+      }
+    } else {
+      setFormData((prev) => ({
+        ...prev,
+        [name]: type === "number" ? Number.parseFloat(value) || 0 : value,
+      }))
+    }
+
     if (errors[name as keyof FormErrors]) {
       setErrors((prev) => ({ ...prev, [name]: undefined }))
     }
@@ -159,6 +203,8 @@ export function NewLoanForm({ onSuccess, onCancel }: NewLoanFormProps) {
 
       setFormData(initialFormData)
       setErrors({})
+      setDisplayAmount("")
+      setDisplayInstallmentAmount("")
 
       onSuccess()
     } catch (error: any) {
@@ -228,17 +274,20 @@ export function NewLoanForm({ onSuccess, onCancel }: NewLoanFormProps) {
           Monto
         </Label>
         <div className="col-span-3">
-          <Input
-            id="amount"
-            name="amount"
-            type="number"
-            step="0.01"
-            value={formData.amount}
-            onChange={handleChange}
-            className="bg-gray-700 border-gray-600 text-gray-100"
-            placeholder="Ej: 10000.00"
-            required
-          />
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-sm">$</span>
+            <Input
+              id="amount"
+              name="amount"
+              type="text"
+              value={displayAmount}
+              onChange={handleChange}
+              className="bg-gray-700 border-gray-600 text-gray-100 pl-8"
+              placeholder="15000.00"
+              required
+            />
+          </div>
+          <p className="text-xs text-gray-400 mt-1">Ejemplo: $15000.00 (sin puntos de miles)</p>
           {errors.amount && <p className="text-red-500 text-xs mt-1">{errors.amount}</p>}
         </div>
       </div>
@@ -267,19 +316,21 @@ export function NewLoanForm({ onSuccess, onCancel }: NewLoanFormProps) {
           Monto de cuota
         </Label>
         <div className="col-span-3">
-          <Input
-            id="installment_amount"
-            name="installment_amount"
-            type="number"
-            step="0.01"
-            value={formData.installment_amount}
-            onChange={handleChange}
-            className="bg-gray-700 border-gray-600 text-gray-100"
-            placeholder="Ej: 1200.00"
-            required
-          />
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-sm">$</span>
+            <Input
+              id="installment_amount"
+              name="installment_amount"
+              type="text"
+              value={displayInstallmentAmount}
+              onChange={handleChange}
+              className="bg-gray-700 border-gray-600 text-gray-100 pl-8"
+              placeholder="1875.00"
+              required
+            />
+          </div>
+          <p className="text-xs text-gray-400 mt-1">Ejemplo: $1875.00 - Monto que pagará el cliente por cada cuota</p>
           {errors.installment_amount && <p className="text-red-500 text-xs mt-1">{errors.installment_amount}</p>}
-          <p className="text-xs text-gray-400 mt-1">Monto que pagará el cliente por cada cuota</p>
         </div>
       </div>
 
