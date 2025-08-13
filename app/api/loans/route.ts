@@ -45,8 +45,9 @@ export async function GET(request: NextRequest) {
   try {
     const supabase = getSupabaseAdmin()
     const term = request.nextUrl.searchParams.get("search")?.trim()
+    const clientId = request.nextUrl.searchParams.get("client_id")
+    const statusFilter = request.nextUrl.searchParams.get("status")
 
-    // Búsqueda por cliente (código o nombre)
     let clientIds: string[] = []
     if (term && term.length > 0) {
       const { data: clientMatches, error: clientErr } = await supabase
@@ -62,6 +63,10 @@ export async function GET(request: NextRequest) {
 
     let query = supabase.from("loans").select(loanSelect).order("loan_code", { ascending: false })
 
+    if (clientId) {
+      query = query.eq("client_id", clientId)
+    }
+
     if (term && term.length > 0) {
       const orParts = [`loan_code.ilike.%${term}%`]
       if (clientIds.length > 0) {
@@ -75,13 +80,18 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ detail: `Error listando préstamos: ${error.message}` }, { status: 500 })
     }
 
-    const loansWithDefaults = (data ?? []).map((loan) => ({
+    let loansWithDefaults = (data ?? []).map((loan) => ({
       ...loan,
-      // Solo calcular si no existe en la BD (para compatibilidad con registros antiguos)
       installment_amount: loan.installment_amount ?? (loan.installments > 0 ? loan.amount / loan.installments : 0),
       amount_to_repay: loan.amount_to_repay ?? loan.amount * (1 + (loan.interest_rate || 0) / 100),
       delivery_mode: loan.delivery_mode ?? "Efectivo",
     }))
+
+    if (statusFilter === "active") {
+      loansWithDefaults = loansWithDefaults.filter(
+        (loan) => loan.status === "Activo" || loan.status === "En Mora" || loan.status === "activo",
+      )
+    }
 
     return NextResponse.json(loansWithDefaults, { status: 200 })
   } catch (e: any) {

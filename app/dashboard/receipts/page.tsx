@@ -124,10 +124,7 @@ export default function ReceiptsPage() {
       const response = await fetch(`/api/loans?client_id=${clientId}&status=active`)
       if (response.ok) {
         const data = await response.json()
-        const activeLoansForClient = data.filter(
-          (loan: Loan) => loan.client_id === clientId && (loan.status === "active" || loan.status === "Activo"),
-        )
-        setActiveLoans(activeLoansForClient)
+        setActiveLoans(data)
       }
     } catch (error) {
       console.error("Error fetching active loans:", error)
