@@ -13,6 +13,7 @@ import {
   ChevronDown,
   User2,
   FileText,
+  Receipt,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -38,6 +39,7 @@ const navItems = [
   { title: "Socios", href: "/dashboard/partners", icon: Handshake },
   { title: "Clientes", href: "/dashboard/clients", icon: User2 },
   { title: "Préstamos", href: "/dashboard/loans", icon: CreditCard },
+  { title: "Recibos", href: "/dashboard/recibos", icon: Receipt }, // agregando ruta de recibos
   { title: "Transacciones", href: "/dashboard/transactions", icon: DollarSign },
   { title: "Seguimientos", href: "/dashboard/followups", icon: CalendarCheck },
   { title: "Resumen para Socios", href: "/dashboard/resumen", icon: FileText },
