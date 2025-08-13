@@ -233,8 +233,10 @@ export default function ReceiptsPage() {
   }
 
   const handleCreateReceipt = async () => {
+    const currentDate = newReceipt.date || new Date()
+
     if (
-      !newReceipt.date ||
+      !currentDate ||
       !newReceipt.client_id ||
       !newReceipt.payment_type ||
       newReceipt.selected_loans.length === 0 ||
@@ -272,10 +274,8 @@ export default function ReceiptsPage() {
         }
       }
 
-      const receiptDate = newReceipt.date || new Date()
-
       const receiptData = {
-        receipt_date: receiptDate.toISOString().split("T")[0],
+        receipt_date: currentDate.toISOString().split("T")[0],
         client_id: newReceipt.client_id,
         selected_loans: newReceipt.selected_loans,
         selected_installments: selectedInstallments,
