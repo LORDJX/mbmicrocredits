@@ -42,6 +42,8 @@ interface Client {
   created_at: string
   updated_at: string | null
   deleted_at: string | null
+  cbu_cvu: string | null
+  alias: string | null
 }
 
 type PartialClient = Partial<Client>
@@ -58,6 +60,8 @@ const initialNewClientState: PartialClient = {
   observations: "",
   dni_front_url: null,
   dni_back_url: null,
+  cbu_cvu: "",
+  alias: "",
 }
 
 interface FormErrors {
@@ -65,6 +69,7 @@ interface FormErrors {
   last_name?: string
   dni?: string
   email?: string
+  cbu_cvu?: string
 }
 
 const getErrorMessage = async (response: Response, defaultMessage: string): Promise<string> => {
@@ -292,7 +297,12 @@ export default function ClientsPage() {
     const errors: FormErrors = {}
     if (!clientData.first_name?.toString().trim()) errors.first_name = "El nombre es obligatorio."
     if (!clientData.last_name?.toString().trim()) errors.last_name = "El apellido es obligatorio."
-    if (!clientData.dni?.toString().trim()) errors.dni = "El DNI es obligatorio."
+    const dni = clientData.dni?.toString().trim()
+    if (!dni) {
+      errors.dni = "El DNI es obligatorio."
+    } else if (!/^\d{7,8}$/.test(dni)) {
+      errors.dni = "El DNI debe contener solo números (7 u 8 dígitos)."
+    }
     if (clientData.email && !/\S+@\S+\.\S+/.test(String(clientData.email)))
       errors.email = "Correo electrónico inválido."
     setFormErrors(errors)
@@ -526,6 +536,14 @@ export default function ClientsPage() {
                 <div class="info-label">Referido por</div>
                 <div class="info-value">${client.referred_by || "No especificado"}</div>
               </div>
+              <div class="info-item">
+                <div class="info-label">CBU/CVU</div>
+                <div class="info-value">${client.cbu_cvu || "No especificado"}</div>
+              </div>
+              <div class="info-item">
+                <div class="info-label">Alias</div>
+                <div class="info-value">${client.alias || "No especificado"}</div>
+              </div>
               <div class="observations">
                 <div class="info-label">Observaciones</div>
                 <div class="observations-text">${client.observations || "Sin observaciones registradas"}</div>
@@ -624,6 +642,24 @@ export default function ClientsPage() {
       })
       return
     }
+
+    try {
+      const dniCheckResponse = await fetch(`/api/clients?dni=${newClient.dni}`)
+      if (dniCheckResponse.ok) {
+        const existingClients = await dniCheckResponse.json()
+        if (existingClients.length > 0) {
+          toast({
+            title: "DNI duplicado",
+            description: "Ya existe un cliente con este DNI.",
+            variant: "destructive",
+          })
+          return
+        }
+      }
+    } catch (error) {
+      console.error("Error verificando DNI:", error)
+    }
+
     try {
       const payload: Record<string, any> = { ...newClient }
 
@@ -905,6 +941,16 @@ export default function ClientsPage() {
                 <p className="text-lg">{currentClient.referred_by || "No especificado"}</p>
               </div>
 
+              <div className="space-y-2">
+                <Label className="text-sm font-semibold text-muted-foreground">CBU/CVU</Label>
+                <p className="text-lg">{currentClient.cbu_cvu || "No especificado"}</p>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-sm font-semibold text-muted-foreground">Alias</Label>
+                <p className="text-lg">{currentClient.alias || "No especificado"}</p>
+              </div>
+
               {/* Observaciones */}
               <div className="space-y-2">
                 <Label className="text-sm font-semibold text-muted-foreground">Observaciones</Label>
@@ -1036,8 +1082,17 @@ export default function ClientsPage() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="dni">DNI</Label>
-                <Input id="dni" name="dni" value={newClient.dni} onChange={(e) => handleInputChange(e, setNewClient)} />
+                <Label htmlFor="dni">DNI *</Label>
+                <Input
+                  id="dni"
+                  name="dni"
+                  value={newClient.dni}
+                  onChange={(e) => handleInputChange(e, setNewClient)}
+                  placeholder="Ej: 12345678"
+                  className={formErrors.dni ? "border-destructive" : ""}
+                />
+                {formErrors.dni && <p className="text-sm text-destructive">{formErrors.dni}</p>}
+                <p className="text-xs text-muted-foreground">Solo números, 7 u 8 dígitos, sin puntos ni espacios</p>
               </div>
 
               <div className="space-y-2">
@@ -1051,60 +1106,88 @@ export default function ClientsPage() {
               </div>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                name="email"
-                type="email"
-                value={newClient.email}
-                onChange={(e) => handleInputChange(e, setNewClient)}
-              />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  name="email"
+                  type="email"
+                  value={newClient.email}
+                  onChange={(e) => handleInputChange(e, setNewClient)}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="address">Dirección</Label>
+                <Input
+                  id="address"
+                  name="address"
+                  value={newClient.address}
+                  onChange={(e) => handleInputChange(e, setNewClient)}
+                />
+              </div>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="address">Dirección</Label>
-              <Input
-                id="address"
-                name="address"
-                value={newClient.address}
-                onChange={(e) => handleInputChange(e, setNewClient)}
-              />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="referred_by">Referido por</Label>
+                <Select
+                  value={newClient.referred_by || "__none__"}
+                  onValueChange={(value) => {
+                    const referredBy = value === "__none__" ? undefined : value
+                    setNewClient((prev) => ({ ...prev, referred_by: referredBy }))
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecciona un cliente" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">Ninguno</SelectItem>
+                    {clients.map((client) => (
+                      <SelectItem key={client.id} value={client.id}>
+                        {client.first_name} {client.last_name} ({client.client_code})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="observations">Observaciones</Label>
+                <Textarea
+                  id="observations"
+                  name="observations"
+                  value={newClient.observations}
+                  onChange={(e) => handleInputChange(e, setNewClient)}
+                  rows={4}
+                  placeholder="Ingresa observaciones adicionales..."
+                />
+              </div>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="referred_by">Referido por</Label>
-              <Select
-                value={newClient.referred_by || "__none__"}
-                onValueChange={(value) => {
-                  const referredBy = value === "__none__" ? undefined : value
-                  setNewClient((prev) => ({ ...prev, referred_by: referredBy }))
-                }}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecciona un cliente" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">Ninguno</SelectItem>
-                  {clients.map((client) => (
-                    <SelectItem key={client.id} value={client.id}>
-                      {client.first_name} {client.last_name} ({client.client_code})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="cbu_cvu">CBU/CVU</Label>
+                <Input
+                  id="cbu_cvu"
+                  name="cbu_cvu"
+                  value={newClient.cbu_cvu || ""}
+                  onChange={(e) => handleInputChange(e, setNewClient)}
+                  placeholder="Ingrese CBU o CVU"
+                />
+              </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="observations">Observaciones</Label>
-              <Textarea
-                id="observations"
-                name="observations"
-                value={newClient.observations}
-                onChange={(e) => handleInputChange(e, setNewClient)}
-                rows={4}
-                placeholder="Ingresa observaciones adicionales..."
-              />
+              <div className="space-y-2">
+                <Label htmlFor="alias">Alias</Label>
+                <Input
+                  id="alias"
+                  name="alias"
+                  value={newClient.alias || ""}
+                  onChange={(e) => handleInputChange(e, setNewClient)}
+                  placeholder="Ingrese alias bancario"
+                />
+              </div>
             </div>
 
             {/* Fotos DNI */}
