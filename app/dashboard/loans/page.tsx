@@ -18,7 +18,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { MoreHorizontal, PlusCircle, Search } from "lucide-react"
+import { MoreHorizontal, PlusCircle, Search, Printer } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { NewLoanForm } from "./new-loan-form" // Importar el nuevo componente
 
@@ -38,6 +38,9 @@ interface Loan {
   installments: number
   loan_type: string | null
   interest_rate: number | null
+  installment_amount?: number // Nuevo campo opcional
+  delivery_mode?: string // Nuevo campo opcional
+  amount_to_repay?: number // Nuevo campo opcional
   start_date: string | null // Formato ISO string
   end_date: string | null // Formato ISO string
   status: string | null
@@ -123,6 +126,9 @@ export default function LoansPage() {
           start_date: currentLoan.start_date,
           end_date: currentLoan.end_date,
           status: currentLoan.status,
+          installment_amount: currentLoan.installment_amount,
+          delivery_mode: currentLoan.delivery_mode,
+          amount_to_repay: currentLoan.amount_to_repay,
         }),
       })
 
@@ -201,6 +207,141 @@ export default function LoansPage() {
     }
   }
 
+  const calculateInterestRate = (loan: Loan): number => {
+    if (loan.amount_to_repay && loan.amount > 0) {
+      return Math.round((loan.amount_to_repay / loan.amount - 1) * 100)
+    }
+    if (loan.installment_amount && loan.installments > 0 && loan.amount > 0) {
+      const totalAmount = loan.installment_amount * loan.installments
+      return Math.round((totalAmount / loan.amount - 1) * 100)
+    }
+    return loan.interest_rate ? Math.round(loan.interest_rate) : 0
+  }
+
+  const generatePaymentSchedule = (loan: Loan) => {
+    if (!loan.start_date || !loan.installment_amount) return []
+
+    const startDate = new Date(loan.start_date)
+    const schedule = []
+    const currentDate = new Date(startDate)
+
+    const dayIncrement = loan.loan_type === "Semanal" ? 7 : loan.loan_type === "Quincenal" ? 15 : 30
+
+    for (let i = 1; i <= loan.installments; i++) {
+      schedule.push({
+        installment: i,
+        date: new Date(currentDate),
+        amount: loan.installment_amount,
+      })
+      currentDate.setDate(currentDate.getDate() + dayIncrement)
+    }
+
+    return schedule
+  }
+
+  const printLoanSchedule = (loan: Loan) => {
+    const schedule = generatePaymentSchedule(loan)
+    const clientName = loan.clients ? `${loan.clients.first_name} ${loan.clients.last_name}` : "Cliente no encontrado"
+    const totalAmount = loan.installment_amount ? loan.installment_amount * loan.installments : 0
+
+    const printWindow = window.open("", "_blank")
+    if (!printWindow) return
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Cronograma de Préstamo - ${loan.loan_code}</title>
+          <style>
+            body { font-family: Arial, sans-serif; margin: 20px; color: #333; }
+            .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #333; padding-bottom: 20px; }
+            .logo { width: 80px; height: 80px; margin: 0 auto 10px; }
+            .company-name { font-size: 24px; font-weight: bold; color: #d4a574; margin-bottom: 5px; }
+            .document-title { font-size: 18px; color: #666; }
+            .loan-info { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 30px; }
+            .info-section { background: #f8f9fa; padding: 15px; border-radius: 8px; }
+            .info-title { font-weight: bold; color: #333; margin-bottom: 10px; font-size: 16px; }
+            .info-item { margin-bottom: 8px; }
+            .label { font-weight: bold; color: #666; }
+            .schedule-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+            .schedule-table th, .schedule-table td { border: 1px solid #ddd; padding: 12px; text-align: center; }
+            .schedule-table th { background-color: #f8f9fa; font-weight: bold; color: #333; }
+            .schedule-table tr:nth-child(even) { background-color: #f8f9fa; }
+            .total-row { background-color: #e9ecef !important; font-weight: bold; }
+            @media print {
+              body { margin: 0; }
+              .no-print { display: none; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div class="logo">
+              <img src="/images/logo-bm.png" alt="BM Microcréditos" style="width: 80px; height: 80px;" />
+            </div>
+            <div class="company-name">BM MICROCRÉDITOS</div>
+            <div class="document-title">Cronograma de Pagos</div>
+          </div>
+          
+          <div class="loan-info">
+            <div class="info-section">
+              <div class="info-title">Información del Préstamo</div>
+              <div class="info-item"><span class="label">Código:</span> ${loan.loan_code}</div>
+              <div class="info-item"><span class="label">Cliente:</span> ${clientName}</div>
+              <div class="info-item"><span class="label">Monto Prestado:</span> $${loan.amount.toFixed(2)}</div>
+              <div class="info-item"><span class="label">Monto Total a Devolver:</span> $${totalAmount.toFixed(2)}</div>
+            </div>
+            <div class="info-section">
+              <div class="info-title">Detalles del Pago</div>
+              <div class="info-item"><span class="label">Tipo:</span> ${loan.loan_type || "N/A"}</div>
+              <div class="info-item"><span class="label">Cantidad de Cuotas:</span> ${loan.installments}</div>
+              <div class="info-item"><span class="label">Monto por Cuota:</span> $${(loan.installment_amount || 0).toFixed(2)}</div>
+              <div class="info-item"><span class="label">Fecha de Inicio:</span> ${loan.start_date ? new Date(loan.start_date).toLocaleDateString() : "N/A"}</div>
+            </div>
+          </div>
+          
+          <table class="schedule-table">
+            <thead>
+              <tr>
+                <th>Cuota N°</th>
+                <th>Fecha de Pago</th>
+                <th>Monto</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${schedule
+                .map(
+                  (payment) => `
+                <tr>
+                  <td>${payment.installment}</td>
+                  <td>${payment.date.toLocaleDateString()}</td>
+                  <td>$${payment.amount.toFixed(2)}</td>
+                </tr>
+              `,
+                )
+                .join("")}
+              <tr class="total-row">
+                <td colspan="2"><strong>TOTAL</strong></td>
+                <td><strong>$${totalAmount.toFixed(2)}</strong></td>
+              </tr>
+            </tbody>
+          </table>
+          
+          <script>
+            window.onload = function() {
+              window.print();
+              window.onafterprint = function() {
+                window.close();
+              }
+            }
+          </script>
+        </body>
+      </html>
+    `)
+
+    printWindow.document.close()
+  }
+
   if (loading && loans.length === 0) {
     // Mostrar cargando solo en la carga inicial
     return (
@@ -258,9 +399,10 @@ export default function LoansPage() {
                   <TableHead className="text-gray-300">Monto</TableHead>
                   <TableHead className="text-gray-300">Cuotas</TableHead>
                   <TableHead className="text-gray-300">Tipo</TableHead>
-                  <TableHead className="text-gray-300">Tasa Interés</TableHead>
+                  <TableHead className="text-gray-300">Tasa Interés</TableHead>{" "}
+                  {/* Mantener columna pero calcular dinámicamente */}
+                  <TableHead className="text-gray-300">Modo Entrega</TableHead> {/* Nueva columna */}
                   <TableHead className="text-gray-300">Fecha Inicio</TableHead>
-                  <TableHead className="text-gray-300">Fecha Fin</TableHead>
                   <TableHead className="text-gray-300">Estado</TableHead>
                   <TableHead className="text-gray-300">Acciones</TableHead>
                 </TableRow>
@@ -277,14 +419,10 @@ export default function LoansPage() {
                     <TableCell className="text-gray-300">${loan.amount.toFixed(2)}</TableCell>
                     <TableCell className="text-gray-300">{loan.installments}</TableCell>
                     <TableCell className="text-gray-300">{loan.loan_type || "N/A"}</TableCell>
-                    <TableCell className="text-gray-300">
-                      {loan.interest_rate ? `${loan.interest_rate}%` : "N/A"}
-                    </TableCell>
+                    <TableCell className="text-gray-300">{calculateInterestRate(loan)}%</TableCell>
+                    <TableCell className="text-gray-300">{loan.delivery_mode || "N/A"}</TableCell> {/* Nueva columna */}
                     <TableCell className="text-gray-300">
                       {loan.start_date ? new Date(loan.start_date).toLocaleDateString() : "N/A"}
-                    </TableCell>
-                    <TableCell className="text-gray-300">
-                      {loan.end_date ? new Date(loan.end_date).toLocaleDateString() : "N/A"}
                     </TableCell>
                     <TableCell>
                       <span
@@ -313,6 +451,13 @@ export default function LoansPage() {
                             className="hover:bg-gray-600 focus:bg-gray-600 cursor-pointer"
                           >
                             Editar
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => printLoanSchedule(loan)}
+                            className="hover:bg-gray-600 focus:bg-gray-600 cursor-pointer"
+                          >
+                            <Printer className="mr-2 h-4 w-4" />
+                            Imprimir Cronograma
                           </DropdownMenuItem>
                           {!loan.deleted_at && (
                             <DropdownMenuItem
@@ -422,6 +567,32 @@ export default function LoansPage() {
                   step="0.01"
                   value={currentLoan.interest_rate || ""}
                   onChange={(e) => setCurrentLoan({ ...currentLoan, interest_rate: Number.parseFloat(e.target.value) })}
+                  className="col-span-3 bg-gray-700 border-gray-600 text-gray-100 placeholder:text-gray-400"
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="installment_amount" className="text-right text-gray-300">
+                  Monto por Cuota
+                </Label>
+                <Input
+                  id="installment_amount"
+                  type="number"
+                  step="0.01"
+                  value={currentLoan.installment_amount || ""}
+                  onChange={(e) =>
+                    setCurrentLoan({ ...currentLoan, installment_amount: Number.parseFloat(e.target.value) })
+                  }
+                  className="col-span-3 bg-gray-700 border-gray-600 text-gray-100 placeholder:text-gray-400"
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="delivery_mode" className="text-right text-gray-300">
+                  Modo Entrega
+                </Label>
+                <Input
+                  id="delivery_mode"
+                  value={currentLoan.delivery_mode || ""}
+                  onChange={(e) => setCurrentLoan({ ...currentLoan, delivery_mode: e.target.value })}
                   className="col-span-3 bg-gray-700 border-gray-600 text-gray-100 placeholder:text-gray-400"
                 />
               </div>

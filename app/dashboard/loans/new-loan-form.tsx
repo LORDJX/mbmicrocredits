@@ -6,6 +6,7 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/hooks/use-toast"
 import { DialogFooter } from "@/components/ui/dialog"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
@@ -29,8 +30,9 @@ const initialFormData = {
   client_id: "",
   amount: 0,
   installments: 1,
-  loan_type: "Personal",
-  interest_rate: 0,
+  loan_type: "Semanal", // Cambiado de "Personal" a "Semanal"
+  installment_amount: 0, // Nuevo campo para monto de cuota
+  delivery_mode: "Efectivo", // Nuevo campo para modo de entrega
   start_date: new Date().toISOString().split("T")[0],
   end_date: "",
   status: "activo",
@@ -40,7 +42,7 @@ interface FormErrors {
   client_id?: string
   amount?: string
   installments?: string
-  interest_rate?: string
+  installment_amount?: string // Nuevo campo de error
   start_date?: string
 }
 
@@ -84,8 +86,8 @@ export function NewLoanForm({ onSuccess, onCancel }: NewLoanFormProps) {
     if (formData.installments <= 0 || !Number.isInteger(formData.installments)) {
       newErrors.installments = "El número de cuotas debe ser un entero positivo."
     }
-    if (formData.interest_rate < 0) {
-      newErrors.interest_rate = "La tasa de interés no puede ser negativa."
+    if (formData.installment_amount <= 0) {
+      newErrors.installment_amount = "El monto de cuota debe ser mayor que cero."
     }
     if (!formData.start_date) {
       newErrors.start_date = "La fecha de inicio es obligatoria."
@@ -103,6 +105,10 @@ export function NewLoanForm({ onSuccess, onCancel }: NewLoanFormProps) {
     if (errors[name as keyof FormErrors]) {
       setErrors((prev) => ({ ...prev, [name]: undefined }))
     }
+  }
+
+  const handleSelectChange = (name: string, value: string) => {
+    setFormData((prev) => ({ ...prev, [name]: value }))
   }
 
   const handleClientSelect = (clientId: string) => {
@@ -123,12 +129,22 @@ export function NewLoanForm({ onSuccess, onCancel }: NewLoanFormProps) {
       })
       return
     }
+
     setLoading(true)
     try {
+      const totalAmount = formData.installment_amount * formData.installments
+      const interestRate = (totalAmount / formData.amount - 1) * 100
+
+      const submitData = {
+        ...formData,
+        interest_rate: interestRate,
+        amount_to_repay: totalAmount, // Agregar monto total a devolver
+      }
+
       const response = await fetch("/api/loans", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(submitData),
       })
 
       if (!response.ok) {
@@ -216,6 +232,7 @@ export function NewLoanForm({ onSuccess, onCancel }: NewLoanFormProps) {
             value={formData.amount}
             onChange={handleChange}
             className="bg-gray-700 border-gray-600 text-gray-100"
+            placeholder="Ej: 10000.00"
             required
           />
           {errors.amount && <p className="text-red-500 text-xs mt-1">{errors.amount}</p>}
@@ -242,20 +259,58 @@ export function NewLoanForm({ onSuccess, onCancel }: NewLoanFormProps) {
       </div>
 
       <div className="grid grid-cols-4 items-start gap-4">
-        <Label htmlFor="interest_rate" className="text-right text-gray-300 pt-2">
-          Tasa de Interés (%)
+        <Label htmlFor="installment_amount" className="text-right text-gray-300 pt-2">
+          Monto de cuota
         </Label>
         <div className="col-span-3">
           <Input
-            id="interest_rate"
-            name="interest_rate"
+            id="installment_amount"
+            name="installment_amount"
             type="number"
             step="0.01"
-            value={formData.interest_rate}
+            value={formData.installment_amount}
             onChange={handleChange}
             className="bg-gray-700 border-gray-600 text-gray-100"
+            placeholder="Ej: 1200.00"
+            required
           />
-          {errors.interest_rate && <p className="text-red-500 text-xs mt-1">{errors.interest_rate}</p>}
+          {errors.installment_amount && <p className="text-red-500 text-xs mt-1">{errors.installment_amount}</p>}
+          <p className="text-xs text-gray-400 mt-1">Monto que pagará el cliente por cada cuota</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-4 items-start gap-4">
+        <Label htmlFor="loan_type" className="text-right text-gray-300 pt-2">
+          Tipo de préstamo
+        </Label>
+        <div className="col-span-3">
+          <Select value={formData.loan_type} onValueChange={(value) => handleSelectChange("loan_type", value)}>
+            <SelectTrigger className="bg-gray-700 border-gray-600 text-gray-100">
+              <SelectValue placeholder="Selecciona el tipo" />
+            </SelectTrigger>
+            <SelectContent className="bg-gray-800 border-gray-700 text-gray-100">
+              <SelectItem value="Semanal">Semanal</SelectItem>
+              <SelectItem value="Quincenal">Quincenal</SelectItem>
+              <SelectItem value="Mensual">Mensual</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-4 items-start gap-4">
+        <Label htmlFor="delivery_mode" className="text-right text-gray-300 pt-2">
+          Modo de entrega
+        </Label>
+        <div className="col-span-3">
+          <Select value={formData.delivery_mode} onValueChange={(value) => handleSelectChange("delivery_mode", value)}>
+            <SelectTrigger className="bg-gray-700 border-gray-600 text-gray-100">
+              <SelectValue placeholder="Selecciona el modo" />
+            </SelectTrigger>
+            <SelectContent className="bg-gray-800 border-gray-700 text-gray-100">
+              <SelectItem value="Efectivo">Efectivo</SelectItem>
+              <SelectItem value="Transferencia">Transferencia</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
