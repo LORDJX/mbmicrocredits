@@ -1,6 +1,11 @@
 "use client"
 
 import type React from "react"
+import { CalendarIcon } from "lucide-react"
+import { Calendar } from "@/components/ui/calendar"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { format } from "date-fns"
+import { es } from "date-fns/locale"
 
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
@@ -38,11 +43,13 @@ interface Loan {
   installments: number
   installment_amount: number
   status: string
+  client_id: string
 }
 
 interface Receipt {
   id: string
-  date: string
+  receipt_number: string
+  receipt_date: string
   client_id: string
   client_name: string
   payment_type: string
@@ -50,7 +57,7 @@ interface Receipt {
   transfer_amount: number
   total_amount: number
   observations: string
-  receipt_file_url?: string
+  attachment_url?: string
   created_at: string
 }
 
@@ -63,9 +70,10 @@ export default function ReceiptsPage() {
   const [selectedReceipt, setSelectedReceipt] = useState<Receipt | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date())
 
   const [newReceipt, setNewReceipt] = useState({
-    date: new Date().toISOString().split("T")[0],
+    date: new Date(),
     client_id: "",
     selected_loans: [] as string[],
     payment_type: "",
@@ -113,10 +121,12 @@ export default function ReceiptsPage() {
 
   const fetchActiveLoans = async (clientId: string) => {
     try {
-      const response = await fetch(`/api/loans?client_id=${clientId}`)
+      const response = await fetch(`/api/loans?client_id=${clientId}&status=active`)
       if (response.ok) {
         const data = await response.json()
-        const activeLoansForClient = data.filter((loan: Loan) => loan.status === "active" || loan.status === "Activo")
+        const activeLoansForClient = data.filter(
+          (loan: Loan) => loan.client_id === clientId && (loan.status === "active" || loan.status === "Activo"),
+        )
         setActiveLoans(activeLoansForClient)
       }
     } catch (error) {
@@ -178,7 +188,7 @@ export default function ReceiptsPage() {
     setIsLoading(true)
 
     try {
-      let receiptFileUrl = ""
+      let attachmentUrl = ""
 
       if (selectedFile) {
         const formData = new FormData()
@@ -191,12 +201,12 @@ export default function ReceiptsPage() {
 
         if (uploadResponse.ok) {
           const uploadData = await uploadResponse.json()
-          receiptFileUrl = uploadData.url
+          attachmentUrl = uploadData.url
         }
       }
 
       const receiptData = {
-        date: newReceipt.date,
+        receipt_date: newReceipt.date.toISOString().split("T")[0],
         client_id: newReceipt.client_id,
         selected_loans: newReceipt.selected_loans,
         payment_type: newReceipt.payment_type,
@@ -204,7 +214,7 @@ export default function ReceiptsPage() {
         transfer_amount: transferAmount,
         total_amount: cashAmount + transferAmount,
         observations: newReceipt.observations,
-        receipt_file_url: receiptFileUrl,
+        attachment_url: attachmentUrl,
       }
 
       const response = await fetch("/api/receipts", {
@@ -219,7 +229,7 @@ export default function ReceiptsPage() {
         toast.success("Recibo creado exitosamente")
         setIsCreateDialogOpen(false)
         setNewReceipt({
-          date: new Date().toISOString().split("T")[0],
+          date: new Date(),
           client_id: "",
           selected_loans: [],
           payment_type: "",
@@ -254,7 +264,7 @@ export default function ReceiptsPage() {
       <!DOCTYPE html>
       <html>
         <head>
-          <title>Detalle de Recibo - ${receipt.id}</title>
+          <title>Detalle de Recibo - ${receipt.receipt_number}</title>
           <style>
             body { font-family: Arial, sans-serif; margin: 20px; }
             .header { text-align: center; margin-bottom: 30px; }
@@ -286,12 +296,12 @@ export default function ReceiptsPage() {
             <div class="section">
               <div class="section-title">Información General</div>
               <div class="field">
-                <span class="field-label">ID Recibo:</span>
-                <span class="field-value">${receipt.id}</span>
+                <span class="field-label">N° Recibo:</span>
+                <span class="field-value">${receipt.receipt_number}</span>
               </div>
               <div class="field">
                 <span class="field-label">Fecha:</span>
-                <span class="field-value">${new Date(receipt.date).toLocaleDateString("es-ES")}</span>
+                <span class="field-value">${new Date(receipt.receipt_date).toLocaleDateString("es-ES")}</span>
               </div>
               <div class="field">
                 <span class="field-label">Cliente:</span>
@@ -377,12 +387,22 @@ export default function ReceiptsPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="date">Fecha *</Label>
-                  <Input
-                    id="date"
-                    type="date"
-                    value={newReceipt.date}
-                    onChange={(e) => setNewReceipt((prev) => ({ ...prev, date: e.target.value }))}
-                  />
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className="w-full justify-start text-left font-normal bg-transparent">
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {newReceipt.date ? format(newReceipt.date, "PPP", { locale: es }) : "Seleccionar fecha"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0">
+                      <Calendar
+                        mode="single"
+                        selected={newReceipt.date}
+                        onSelect={(date) => date && setNewReceipt((prev) => ({ ...prev, date }))}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
                 </div>
 
                 <div className="space-y-2">
@@ -542,6 +562,7 @@ export default function ReceiptsPage() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead>N° Recibo</TableHead>
                 <TableHead>Fecha</TableHead>
                 <TableHead>Cliente</TableHead>
                 <TableHead>Tipo de Pago</TableHead>
@@ -554,8 +575,11 @@ export default function ReceiptsPage() {
             <TableBody>
               {receipts.map((receipt) => (
                 <TableRow key={receipt.id}>
+                  <TableCell className="font-medium">{receipt.receipt_number}</TableCell>
                   <TableCell>
-                    {receipt.date ? new Date(receipt.date).toLocaleDateString("es-ES") : "Fecha no disponible"}
+                    {receipt.receipt_date
+                      ? new Date(receipt.receipt_date).toLocaleDateString("es-ES")
+                      : "Fecha no disponible"}
                   </TableCell>
                   <TableCell>{receipt.client_name}</TableCell>
                   <TableCell>
@@ -575,7 +599,7 @@ export default function ReceiptsPage() {
               ))}
               {receipts.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center text-muted-foreground">
+                  <TableCell colSpan={8} className="text-center text-muted-foreground">
                     No hay recibos registrados
                   </TableCell>
                 </TableRow>
@@ -596,14 +620,14 @@ export default function ReceiptsPage() {
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label className="text-sm font-medium text-muted-foreground">ID Recibo</Label>
-                  <p className="text-sm">{selectedReceipt.id}</p>
+                  <Label className="text-sm font-medium text-muted-foreground">N° Recibo</Label>
+                  <p className="text-sm font-medium">{selectedReceipt.receipt_number}</p>
                 </div>
                 <div>
                   <Label className="text-sm font-medium text-muted-foreground">Fecha</Label>
                   <p className="text-sm">
-                    {selectedReceipt.date
-                      ? new Date(selectedReceipt.date).toLocaleDateString("es-ES")
+                    {selectedReceipt.receipt_date
+                      ? new Date(selectedReceipt.receipt_date).toLocaleDateString("es-ES")
                       : "No disponible"}
                   </p>
                 </div>
