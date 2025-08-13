@@ -8,14 +8,59 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 let supabase: any = null
 
 if (supabaseUrl && supabaseAnonKey) {
+  if (typeof window !== "undefined") {
+    try {
+      // Limpiar cualquier token corrupto de localStorage
+      const keys = Object.keys(localStorage)
+      keys.forEach((key) => {
+        if (key.startsWith("sb-") || key.includes("supabase")) {
+          try {
+            const value = localStorage.getItem(key)
+            if (value) {
+              JSON.parse(value) // Verificar si es JSON válido
+            }
+          } catch (e) {
+            console.warn(`Limpiando token corrupto: ${key}`)
+            localStorage.removeItem(key)
+          }
+        }
+      })
+    } catch (e) {
+      console.warn("Error limpiando tokens:", e)
+    }
+  }
+
   supabase = createClient(supabaseUrl, supabaseAnonKey, {
     auth: {
       autoRefreshToken: true,
       persistSession: true,
       detectSessionInUrl: true,
       flowType: "pkce",
+      onRefreshTokenError: (error) => {
+        console.warn("Error refrescando token:", error)
+        // Limpiar sesión corrupta
+        if (typeof window !== "undefined") {
+          localStorage.removeItem(`sb-${supabaseUrl.split("//")[1]?.split(".")[0]}-auth-token`)
+        }
+      },
     },
   })
+
+  const originalRefreshSession = supabase.auth.refreshSession
+  supabase.auth.refreshSession = async (...args: any[]) => {
+    try {
+      return await originalRefreshSession.apply(supabase.auth, args)
+    } catch (error: any) {
+      if (error?.message?.includes("Invalid Refresh Token") || error?.message?.includes("Refresh Token Not Found")) {
+        console.warn("Token de refresh inválido, limpiando sesión...")
+        await supabase.auth.signOut()
+        if (typeof window !== "undefined") {
+          window.location.reload()
+        }
+      }
+      throw error
+    }
+  }
 } else {
   // Cliente mock mejorado para desarrollo sin configuración
   supabase = {
