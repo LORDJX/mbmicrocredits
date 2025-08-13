@@ -19,6 +19,8 @@ import { Label } from "@/components/ui/label"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { MoreHorizontal, Search, PlusCircle, AlertCircle, Camera, X } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Textarea } from "@/components/ui/textarea"
 
 interface Client {
   id: string
@@ -996,6 +998,195 @@ export default function ClientsPage() {
           </DialogContent>
         </Dialog>
       )}
+
+      {/* Dialog para crear cliente */}
+      <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+        <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto bg-card text-card-foreground border-border">
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-bold text-primary">Crear Nuevo Cliente</DialogTitle>
+            <DialogDescription>Completa la información del nuevo cliente</DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleCreateClient} className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="first_name">Nombre *</Label>
+                <Input
+                  id="first_name"
+                  name="first_name"
+                  value={newClient.first_name}
+                  onChange={(e) => handleInputChange(e, setNewClient)}
+                  className={formErrors.first_name ? "border-destructive" : ""}
+                />
+                {formErrors.first_name && <p className="text-sm text-destructive">{formErrors.first_name}</p>}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="last_name">Apellido *</Label>
+                <Input
+                  id="last_name"
+                  name="last_name"
+                  value={newClient.last_name}
+                  onChange={(e) => handleInputChange(e, setNewClient)}
+                  className={formErrors.last_name ? "border-destructive" : ""}
+                />
+                {formErrors.last_name && <p className="text-sm text-destructive">{formErrors.last_name}</p>}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="dni">DNI</Label>
+                <Input id="dni" name="dni" value={newClient.dni} onChange={(e) => handleInputChange(e, setNewClient)} />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="phone">Teléfono</Label>
+                <Input
+                  id="phone"
+                  name="phone"
+                  value={newClient.phone}
+                  onChange={(e) => handleInputChange(e, setNewClient)}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                name="email"
+                type="email"
+                value={newClient.email}
+                onChange={(e) => handleInputChange(e, setNewClient)}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="address">Dirección</Label>
+              <Input
+                id="address"
+                name="address"
+                value={newClient.address}
+                onChange={(e) => handleInputChange(e, setNewClient)}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="referred_by">Referido por</Label>
+              <Select
+                value={newClient.referred_by || "__none__"}
+                onValueChange={(value) => {
+                  const referredBy = value === "__none__" ? undefined : value
+                  setNewClient((prev) => ({ ...prev, referred_by: referredBy }))
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecciona un cliente" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">Ninguno</SelectItem>
+                  {clients.map((client) => (
+                    <SelectItem key={client.id} value={client.id}>
+                      {client.first_name} {client.last_name} ({client.client_code})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="observations">Observaciones</Label>
+              <Textarea
+                id="observations"
+                name="observations"
+                value={newClient.observations}
+                onChange={(e) => handleInputChange(e, setNewClient)}
+                rows={4}
+                placeholder="Ingresa observaciones adicionales..."
+              />
+            </div>
+
+            {/* Fotos DNI */}
+            <div className="space-y-4">
+              <Label className="text-lg font-semibold">Fotos del DNI</Label>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Foto DNI Frente</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0]
+                        if (file) setNewFrontFile(file)
+                      }}
+                      className="flex-1"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCameraOpen({ isOpen: true, type: "new-front" })}
+                      className="px-3"
+                    >
+                      <Camera className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  {newFrontFile && (
+                    <p className="text-sm text-muted-foreground">Archivo seleccionado: {newFrontFile.name}</p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Foto DNI Reverso</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0]
+                        if (file) setNewBackFile(file)
+                      }}
+                      className="flex-1"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCameraOpen({ isOpen: true, type: "new-back" })}
+                      className="px-3"
+                    >
+                      <Camera className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  {newBackFile && (
+                    <p className="text-sm text-muted-foreground">Archivo seleccionado: {newBackFile.name}</p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setIsCreateDialogOpen(false)
+                  setNewClient(initialNewClientState)
+                  setFormErrors({})
+                  setNewFrontFile(null)
+                  setNewBackFile(null)
+                }}
+              >
+                Cancelar
+              </Button>
+              <Button type="submit">Crear Cliente</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       {/* ... existing dialogs ... */}
     </>
