@@ -242,7 +242,6 @@ export default function LoansPage() {
   const printLoanSchedule = (loan: Loan) => {
     const schedule = generatePaymentSchedule(loan)
     const clientName = loan.clients ? `${loan.clients.first_name} ${loan.clients.last_name}` : "Cliente no encontrado"
-    const totalAmount = loan.installment_amount ? loan.installment_amount * loan.installments : 0
 
     const printWindow = window.open("", "_blank")
     if (!printWindow) return
@@ -255,7 +254,7 @@ export default function LoansPage() {
           <style>
             body { font-family: Arial, sans-serif; margin: 20px; color: #333; }
             .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #333; padding-bottom: 20px; }
-            .logo { width: 80px; height: 80px; margin: 0 auto 10px; }
+            .logo { width: 80px; height: 80px; margin: 0 auto 10px; border-radius: 50%; }
             .company-name { font-size: 24px; font-weight: bold; color: #d4a574; margin-bottom: 5px; }
             .document-title { font-size: 18px; color: #666; }
             .loan-info { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 30px; }
@@ -277,7 +276,7 @@ export default function LoansPage() {
         <body>
           <div class="header">
             <div class="logo">
-              <img src="/images/logo-bm.png" alt="BM Microcréditos" style="width: 80px; height: 80px;" />
+              <img src="/images/logo-bm-circular.jpg" alt="BM Microcréditos" style="width: 80px; height: 80px; border-radius: 50%;" />
             </div>
             <div class="company-name">BM MICROCRÉDITOS</div>
             <div class="document-title">Cronograma de Pagos</div>
@@ -289,7 +288,6 @@ export default function LoansPage() {
               <div class="info-item"><span class="label">Código:</span> ${loan.loan_code}</div>
               <div class="info-item"><span class="label">Cliente:</span> ${clientName}</div>
               <div class="info-item"><span class="label">Monto Prestado:</span> $${loan.amount.toFixed(2)}</div>
-              <div class="info-item"><span class="label">Monto Total a Devolver:</span> $${totalAmount.toFixed(2)}</div>
             </div>
             <div class="info-section">
               <div class="info-title">Detalles del Pago</div>
@@ -320,10 +318,6 @@ export default function LoansPage() {
               `,
                 )
                 .join("")}
-              <tr class="total-row">
-                <td colspan="2"><strong>TOTAL</strong></td>
-                <td><strong>$${totalAmount.toFixed(2)}</strong></td>
-              </tr>
             </tbody>
           </table>
           

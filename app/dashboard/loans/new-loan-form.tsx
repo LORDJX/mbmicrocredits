@@ -156,6 +156,10 @@ export function NewLoanForm({ onSuccess, onCancel }: NewLoanFormProps) {
         title: "Éxito",
         description: "Préstamo creado correctamente.",
       })
+
+      setFormData(initialFormData)
+      setErrors({})
+
       onSuccess()
     } catch (error: any) {
       toast({
