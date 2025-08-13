@@ -57,18 +57,17 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Insert receipt
     const { data: receipt, error: receiptError } = await supabase
       .from("receipts")
       .insert({
-        date,
+        receipt_date: date,
         client_id,
         payment_type,
         cash_amount,
         transfer_amount,
         total_amount,
         observations,
-        receipt_file_url,
+        attachment_url: receipt_file_url,
         selected_loans: selected_loans,
       })
       .select()
