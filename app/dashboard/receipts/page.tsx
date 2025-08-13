@@ -336,8 +336,8 @@ export default function ReceiptsPage() {
                     <SelectValue placeholder="Seleccionar tipo" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="total">Total</SelectItem>
-                    <SelectItem value="parcial">Parcial</SelectItem>
+                    <SelectItem value="Total">Total</SelectItem>
+                    <SelectItem value="Parcial">Parcial</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -436,8 +436,8 @@ export default function ReceiptsPage() {
                   <TableCell>{new Date(receipt.date).toLocaleDateString()}</TableCell>
                   <TableCell>{receipt.client_name}</TableCell>
                   <TableCell>
-                    <Badge variant={receipt.payment_type === "total" ? "default" : "secondary"}>
-                      {receipt.payment_type === "total" ? "Total" : "Parcial"}
+                    <Badge variant={receipt.payment_type === "Total" ? "default" : "secondary"}>
+                      {receipt.payment_type}
                     </Badge>
                   </TableCell>
                   <TableCell>${receipt.cash_amount.toFixed(2)}</TableCell>
