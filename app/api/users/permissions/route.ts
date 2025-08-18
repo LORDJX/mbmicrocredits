@@ -15,6 +15,7 @@ const AVAILABLE_ROUTES = [
   { id: "transactions", path: "/dashboard/transactions", name: "Transacciones" },
   { id: "followups", path: "/dashboard/followups", name: "Seguimientos" },
   { id: "receipts", path: "/dashboard/receipts", name: "Recibos" },
+  { id: "cronograma", path: "/dashboard/cronograma", name: "Cronograma" },
   { id: "reports", path: "/dashboard/reports", name: "Informe de situación Financiera" },
   { id: "resumen", path: "/dashboard/resumen", name: "Resumen para Socios" },
   { id: "users", path: "/dashboard/users", name: "Gestión de Usuarios" },
@@ -29,8 +30,8 @@ export async function GET(request: NextRequest) {
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
     return NextResponse.json({
       available_routes: AVAILABLE_ROUTES,
-      permissions: ["dashboard", "clients", "loans"], // Default restricted permissions
-      user_routes: ["/dashboard", "/dashboard/clients", "/dashboard/loans"],
+      permissions: ["dashboard", "clients", "loans", "cronograma"], // Default restricted permissions
+      user_routes: ["/dashboard", "/dashboard/clients", "/dashboard/loans", "/dashboard/cronograma"],
       message: "Usando permisos por defecto - Configurar Supabase para permisos personalizados",
     })
   }
@@ -47,8 +48,8 @@ export async function GET(request: NextRequest) {
       if (error.message.includes("does not exist")) {
         return NextResponse.json({
           available_routes: AVAILABLE_ROUTES,
-          permissions: ["dashboard", "clients", "loans"], // Default restricted permissions
-          user_routes: ["/dashboard", "/dashboard/clients", "/dashboard/loans"],
+          permissions: ["dashboard", "clients", "loans", "cronograma"], // Default restricted permissions
+          user_routes: ["/dashboard", "/dashboard/clients", "/dashboard/loans", "/dashboard/cronograma"],
           message: "Tabla de permisos no existe - Ejecutar migración SQL",
         })
       }
@@ -70,8 +71,8 @@ export async function GET(request: NextRequest) {
     console.error("Error interno:", err)
     return NextResponse.json({
       available_routes: AVAILABLE_ROUTES,
-      permissions: ["dashboard", "clients", "loans"],
-      user_routes: ["/dashboard", "/dashboard/clients", "/dashboard/loans"],
+      permissions: ["dashboard", "clients", "loans", "cronograma"],
+      user_routes: ["/dashboard", "/dashboard/clients", "/dashboard/loans", "/dashboard/cronograma"],
       message: "Error de conexión - Usando permisos por defecto",
     })
   }

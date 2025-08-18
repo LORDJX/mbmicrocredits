@@ -68,12 +68,12 @@ export function DashboardSidebar() {
           if (data.permissions && Array.isArray(data.permissions)) {
             setUserPermissions(data.permissions)
           } else {
-            setUserPermissions(["dashboard", "clients", "loans", "receipts", "transactions"])
+            setUserPermissions(["dashboard", "clients", "loans", "receipts", "cronograma", "transactions"])
           }
         }
       } catch (error) {
         console.error("Error loading permissions:", error)
-        setUserPermissions(["dashboard", "clients", "loans"])
+        setUserPermissions(["dashboard", "clients", "loans", "cronograma"])
       } finally {
         setPermissionsLoaded(true)
       }
