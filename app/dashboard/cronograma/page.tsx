@@ -169,7 +169,7 @@ export default function CronogramaPage() {
       const result = await response.json()
       console.log("[v0] Receipt API response:", result)
 
-      if (response.ok && result.success) {
+      if (response.ok && result.id) {
         console.log("[v0] Receipt created successfully")
         toast.success("Recibo creado exitosamente")
 
@@ -182,6 +182,8 @@ export default function CronogramaPage() {
           setTodayInstallments((prev) => updateInstallmentStatus(prev))
           setOverdueInstallments((prev) => updateInstallmentStatus(prev))
           setMonthInstallments((prev) => updateInstallmentStatus(prev))
+
+          console.log("[v0] Updated installment status to paid")
         }
 
         setIsReceiptModalOpen(false)
