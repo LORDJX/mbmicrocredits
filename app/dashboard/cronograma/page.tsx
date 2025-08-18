@@ -341,7 +341,7 @@ BM Microcréditos`
             <h4 className="font-semibold text-lg text-green-800">
               {receipt.clients.first_name} {receipt.clients.last_name}
             </h4>
-            <p className="text-sm text-green-600">Recibo N° {receipt.receipt_number || receipt.id}</p>
+            <p className="text-sm text-green-600">Recibo N° {receipt.receipt_number}</p>
             <p className="text-sm text-green-600">
               {receipt.selected_loans?.[0]?.loan_code && <>Préstamo: {receipt.selected_loans[0].loan_code}</>}
             </p>
