@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Calendar, AlertTriangle, DollarSign, Plus, MessageCircle } from "lucide-react"
+import { Calendar, AlertTriangle, DollarSign, Plus, MessageCircle, Search } from "lucide-react"
 import { AppHeader } from "@/components/app-header"
 import { toast } from "sonner"
 
@@ -87,6 +87,7 @@ export default function CronogramaPage() {
     observations: "",
   })
   const [isCreatingReceipt, setIsCreatingReceipt] = useState(false)
+  const [searchFilter, setSearchFilter] = useState("") // Added filter state for search functionality
 
   useEffect(() => {
     fetchCronogramaData()
@@ -368,6 +369,30 @@ BM Microcréditos`
     </Card>
   )
 
+  const filterData = (items: (Installment | Receipt)[], searchTerm: string) => {
+    if (!searchTerm.trim()) return items
+
+    const term = searchTerm.toLowerCase().trim()
+
+    return items.filter((item) => {
+      // For installments
+      if ("client_name" in item) {
+        return item.client_name.toLowerCase().includes(term) || item.loan_code.toLowerCase().includes(term)
+      }
+      // For receipts
+      if ("clients" in item) {
+        const fullName = `${item.clients.first_name} ${item.clients.last_name}`.toLowerCase()
+        return fullName.includes(term) || (item.receipt_number && item.receipt_number.toLowerCase().includes(term))
+      }
+      return false
+    })
+  }
+
+  const filteredTodayInstallments = filterData(todayInstallments, searchFilter) as Installment[]
+  const filteredOverdueInstallments = filterData(overdueInstallments, searchFilter) as Installment[]
+  const filteredMonthInstallments = filterData(monthInstallments, searchFilter) as Installment[]
+  const filteredTodayReceipts = filterData(todayReceipts, searchFilter) as Receipt[]
+
   if (loading) {
     return (
       <div className="space-y-6">
@@ -386,6 +411,30 @@ BM Microcréditos`
     <div className="space-y-6">
       <AppHeader title="Cronograma de Pagos" />
 
+      <Card className="border-gray-200">
+        <CardContent className="p-4">
+          <div className="flex items-center space-x-4">
+            <div className="flex-1 relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Input
+                placeholder="Buscar por nombre del cliente, DNI o código de préstamo..."
+                value={searchFilter}
+                onChange={(e) => setSearchFilter(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+            {searchFilter && (
+              <Button variant="outline" size="sm" onClick={() => setSearchFilter("")}>
+                Limpiar
+              </Button>
+            )}
+          </div>
+          {searchFilter && (
+            <p className="text-sm text-muted-foreground mt-2">Mostrando resultados para: "{searchFilter}"</p>
+          )}
+        </CardContent>
+      </Card>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Sección HOY */}
         <div className="space-y-4">
@@ -394,6 +443,11 @@ BM Microcréditos`
               <CardTitle className="flex items-center gap-2 text-blue-700">
                 <Calendar className="h-5 w-5" />
                 Hoy
+                {searchFilter && (
+                  <Badge variant="secondary" className="ml-2">
+                    {filteredTodayInstallments.length + filteredTodayReceipts.length}
+                  </Badge>
+                )}
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -411,27 +465,28 @@ BM Microcréditos`
               </div>
 
               <div className="space-y-2 max-h-96 overflow-y-auto">
-                {todayReceipts.length > 0 && (
+                {filteredTodayReceipts.length > 0 && (
                   <div className="mb-4">
                     <h5 className="text-sm font-semibold text-green-700 mb-2">Recibos Generados Hoy</h5>
-                    {todayReceipts.map((receipt) => (
+                    {filteredTodayReceipts.map((receipt) => (
                       <ReceiptCard key={receipt.id} receipt={receipt} />
                     ))}
                   </div>
                 )}
 
-                {/* Cuotas pendientes para hoy */}
-                {todayInstallments.length > 0 && (
+                {filteredTodayInstallments.length > 0 && (
                   <div>
                     <h5 className="text-sm font-semibold text-blue-700 mb-2">Cuotas Pendientes</h5>
-                    {todayInstallments.map((installment) => (
+                    {filteredTodayInstallments.map((installment) => (
                       <InstallmentCard key={installment.id} installment={installment} />
                     ))}
                   </div>
                 )}
 
-                {todayInstallments.length === 0 && todayReceipts.length === 0 && (
-                  <p className="text-center text-muted-foreground py-4">No hay cuotas ni recibos para hoy</p>
+                {filteredTodayInstallments.length === 0 && filteredTodayReceipts.length === 0 && (
+                  <p className="text-center text-muted-foreground py-4">
+                    {searchFilter ? "No se encontraron resultados" : "No hay cuotas ni recibos para hoy"}
+                  </p>
                 )}
               </div>
             </CardContent>
@@ -445,6 +500,11 @@ BM Microcréditos`
               <CardTitle className="flex items-center gap-2 text-red-700">
                 <AlertTriangle className="h-5 w-5" />
                 Vencidos
+                {searchFilter && (
+                  <Badge variant="secondary" className="ml-2">
+                    {filteredOverdueInstallments.length}
+                  </Badge>
+                )}
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -462,12 +522,14 @@ BM Microcréditos`
               </div>
 
               <div className="space-y-2 max-h-96 overflow-y-auto">
-                {overdueInstallments.length > 0 ? (
-                  overdueInstallments.map((installment) => (
+                {filteredOverdueInstallments.length > 0 ? (
+                  filteredOverdueInstallments.map((installment) => (
                     <InstallmentCard key={installment.id} installment={installment} />
                   ))
                 ) : (
-                  <p className="text-center text-muted-foreground py-4">No hay cuotas vencidas</p>
+                  <p className="text-center text-muted-foreground py-4">
+                    {searchFilter ? "No se encontraron resultados" : "No hay cuotas vencidas"}
+                  </p>
                 )}
               </div>
             </CardContent>
@@ -481,6 +543,11 @@ BM Microcréditos`
               <CardTitle className="flex items-center gap-2 text-green-700">
                 <DollarSign className="h-5 w-5" />
                 Este Mes
+                {searchFilter && (
+                  <Badge variant="secondary" className="ml-2">
+                    {filteredMonthInstallments.length}
+                  </Badge>
+                )}
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -504,12 +571,14 @@ BM Microcréditos`
               </div>
 
               <div className="space-y-2 max-h-96 overflow-y-auto">
-                {monthInstallments.length > 0 ? (
-                  monthInstallments.map((installment) => (
+                {filteredMonthInstallments.length > 0 ? (
+                  filteredMonthInstallments.map((installment) => (
                     <InstallmentCard key={installment.id} installment={installment} />
                   ))
                 ) : (
-                  <p className="text-center text-muted-foreground py-4">No hay cuotas para este mes</p>
+                  <p className="text-center text-muted-foreground py-4">
+                    {searchFilter ? "No se encontraron resultados" : "No hay cuotas para este mes"}
+                  </p>
                 )}
               </div>
             </CardContent>
