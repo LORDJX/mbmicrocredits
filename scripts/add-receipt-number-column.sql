@@ -24,7 +24,31 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Update existing receipts without receipt_number
+-- Replacing problematic UPDATE with window function using CTE approach
+WITH numbered_receipts AS (
+    SELECT id, ROW_NUMBER() OVER (ORDER BY created_at) as row_num
+    FROM receipts 
+    WHERE receipt_number IS NULL
+)
 UPDATE receipts 
-SET receipt_number = 'Rbo - ' || LPAD(ROW_NUMBER() OVER (ORDER BY created_at)::TEXT, 6, '0')
-WHERE receipt_number IS NULL;
+SET receipt_number = 'Rbo - ' || LPAD(numbered_receipts.row_num::TEXT, 6, '0')
+FROM numbered_receipts
+WHERE receipts.id = numbered_receipts.id;
+
+-- Create trigger to auto-generate receipt numbers for new records
+CREATE OR REPLACE FUNCTION set_receipt_number()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF NEW.receipt_number IS NULL THEN
+        NEW.receipt_number := generate_receipt_number();
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Create trigger
+DROP TRIGGER IF EXISTS trigger_set_receipt_number ON receipts;
+CREATE TRIGGER trigger_set_receipt_number
+    BEFORE INSERT ON receipts
+    FOR EACH ROW
+    EXECUTE FUNCTION set_receipt_number();
