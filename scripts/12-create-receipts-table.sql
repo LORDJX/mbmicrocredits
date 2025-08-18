@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS receipts (
 
 -- Create indexes
 CREATE INDEX IF NOT EXISTS idx_receipts_client_id ON receipts(client_id);
-CREATE INDEX IF NOT EXISTS idx_receipts_date ON receipts(date);
+CREATE INDEX IF NOT EXISTS idx_receipts_date ON receipts(receipt_date);
 CREATE INDEX IF NOT EXISTS idx_receipts_created_at ON receipts(created_at);
 
 -- Add RLS policies
