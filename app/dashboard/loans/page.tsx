@@ -62,6 +62,11 @@ export default function LoansPage() {
   const { toast } = useToast()
   const router = useRouter()
 
+  const handleDetailClick = (loan: Loan) => {
+    setCurrentLoan(loan)
+    setIsDetailDialogOpen(true)
+  }
+
   useEffect(() => {
     fetchLoans()
   }, [searchTerm]) // Volver a cargar préstamos cuando cambie el término de búsqueda
@@ -263,74 +268,229 @@ export default function LoansPage() {
         <head>
           <title>Cronograma de Préstamo - ${loan.loan_code}</title>
           <style>
-            body { font-family: Arial, sans-serif; margin: 20px; color: #333; }
-            .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #333; padding-bottom: 20px; }
-            .logo { width: 80px; height: 80px; margin: 0 auto 10px; border-radius: 50%; }
-            .company-name { font-size: 24px; font-weight: bold; color: #d4a574; margin-bottom: 5px; }
-            .document-title { font-size: 18px; color: #666; }
-            .loan-info { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 30px; }
-            .info-section { background: #f8f9fa; padding: 15px; border-radius: 8px; }
-            .info-title { font-weight: bold; color: #333; margin-bottom: 10px; font-size: 16px; }
-            .info-item { margin-bottom: 8px; }
-            .label { font-weight: bold; color: #666; }
-            .schedule-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-            .schedule-table th, .schedule-table td { border: 1px solid #ddd; padding: 12px; text-align: center; }
-            .schedule-table th { background-color: #f8f9fa; font-weight: bold; color: #333; }
-            .schedule-table tr:nth-child(even) { background-color: #f8f9fa; }
-            .total-row { background-color: #e9ecef !important; font-weight: bold; }
+            @page { 
+              size: 80mm 200mm; 
+              margin: 3mm; 
+            }
+            * { 
+              box-sizing: border-box; 
+              margin: 0; 
+              padding: 0; 
+            }
+            body { 
+              font-family: 'Courier New', monospace; 
+              font-size: 10px; 
+              line-height: 1.2; 
+              color: #000; 
+              background: #fff; 
+              width: 100%; 
+              height: 100%; 
+              padding: 2mm;
+            }
+            .header { 
+              text-align: center; 
+              margin-bottom: 4mm; 
+              border-bottom: 2px solid #000; 
+              padding-bottom: 2mm; 
+            }
+            .logo { 
+              width: 20mm; 
+              height: 20mm; 
+              margin: 0 auto 2mm; 
+              border-radius: 50%; 
+              border: 1px solid #000;
+            }
+            .company-name { 
+              font-size: 14px; 
+              font-weight: bold; 
+              margin-bottom: 1mm; 
+              letter-spacing: 1px;
+            }
+            .document-title { 
+              font-size: 11px; 
+              font-weight: bold; 
+              text-decoration: underline;
+            }
+            .info-section { 
+              margin-bottom: 3mm; 
+              padding: 2mm; 
+              border: 1px solid #000; 
+              background: #f8f8f8;
+            }
+            .info-title { 
+              font-weight: bold; 
+              font-size: 11px; 
+              margin-bottom: 2mm; 
+              text-align: center; 
+              text-decoration: underline;
+            }
+            .info-grid { 
+              display: grid; 
+              grid-template-columns: 1fr 1fr; 
+              gap: 1mm; 
+              font-size: 9px;
+            }
+            .info-item { 
+              margin-bottom: 1mm; 
+            }
+            .label { 
+              font-weight: bold; 
+            }
+            .value { 
+              margin-left: 2mm; 
+            }
+            .schedule-section {
+              margin-top: 3mm;
+            }
+            .schedule-title {
+              font-weight: bold;
+              font-size: 11px;
+              text-align: center;
+              margin-bottom: 2mm;
+              padding: 1mm;
+              background: #000;
+              color: #fff;
+            }
+            .schedule-table { 
+              width: 100%; 
+              border-collapse: collapse; 
+              font-size: 9px;
+            }
+            .schedule-table th, .schedule-table td { 
+              border: 1px solid #000; 
+              padding: 1mm; 
+              text-align: center; 
+            }
+            .schedule-table th { 
+              background-color: #ddd; 
+              font-weight: bold; 
+              font-size: 8px;
+            }
+            .schedule-table tr:nth-child(even) { 
+              background-color: #f5f5f5; 
+            }
+            .total-section {
+              margin-top: 3mm;
+              padding: 2mm;
+              border: 2px solid #000;
+              background: #f0f0f0;
+              text-align: center;
+            }
+            .total-label {
+              font-size: 10px;
+              font-weight: bold;
+            }
+            .total-amount {
+              font-size: 14px;
+              font-weight: bold;
+              margin-top: 1mm;
+            }
+            .footer {
+              margin-top: 4mm;
+              text-align: center;
+              font-size: 8px;
+              border-top: 1px solid #000;
+              padding-top: 2mm;
+            }
+            .separator {
+              border-top: 1px dashed #000;
+              margin: 2mm 0;
+            }
             @media print {
-              body { margin: 0; }
-              .no-print { display: none; }
+              body { 
+                margin: 0; 
+                padding: 2mm;
+              }
+              .no-print { 
+                display: none; 
+              }
             }
           </style>
         </head>
         <body>
           <div class="header">
             <div class="logo">
-              <img src="/images/logo-bm-circular.jpg" alt="BM Microcréditos" style="width: 80px; height: 80px; border-radius: 50%;" />
+              <img src="/images/logo-bm-circular.jpg" alt="BM" style="width: 20mm; height: 20mm; border-radius: 50%;" />
             </div>
             <div class="company-name">BM MICROCRÉDITOS</div>
-            <div class="document-title">Cronograma de Pagos</div>
+            <div class="document-title">CRONOGRAMA DE PAGOS</div>
           </div>
           
-          <div class="loan-info">
-            <div class="info-section">
-              <div class="info-title">Información del Préstamo</div>
-              <div class="info-item"><span class="label">Código:</span> ${loan.loan_code}</div>
-              <div class="info-item"><span class="label">Cliente:</span> ${clientName}</div>
-              <div class="info-item"><span class="label">Monto Prestado:</span> $${loan.amount.toFixed(2)}</div>
+          <div class="info-section">
+            <div class="info-title">INFORMACIÓN DEL PRÉSTAMO</div>
+            <div class="info-item">
+              <span class="label">CÓDIGO:</span>
+              <span class="value">${loan.loan_code}</span>
             </div>
-            <div class="info-section">
-              <div class="info-title">Detalles del Pago</div>
-              <div class="info-item"><span class="label">Tipo:</span> ${loan.loan_type || "N/A"}</div>
-              <div class="info-item"><span class="label">Cantidad de Cuotas:</span> ${loan.installments}</div>
-              <div class="info-item"><span class="label">Monto por Cuota:</span> $${(loan.installment_amount || 0).toFixed(2)}</div>
-              <div class="info-item"><span class="label">Fecha de Inicio:</span> ${loan.start_date ? new Date(loan.start_date).toLocaleDateString() : "N/A"}</div>
+            <div class="info-item">
+              <span class="label">CLIENTE:</span>
+              <span class="value">${clientName}</span>
+            </div>
+            <div class="info-item">
+              <span class="label">MONTO PRESTADO:</span>
+              <span class="value">$${loan.amount.toFixed(2)}</span>
             </div>
           </div>
-          
-          <table class="schedule-table">
-            <thead>
-              <tr>
-                <th>Cuota N°</th>
-                <th>Fecha de Pago</th>
-                <th>Monto</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${schedule
-                .map(
-                  (payment) => `
+
+          <div class="info-section">
+            <div class="info-title">DETALLES DEL PAGO</div>
+            <div class="info-grid">
+              <div class="info-item">
+                <span class="label">TIPO:</span>
+                <span class="value">${loan.loan_type || "Mensual"}</span>
+              </div>
+              <div class="info-item">
+                <span class="label">CUOTAS:</span>
+                <span class="value">${loan.installments}</span>
+              </div>
+              <div class="info-item">
+                <span class="label">MONTO/CUOTA:</span>
+                <span class="value">$${(loan.installment_amount || 0).toFixed(2)}</span>
+              </div>
+              <div class="info-item">
+                <span class="label">INICIO:</span>
+                <span class="value">${loan.start_date ? new Date(loan.start_date).toLocaleDateString("es-AR") : "N/A"}</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="separator"></div>
+
+          <div class="schedule-section">
+            <div class="schedule-title">CRONOGRAMA DE CUOTAS</div>
+            <table class="schedule-table">
+              <thead>
                 <tr>
-                  <td>${payment.installment}</td>
-                  <td>${payment.date.toLocaleDateString()}</td>
-                  <td>$${payment.amount.toFixed(2)}</td>
+                  <th>Cuota N°</th>
+                  <th>Fecha de Pago</th>
+                  <th>Monto</th>
                 </tr>
-              `,
-                )
-                .join("")}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                ${schedule
+                  .map(
+                    (payment) => `
+                  <tr>
+                    <td>${payment.installment}</td>
+                    <td>${payment.date.toLocaleDateString("es-AR")}</td>
+                    <td>$${payment.amount.toFixed(2)}</td>
+                  </tr>
+                `,
+                  )
+                  .join("")}
+              </tbody>
+            </table>
+          </div>
+
+          <div class="total-section">
+            <div class="total-label">TOTAL A DEVOLVER</div>
+            <div class="total-amount">$${((loan.installment_amount || 0) * loan.installments).toFixed(2)}</div>
+          </div>
+
+          <div class="footer">
+            <div>Generado el ${new Date().toLocaleDateString("es-AR")} a las ${new Date().toLocaleTimeString("es-AR")}</div>
+            <div style="margin-top: 1mm;">BM Microcréditos - Soluciones Financieras</div>
+          </div>
           
           <script>
             window.onload = function() {
@@ -345,11 +505,6 @@ export default function LoansPage() {
     `)
 
     printWindow.document.close()
-  }
-
-  const handleDetailClick = (loan: Loan) => {
-    setCurrentLoan(loan)
-    setIsDetailDialogOpen(true)
   }
 
   const printLoanDetail = (loan: Loan) => {
@@ -467,11 +622,11 @@ export default function LoansPage() {
               </div>
               <div class="detail-item">
                 <span class="label">Fecha de Inicio:</span>
-                <span class="value">${loan.start_date ? new Date(loan.start_date).toLocaleDateString() : "N/A"}</span>
+                <span class="value">${loan.start_date ? new Date(loan.start_date).toLocaleDateString("es-AR") : "N/A"}</span>
               </div>
               <div class="detail-item">
                 <span class="label">Fecha de Fin:</span>
-                <span class="value">${loan.end_date ? new Date(loan.end_date).toLocaleDateString() : "N/A"}</span>
+                <span class="value">${loan.end_date ? new Date(loan.end_date).toLocaleDateString("es-AR") : "N/A"}</span>
               </div>
             </div>
           </div>
@@ -946,13 +1101,13 @@ export default function LoansPage() {
                   <div className="flex justify-between">
                     <span className="text-gray-400">Fecha de Inicio:</span>
                     <span className="text-gray-200">
-                      {currentLoan.start_date ? new Date(currentLoan.start_date).toLocaleDateString() : "N/A"}
+                      {currentLoan.start_date ? new Date(currentLoan.start_date).toLocaleDateString("es-AR") : "N/A"}
                     </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-400">Fecha de Fin:</span>
                     <span className="text-gray-200">
-                      {currentLoan.end_date ? new Date(currentLoan.end_date).toLocaleDateString() : "N/A"}
+                      {currentLoan.end_date ? new Date(currentLoan.end_date).toLocaleDateString("es-AR") : "N/A"}
                     </span>
                   </div>
                 </div>
