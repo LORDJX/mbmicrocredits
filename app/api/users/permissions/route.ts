@@ -8,26 +8,31 @@ const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
 
 // Rutas disponibles en el sistema
 const AVAILABLE_ROUTES = [
-  { path: "/dashboard", name: "Dashboard Principal" },
-  { path: "/dashboard/clients", name: "Gestión de Clientes" },
-  { path: "/dashboard/loans", name: "Gestión de Préstamos" },
-  { path: "/dashboard/partners", name: "Gestión de Socios" },
-  { path: "/dashboard/transactions", name: "Transacciones" },
-  { path: "/dashboard/followups", name: "Seguimientos" },
-  { path: "/dashboard/receipts", name: "Recibos" },
-  { path: "/dashboard/reports", name: "Informe de situación Financiera" },
-  { path: "/dashboard/resumen", name: "Resumen para Socios" },
-  { path: "/dashboard/users", name: "Gestión de Usuarios" },
+  { id: "dashboard", path: "/dashboard", name: "Dashboard Principal" },
+  { id: "clients", path: "/dashboard/clients", name: "Gestión de Clientes" },
+  { id: "loans", path: "/dashboard/loans", name: "Gestión de Préstamos" },
+  { id: "partners", path: "/dashboard/partners", name: "Gestión de Socios" },
+  { id: "transactions", path: "/dashboard/transactions", name: "Transacciones" },
+  { id: "followups", path: "/dashboard/followups", name: "Seguimientos" },
+  { id: "receipts", path: "/dashboard/receipts", name: "Recibos" },
+  { id: "reports", path: "/dashboard/reports", name: "Informe de situación Financiera" },
+  { id: "resumen", path: "/dashboard/resumen", name: "Resumen para Socios" },
+  { id: "users", path: "/dashboard/users", name: "Gestión de Usuarios" },
 ]
 
 export async function GET(request: NextRequest) {
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-    return NextResponse.json({ detail: "Configuración de Supabase incompleta." }, { status: 500 })
+  const userId = request.nextUrl.searchParams.get("userId") || request.nextUrl.searchParams.get("user_id")
+  if (!userId) {
+    return NextResponse.json({ detail: "Falta el parámetro userId." }, { status: 400 })
   }
 
-  const userId = request.nextUrl.searchParams.get("user_id")
-  if (!userId) {
-    return NextResponse.json({ detail: "Falta el parámetro user_id." }, { status: 400 })
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    return NextResponse.json({
+      available_routes: AVAILABLE_ROUTES,
+      permissions: ["dashboard", "clients", "loans"], // Default restricted permissions
+      user_routes: ["/dashboard", "/dashboard/clients", "/dashboard/loans"],
+      message: "Usando permisos por defecto - Configurar Supabase para permisos personalizados",
+    })
   }
 
   try {
@@ -39,18 +44,36 @@ export async function GET(request: NextRequest) {
 
     if (error) {
       console.error("Error al obtener permisos:", error)
+      if (error.message.includes("does not exist")) {
+        return NextResponse.json({
+          available_routes: AVAILABLE_ROUTES,
+          permissions: ["dashboard", "clients", "loans"], // Default restricted permissions
+          user_routes: ["/dashboard", "/dashboard/clients", "/dashboard/loans"],
+          message: "Tabla de permisos no existe - Ejecutar migración SQL",
+        })
+      }
       return NextResponse.json({ detail: error.message }, { status: 500 })
     }
 
     const userRoutes = data?.map((p) => p.route_path) || []
+    const permissions = userRoutes.map((path) => {
+      const route = AVAILABLE_ROUTES.find((r) => r.path === path)
+      return route ? route.id : path.replace("/dashboard/", "").replace("/dashboard", "dashboard")
+    })
 
     return NextResponse.json({
       available_routes: AVAILABLE_ROUTES,
+      permissions: permissions.length > 0 ? permissions : ["dashboard"], // Always include dashboard
       user_routes: userRoutes,
     })
   } catch (err: any) {
     console.error("Error interno:", err)
-    return NextResponse.json({ detail: "Error interno del servidor." }, { status: 500 })
+    return NextResponse.json({
+      available_routes: AVAILABLE_ROUTES,
+      permissions: ["dashboard", "clients", "loans"],
+      user_routes: ["/dashboard", "/dashboard/clients", "/dashboard/loans"],
+      message: "Error de conexión - Usando permisos por defecto",
+    })
   }
 }
 

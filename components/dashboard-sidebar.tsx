@@ -1,6 +1,7 @@
 "use client"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import { useEffect, useState } from "react"
 import {
   Home,
   Users,
@@ -34,25 +35,69 @@ import { useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
 
 const navItems = [
-  { title: "Inicio", href: "/dashboard", icon: Home },
-  { title: "Usuarios", href: "/dashboard/users", icon: Users },
-  { title: "Socios", href: "/dashboard/partners", icon: Handshake },
-  { title: "Clientes", href: "/dashboard/clients", icon: User2 },
-  { title: "Préstamos", href: "/dashboard/loans", icon: CreditCard },
-  { title: "Recibo", href: "/dashboard/receipts", icon: Receipt }, // Added new receipts route
-  { title: "Transacciones", href: "/dashboard/transactions", icon: DollarSign },
-  { title: "Seguimientos", href: "/dashboard/followups", icon: CalendarCheck },
-  { title: "Resumen para Socios", href: "/dashboard/resumen", icon: FileText },
-  { title: "Informe de situación Financiera", href: "/dashboard/reports", icon: BarChart2 },
+  { title: "Inicio", href: "/dashboard", icon: Home, route: "dashboard" },
+  { title: "Usuarios", href: "/dashboard/users", icon: Users, route: "users" },
+  { title: "Socios", href: "/dashboard/partners", icon: Handshake, route: "partners" },
+  { title: "Clientes", href: "/dashboard/clients", icon: User2, route: "clients" },
+  { title: "Préstamos", href: "/dashboard/loans", icon: CreditCard, route: "loans" },
+  { title: "Recibo", href: "/dashboard/receipts", icon: Receipt, route: "receipts" },
+  { title: "Transacciones", href: "/dashboard/transactions", icon: DollarSign, route: "transactions" },
+  { title: "Seguimientos", href: "/dashboard/followups", icon: CalendarCheck, route: "followups" },
+  { title: "Resumen para Socios", href: "/dashboard/resumen", icon: FileText, route: "reports" },
+  { title: "Informe de situación Financiera", href: "/dashboard/reports", icon: BarChart2, route: "reports" },
 ]
 
 export function DashboardSidebar() {
   const pathname = usePathname()
   const router = useRouter()
+  const [userPermissions, setUserPermissions] = useState<string[]>([])
+  const [permissionsLoaded, setPermissionsLoaded] = useState(false)
+
+  useEffect(() => {
+    const loadUserPermissions = async () => {
+      try {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser()
+        if (user) {
+          const response = await fetch(`/api/users/permissions?userId=${user.id}`)
+          const data = await response.json()
+
+          if (data.permissions && Array.isArray(data.permissions)) {
+            setUserPermissions(data.permissions)
+          } else {
+            setUserPermissions(["dashboard", "clients", "loans", "receipts", "transactions"])
+          }
+        }
+      } catch (error) {
+        console.error("Error loading permissions:", error)
+        setUserPermissions(["dashboard", "clients", "loans"])
+      } finally {
+        setPermissionsLoaded(true)
+      }
+    }
+
+    loadUserPermissions()
+  }, [])
+
+  const filteredNavItems = navItems.filter((item) => userPermissions.includes(item.route) || item.route === "dashboard")
 
   const handleLogout = async () => {
     await supabase.auth.signOut()
     router.push("/login")
+  }
+
+  if (!permissionsLoaded) {
+    return (
+      <Sidebar className="bg-card border-r border-border">
+        <SidebarHeader className="p-4 border-b border-border">
+          <h1 className="text-2xl font-bold text-foreground">Microcréditos</h1>
+        </SidebarHeader>
+        <SidebarContent className="flex-1 overflow-auto py-4">
+          <div className="p-4 text-center text-muted-foreground">Cargando permisos...</div>
+        </SidebarContent>
+      </Sidebar>
+    )
   }
 
   return (
@@ -65,7 +110,7 @@ export function DashboardSidebar() {
           <SidebarGroupLabel className="text-muted-foreground">Navegación</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {navItems.map((item) => (
+              {filteredNavItems.map((item) => (
                 <SidebarMenuItem key={item.href}>
                   <Link href={item.href} legacyBehavior passHref>
                     <SidebarMenuButton
