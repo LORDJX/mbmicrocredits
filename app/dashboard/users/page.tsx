@@ -10,11 +10,12 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
-import { MoreHorizontal, Search, Plus, Pencil } from "lucide-react"
+import { MoreHorizontal, Search, Plus, Pencil, Trash2, Shield } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { useForm } from "react-hook-form"
 import { z } from "zod"
 import { zodResolver } from "@hookform/resolvers/zod"
+import { Checkbox } from "@/components/ui/checkbox"
 
 interface User {
   id: string
@@ -50,6 +51,11 @@ export default function UsersPage() {
   const [openCreate, setOpenCreate] = useState(false)
   const [openEdit, setOpenEdit] = useState(false)
   const [editingUser, setEditingUser] = useState<User | null>(null)
+  const [openPermissions, setOpenPermissions] = useState(false)
+  const [permissionsUser, setPermissionsUser] = useState<User | null>(null)
+  const [availableRoutes, setAvailableRoutes] = useState<Array<{ path: string; name: string }>>([])
+  const [userRoutes, setUserRoutes] = useState<string[]>([])
+  const [loadingPermissions, setLoadingPermissions] = useState(false)
   const { toast } = useToast()
   const router = useRouter()
 
@@ -230,6 +236,98 @@ export default function UsersPage() {
     }
   }
 
+  const handleDeleteUser = async (userId: string, userName: string) => {
+    if (!confirm(`¿Estás seguro de que deseas eliminar al usuario "${userName}"? Esta acción no se puede deshacer.`)) {
+      return
+    }
+
+    try {
+      const response = await fetch(`/api/users/${userId}`, {
+        method: "DELETE",
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.detail || "Error al eliminar el usuario.")
+      }
+
+      toast({
+        title: "Usuario eliminado",
+        description: `El usuario "${userName}" ha sido eliminado correctamente.`,
+      })
+      fetchUsers()
+    } catch (err: any) {
+      console.error("Error al eliminar usuario:", err)
+      toast({
+        title: "Error",
+        description: `No se pudo eliminar el usuario: ${err.message}`,
+        variant: "destructive",
+      })
+    }
+  }
+
+  const openPermissionsDialog = async (user: User) => {
+    setPermissionsUser(user)
+    setLoadingPermissions(true)
+    setOpenPermissions(true)
+
+    try {
+      const response = await fetch(`/api/users/permissions?user_id=${user.id}`)
+      if (!response.ok) {
+        throw new Error("Error al cargar permisos")
+      }
+
+      const data = await response.json()
+      setAvailableRoutes(data.available_routes)
+      setUserRoutes(data.user_routes)
+    } catch (err: any) {
+      toast({
+        title: "Error",
+        description: "No se pudieron cargar los permisos del usuario.",
+        variant: "destructive",
+      })
+    } finally {
+      setLoadingPermissions(false)
+    }
+  }
+
+  const handleSavePermissions = async () => {
+    if (!permissionsUser) return
+
+    try {
+      const response = await fetch("/api/users/permissions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          user_id: permissionsUser.id,
+          routes: userRoutes,
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.detail || "Error al guardar permisos")
+      }
+
+      toast({
+        title: "Permisos actualizados",
+        description: "Los permisos del usuario han sido actualizados correctamente.",
+      })
+      setOpenPermissions(false)
+      setPermissionsUser(null)
+    } catch (err: any) {
+      toast({
+        title: "Error",
+        description: `No se pudieron guardar los permisos: ${err.message}`,
+        variant: "destructive",
+      })
+    }
+  }
+
+  const toggleRoute = (routePath: string) => {
+    setUserRoutes((prev) => (prev.includes(routePath) ? prev.filter((r) => r !== routePath) : [...prev, routePath]))
+  }
+
   if (loading && !users.length) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-900 text-gray-100">
@@ -319,6 +417,20 @@ export default function UsersPage() {
                           >
                             <Pencil className="h-4 w-4 mr-2" />
                             Editar
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => openPermissionsDialog(user)}
+                            className="hover:bg-gray-600 focus:bg-gray-600 cursor-pointer"
+                          >
+                            <Shield className="h-4 w-4 mr-2" />
+                            Permisos
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => handleDeleteUser(user.id, user.full_name || user.username || "Usuario")}
+                            className="hover:bg-red-600 focus:bg-red-600 cursor-pointer text-red-400"
+                          >
+                            <Trash2 className="h-4 w-4 mr-2" />
+                            Eliminar
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -455,6 +567,55 @@ export default function UsersPage() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Diálogo: Permisos */}
+      <Dialog open={openPermissions} onOpenChange={setOpenPermissions}>
+        <DialogContent className="bg-gray-800 text-gray-100 border-gray-700 max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Permisos de Usuario</DialogTitle>
+            <p className="text-gray-400">
+              Selecciona las rutas a las que {permissionsUser?.full_name || permissionsUser?.username} puede acceder
+            </p>
+          </DialogHeader>
+
+          {loadingPermissions ? (
+            <div className="flex justify-center py-8">
+              <p className="text-gray-400">Cargando permisos...</p>
+            </div>
+          ) : (
+            <div className="space-y-4 max-h-96 overflow-y-auto">
+              {availableRoutes.map((route) => (
+                <div key={route.path} className="flex items-center space-x-3 p-3 rounded-lg bg-gray-700/50">
+                  <Checkbox
+                    id={route.path}
+                    checked={userRoutes.includes(route.path)}
+                    onCheckedChange={() => toggleRoute(route.path)}
+                  />
+                  <div className="flex-1">
+                    <Label htmlFor={route.path} className="text-gray-200 font-medium cursor-pointer">
+                      {route.name}
+                    </Label>
+                    <p className="text-sm text-gray-400">{route.path}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <DialogFooter className="gap-2">
+            <Button type="button" variant="ghost" onClick={() => setOpenPermissions(false)}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleSavePermissions}
+              className="bg-blue-600 hover:bg-blue-700"
+              disabled={loadingPermissions}
+            >
+              Guardar Permisos
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

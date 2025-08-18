@@ -101,3 +101,36 @@ export async function PATCH(request: NextRequest, context: { params: { id: strin
     return NextResponse.json({ detail: "Error interno del servidor al actualizar el usuario." }, { status: 500 })
   }
 }
+
+export async function DELETE(request: NextRequest, context: { params: { id: string } }) {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    console.error("Faltan variables de entorno de Supabase (SUPABASE_URL o SUPABASE_SERVICE_ROLE_KEY).")
+    return NextResponse.json({ detail: "Configuración de Supabase incompleta en el servidor." }, { status: 500 })
+  }
+
+  const userId = context.params?.id
+  if (!userId) {
+    return NextResponse.json({ detail: "Falta el parámetro 'id'." }, { status: 400 })
+  }
+
+  try {
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+      auth: { persistSession: false },
+    })
+
+    // Eliminar usuario de Auth (esto también eliminará el perfil por CASCADE)
+    const { error: authDeleteError } = await supabase.auth.admin.deleteUser(userId)
+    if (authDeleteError) {
+      console.error("Error deleteUser:", authDeleteError)
+      return NextResponse.json(
+        { detail: authDeleteError.message || "No se pudo eliminar el usuario." },
+        { status: 400 },
+      )
+    }
+
+    return NextResponse.json({ message: "Usuario eliminado correctamente." }, { status: 200 })
+  } catch (err: any) {
+    console.error("Error interno (DELETE /api/users/[id]):", err)
+    return NextResponse.json({ detail: "Error interno del servidor al eliminar el usuario." }, { status: 500 })
+  }
+}
