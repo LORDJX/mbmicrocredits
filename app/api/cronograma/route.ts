@@ -9,6 +9,10 @@ export async function GET(request: NextRequest) {
     const yesterday = new Date(today)
     yesterday.setDate(yesterday.getDate() - 1)
 
+    console.log("[v0] Cronograma API - Today:", today.toISOString().split("T")[0])
+    console.log("[v0] Cronograma API - Start of month:", startOfMonth.toISOString().split("T")[0])
+    console.log("[v0] Cronograma API - End of month:", endOfMonth.toISOString().split("T")[0])
+
     // Obtener préstamos activos con información del cliente
     const { data: loans, error: loansError } = await supabase
       .from("loans")
@@ -35,16 +39,36 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Error fetching loans" }, { status: 500 })
     }
 
+    console.log("[v0] Cronograma API - Found loans:", loans?.length || 0)
+
     // Generar cronograma de cuotas
     const allInstallments: any[] = []
 
     loans?.forEach((loan) => {
-      const startDate = new Date(loan.start_date)
+      let startDate = new Date(loan.start_date)
+
+      // Si la fecha de inicio es muy antigua, ajustarla para generar cuotas recientes
+      const monthsAgo = new Date()
+      monthsAgo.setMonth(monthsAgo.getMonth() - 2)
+
+      if (startDate < monthsAgo) {
+        startDate = monthsAgo
+      }
+
       const intervalDays = loan.loan_type === "Semanal" ? 7 : loan.loan_type === "Quincenal" ? 15 : 30
+
+      console.log("[v0] Processing loan:", loan.loan_code, "Start date:", startDate.toISOString().split("T")[0])
 
       for (let i = 0; i < loan.installments; i++) {
         const dueDate = new Date(startDate)
         dueDate.setDate(startDate.getDate() + intervalDays * (i + 1))
+
+        let status = "pending"
+        if (dueDate < today) {
+          status = "overdue"
+        } else if (dueDate.toDateString() === today.toDateString()) {
+          status = "due_today"
+        }
 
         const installment = {
           id: `${loan.id}-${i + 1}`,
@@ -55,12 +79,14 @@ export async function GET(request: NextRequest) {
           total_installments: loan.installments,
           amount: loan.installment_amount || loan.amount / loan.installments,
           due_date: dueDate.toISOString().split("T")[0],
-          status: dueDate < today ? "overdue" : "pending",
+          status: status,
         }
 
         allInstallments.push(installment)
       }
     })
+
+    console.log("[v0] Total installments generated:", allInstallments.length)
 
     const todayStr = today.toISOString().split("T")[0]
     const { data: todayReceipts, error: receiptsError } = await supabase
@@ -98,23 +124,29 @@ export async function GET(request: NextRequest) {
       }
     })
 
-    // Filtrar cuotas por categorías excluyendo las pagadas
-    const todayInstallments = allInstallments.filter(
-      (inst) => inst.due_date === todayStr && !paidInstallmentIds.has(`${inst.loan_code}-${inst.installment_number}`),
-    )
-    const overdueInstallments = allInstallments.filter(
-      (inst) => inst.status === "overdue" && !paidInstallmentIds.has(`${inst.loan_code}-${inst.installment_number}`),
-    )
-    const monthInstallments = allInstallments.filter((inst) => {
-      const dueDate = new Date(inst.due_date)
-      return (
-        dueDate >= startOfMonth &&
-        dueDate <= endOfMonth &&
-        !paidInstallmentIds.has(`${inst.loan_code}-${inst.installment_number}`)
-      )
+    const todayInstallments = allInstallments.filter((inst) => {
+      const isDueToday = inst.due_date === todayStr || inst.status === "due_today"
+      const isNotPaid = !paidInstallmentIds.has(`${inst.loan_code}-${inst.installment_number}`)
+      return isDueToday && isNotPaid
     })
 
-    // Obtener recibos para calcular montos cobrados
+    const overdueInstallments = allInstallments.filter((inst) => {
+      const isOverdue = inst.status === "overdue"
+      const isNotPaid = !paidInstallmentIds.has(`${inst.loan_code}-${inst.installment_number}`)
+      return isOverdue && isNotPaid
+    })
+
+    const monthInstallments = allInstallments.filter((inst) => {
+      const dueDate = new Date(inst.due_date)
+      const isInMonth = dueDate >= startOfMonth && dueDate <= endOfMonth
+      const isNotPaid = !paidInstallmentIds.has(`${inst.loan_code}-${inst.installment_number}`)
+      return isInMonth && isNotPaid
+    })
+
+    console.log("[v0] Today installments:", todayInstallments.length)
+    console.log("[v0] Overdue installments:", overdueInstallments.length)
+    console.log("[v0] Month installments:", monthInstallments.length)
+
     const { data: receipts, error: allReceiptsError } = await supabase
       .from("receipts")
       .select("total_amount, receipt_date")
