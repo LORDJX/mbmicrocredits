@@ -67,7 +67,6 @@ export async function GET(request: NextRequest) {
       .from("receipts")
       .select(`
         id,
-        receipt_number,
         total_amount,
         receipt_date,
         payment_type,
