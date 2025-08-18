@@ -11,6 +11,7 @@ type UpdateUserBody = {
   username?: string
   full_name?: string
   is_admin?: boolean
+  new_password?: string // Agregando campo para reseteo de contraseña
 }
 
 export async function PATCH(request: NextRequest, context: { params: { id: string } }) {
@@ -35,11 +36,20 @@ export async function PATCH(request: NextRequest, context: { params: { id: strin
   const username = body.username?.trim().toLowerCase()
   const full_name = body.full_name?.trim()
   const is_admin = body.is_admin
+  const new_password = body.new_password?.trim() // Extrayendo nueva contraseña del body
 
   try {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
       auth: { persistSession: false },
     })
+
+    console.log("[v0] API: Actualizando usuario", userId, {
+      email,
+      username,
+      full_name,
+      is_admin,
+      has_password: !!new_password,
+    }) // Agregando logs de debug para rastrear actualizaciones
 
     // Si se provee email, actualizar también en Auth
     if (email) {
@@ -55,10 +65,26 @@ export async function PATCH(request: NextRequest, context: { params: { id: strin
       }
     }
 
+    if (new_password) {
+      console.log("[v0] API: Actualizando contraseña del usuario")
+      const { error: passwordError } = await supabase.auth.admin.updateUserById(userId, {
+        password: new_password,
+      })
+      if (passwordError) {
+        console.error("Error updateUserById (password):", passwordError)
+        return NextResponse.json(
+          { detail: passwordError.message || "No se pudo actualizar la contraseña del usuario." },
+          { status: 400 },
+        )
+      }
+    }
+
     const updatePayload: Record<string, any> = {}
     if (typeof username !== "undefined") updatePayload.username = username || null
     if (typeof full_name !== "undefined") updatePayload.full_name = full_name || null
     if (typeof is_admin !== "undefined") updatePayload.is_admin = !!is_admin
+
+    console.log("[v0] API: Actualizando perfil con payload:", updatePayload)
 
     if (Object.keys(updatePayload).length === 0) {
       // Si no hay cambios en el perfil, retornar el perfil actual
@@ -72,11 +98,13 @@ export async function PATCH(request: NextRequest, context: { params: { id: strin
         .eq("id", userId)
         .single()
       if (currentErr) {
+        console.error("[v0] API: Error al obtener perfil actual:", currentErr)
         return NextResponse.json(
           { detail: currentErr.message || "No se pudo recuperar el perfil." },
           { status: currentStatus || 500 },
         )
       }
+      console.log("[v0] API: Retornando perfil actual sin cambios:", current)
       return NextResponse.json(current, { status: 200 })
     }
 
@@ -95,6 +123,7 @@ export async function PATCH(request: NextRequest, context: { params: { id: strin
       )
     }
 
+    console.log("[v0] API: Usuario actualizado exitosamente:", data)
     return NextResponse.json(data, { status: 200 })
   } catch (err: any) {
     console.error("Error interno (PATCH /api/users/[id]):", err)

@@ -39,6 +39,7 @@ const editUserSchema = z.object({
   email: z.string().email("Ingresa un email válido."),
   full_name: z.string().trim().min(1, "El nombre es requerido.").max(120, "Máximo 120 caracteres."),
   is_admin: z.boolean().default(false),
+  new_password: z.string().min(6, "Mínimo 6 caracteres.").optional().or(z.literal("")),
 })
 
 type EditUserInput = z.infer<typeof editUserSchema>
@@ -192,6 +193,7 @@ export default function UsersPage() {
       email: "",
       full_name: "",
       is_admin: false,
+      new_password: "",
     },
   })
 
@@ -201,6 +203,7 @@ export default function UsersPage() {
       email: user.username || "",
       full_name: user.full_name || "",
       is_admin: user.is_admin,
+      new_password: "",
     })
     setOpenEdit(true)
   }
@@ -208,6 +211,8 @@ export default function UsersPage() {
   const onSubmitEdit = async (values: EditUserInput) => {
     if (!editingUser) return
     try {
+      console.log("[v0] Editando usuario:", editingUser.id, values)
+
       const payload: any = {
         full_name: values.full_name,
         username: values.email, // mantenemos username como email visible
@@ -218,20 +223,35 @@ export default function UsersPage() {
         payload.email = values.email
       }
 
+      if (values.new_password && values.new_password.trim()) {
+        payload.new_password = values.new_password.trim()
+      }
+
+      console.log("[v0] Payload enviado:", payload)
+
       const res = await fetch(`/api/users/${editingUser.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       })
+
+      console.log("[v0] Respuesta del servidor:", res.status, res.statusText)
+
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
+        console.log("[v0] Error del servidor:", err)
         throw new Error(err.detail || "No se pudo actualizar el usuario.")
       }
+
+      const result = await res.json()
+      console.log("[v0] Usuario actualizado exitosamente:", result)
+
       toast({ title: "Usuario actualizado", description: "Los cambios se han guardado correctamente." })
       setOpenEdit(false)
       setEditingUser(null)
       fetchUsers()
     } catch (e: any) {
+      console.error("[v0] Error al actualizar usuario:", e)
       toast({ title: "Error", description: e.message || "Fallo al actualizar el usuario.", variant: "destructive" })
     }
   }
@@ -544,6 +564,20 @@ export default function UsersPage() {
                 {...registerEdit("full_name")}
               />
               {errorsEdit.full_name && <p className="text-red-400 text-sm">{errorsEdit.full_name.message}</p>}
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="new_password_edit">Nueva Contraseña (opcional)</Label>
+              <Input
+                id="new_password_edit"
+                type="password"
+                placeholder="Dejar vacío para mantener la contraseña actual"
+                className="bg-gray-700 border-gray-600 text-gray-100 placeholder:text-gray-400"
+                {...registerEdit("new_password")}
+              />
+              {errorsEdit.new_password && <p className="text-red-400 text-sm">{errorsEdit.new_password.message}</p>}
+              <p className="text-xs text-gray-400">
+                Solo completa este campo si deseas cambiar la contraseña del usuario.
+              </p>
             </div>
             <div className="flex items-center gap-3">
               <Switch id="is_admin_edit" {...registerEdit("is_admin")} />
