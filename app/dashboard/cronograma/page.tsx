@@ -156,8 +156,33 @@ export default function CronogramaPage() {
 
       if (result.success) {
         toast.success("Recibo creado exitosamente")
+
+        if (selectedInstallment) {
+          const updateInstallmentStatus = (installments: Installment[]) =>
+            installments.map((inst) =>
+              inst.id === selectedInstallment.id ? { ...inst, status: "paid" as const } : inst,
+            )
+
+          setTodayInstallments((prev) => updateInstallmentStatus(prev))
+          setOverdueInstallments((prev) => updateInstallmentStatus(prev))
+          setMonthInstallments((prev) => updateInstallmentStatus(prev))
+        }
+
         setIsReceiptModalOpen(false)
-        fetchCronogramaData() // Refresh data
+        setSelectedInstallment(null)
+        setReceiptForm({
+          receipt_date: new Date().toISOString().split("T")[0],
+          client_id: "",
+          client_name: "",
+          loan_code: "",
+          payment_type: "Total",
+          cash_amount: "",
+          transfer_amount: "0",
+          observations: "",
+        })
+
+        // Refresh data to get updated totals
+        fetchCronogramaData()
       } else {
         toast.error("Error al crear recibo: " + (result.error || "Error desconocido"))
       }
@@ -427,7 +452,7 @@ export default function CronogramaPage() {
             </div>
 
             <div className="flex justify-end space-x-2 pt-4">
-              <Button variant="outline" onClick={() => setIsReceiptModalOpen(false)}>
+              <Button variant="outline" onClick={() => setIsReceiptModalOpen(false)} disabled={isCreatingReceipt}>
                 Cancelar
               </Button>
               <Button onClick={handleCreateReceipt} disabled={isCreatingReceipt}>
