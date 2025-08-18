@@ -15,6 +15,7 @@ import {
   User2,
   FileText,
   Receipt,
+  Calendar,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -41,6 +42,7 @@ const navItems = [
   { title: "Clientes", href: "/dashboard/clients", icon: User2, route: "clients" },
   { title: "Préstamos", href: "/dashboard/loans", icon: CreditCard, route: "loans" },
   { title: "Recibo", href: "/dashboard/receipts", icon: Receipt, route: "receipts" },
+  { title: "Cronograma", href: "/dashboard/cronograma", icon: Calendar, route: "cronograma" }, // agregando ruta cronograma
   { title: "Transacciones", href: "/dashboard/transactions", icon: DollarSign, route: "transactions" },
   { title: "Seguimientos", href: "/dashboard/followups", icon: CalendarCheck, route: "followups" },
   { title: "Resumen para Socios", href: "/dashboard/resumen", icon: FileText, route: "reports" },
