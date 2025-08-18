@@ -125,6 +125,8 @@ export default function CronogramaPage() {
   }
 
   const handleCreateReceipt = async () => {
+    if (isCreatingReceipt) return // Prevent multiple clicks
+
     try {
       setIsCreatingReceipt(true)
 
@@ -181,8 +183,9 @@ export default function CronogramaPage() {
           observations: "",
         })
 
-        // Refresh data to get updated totals
-        fetchCronogramaData()
+        setTimeout(() => {
+          fetchCronogramaData()
+        }, 500)
       } else {
         toast.error("Error al crear recibo: " + (result.error || "Error desconocido"))
       }
@@ -357,7 +360,14 @@ export default function CronogramaPage() {
       </div>
 
       {/* Receipt Modal */}
-      <Dialog open={isReceiptModalOpen} onOpenChange={setIsReceiptModalOpen}>
+      <Dialog
+        open={isReceiptModalOpen}
+        onOpenChange={(open) => {
+          if (!isCreatingReceipt) {
+            setIsReceiptModalOpen(open)
+          }
+        }}
+      >
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Nuevo Recibo - {receiptForm.client_name}</DialogTitle>
@@ -452,10 +462,18 @@ export default function CronogramaPage() {
             </div>
 
             <div className="flex justify-end space-x-2 pt-4">
-              <Button variant="outline" onClick={() => setIsReceiptModalOpen(false)} disabled={isCreatingReceipt}>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  if (!isCreatingReceipt) {
+                    setIsReceiptModalOpen(false)
+                  }
+                }}
+                disabled={isCreatingReceipt}
+              >
                 Cancelar
               </Button>
-              <Button onClick={handleCreateReceipt} disabled={isCreatingReceipt}>
+              <Button onClick={handleCreateReceipt} disabled={isCreatingReceipt || !receiptForm.client_id}>
                 {isCreatingReceipt ? "Creando..." : "Crear Recibo"}
               </Button>
             </div>
