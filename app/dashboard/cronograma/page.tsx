@@ -125,10 +125,14 @@ export default function CronogramaPage() {
   }
 
   const handleCreateReceipt = async () => {
-    if (isCreatingReceipt) return // Prevent multiple clicks
+    if (isCreatingReceipt) {
+      console.log("[v0] Already creating receipt, preventing duplicate")
+      return
+    }
 
     try {
       setIsCreatingReceipt(true)
+      console.log("[v0] Starting receipt creation")
 
       const receiptData = {
         receipt_date: receiptForm.receipt_date,
@@ -157,6 +161,7 @@ export default function CronogramaPage() {
       const result = await response.json()
 
       if (result.success) {
+        console.log("[v0] Receipt created successfully")
         toast.success("Recibo creado exitosamente")
 
         if (selectedInstallment) {
@@ -185,8 +190,9 @@ export default function CronogramaPage() {
 
         setTimeout(() => {
           fetchCronogramaData()
-        }, 500)
+        }, 1000)
       } else {
+        console.log("[v0] Receipt creation failed:", result.error)
         toast.error("Error al crear recibo: " + (result.error || "Error desconocido"))
       }
     } catch (error) {
@@ -194,6 +200,7 @@ export default function CronogramaPage() {
       toast.error("Error al crear recibo")
     } finally {
       setIsCreatingReceipt(false)
+      console.log("[v0] Receipt creation process completed")
     }
   }
 
@@ -360,14 +367,7 @@ export default function CronogramaPage() {
       </div>
 
       {/* Receipt Modal */}
-      <Dialog
-        open={isReceiptModalOpen}
-        onOpenChange={(open) => {
-          if (!isCreatingReceipt) {
-            setIsReceiptModalOpen(open)
-          }
-        }}
-      >
+      <Dialog open={isReceiptModalOpen} onOpenChange={setIsReceiptModalOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Nuevo Recibo - {receiptForm.client_name}</DialogTitle>
@@ -462,18 +462,14 @@ export default function CronogramaPage() {
             </div>
 
             <div className="flex justify-end space-x-2 pt-4">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  if (!isCreatingReceipt) {
-                    setIsReceiptModalOpen(false)
-                  }
-                }}
-                disabled={isCreatingReceipt}
-              >
+              <Button variant="outline" onClick={() => setIsReceiptModalOpen(false)} disabled={isCreatingReceipt}>
                 Cancelar
               </Button>
-              <Button onClick={handleCreateReceipt} disabled={isCreatingReceipt || !receiptForm.client_id}>
+              <Button
+                onClick={handleCreateReceipt}
+                disabled={isCreatingReceipt || !receiptForm.client_id}
+                className={isCreatingReceipt ? "opacity-50 cursor-not-allowed" : ""}
+              >
                 {isCreatingReceipt ? "Creando..." : "Crear Recibo"}
               </Button>
             </div>
