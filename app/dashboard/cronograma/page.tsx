@@ -15,6 +15,7 @@ import { toast } from "sonner"
 
 interface Installment {
   id: string
+  client_id: string
   client_name: string
   loan_code: string
   installment_number: number
@@ -112,7 +113,7 @@ export default function CronogramaPage() {
     setSelectedInstallment(installment)
     setReceiptForm({
       receipt_date: new Date().toISOString().split("T")[0],
-      client_id: installment.id, // Using installment ID as client reference
+      client_id: installment.client_id,
       client_name: installment.client_name,
       loan_code: installment.loan_code,
       payment_type: "Total",

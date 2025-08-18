@@ -48,6 +48,7 @@ export async function GET(request: NextRequest) {
 
         const installment = {
           id: `${loan.id}-${i + 1}`,
+          client_id: loan.client_id,
           client_name: `${loan.clients.first_name} ${loan.clients.last_name}`,
           loan_code: loan.loan_code,
           installment_number: i + 1,
