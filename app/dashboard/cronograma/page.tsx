@@ -278,7 +278,7 @@ BM Microcréditos`
 
     const message = `Hola ${clientName}! 
 
-Su recibo N° ${receipt.receipt_number || receipt.id} ha sido generado exitosamente.
+Su recibo N° ${receipt.receipt_number} ha sido generado exitosamente.
 
 Detalle del pago:
 - Monto: ${formatCurrency(receipt.total_amount)}

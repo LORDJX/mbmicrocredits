@@ -17,11 +17,21 @@ export async function GET(request: NextRequest) {
     }
 
     const formattedReceipts =
-      receipts?.map((receipt) => ({
-        ...receipt,
-        client_name: `${receipt.clients.first_name} ${receipt.clients.last_name}`,
-        receipt_number: receipt.receipt_number || `Rbo - ${receipt.id.slice(-6).toUpperCase()}`,
-      })) || []
+      receipts?.map((receipt, index) => {
+        let receiptNumber = receipt.receipt_number
+
+        // If no receipt_number exists, generate sequential number based on position
+        if (!receiptNumber) {
+          const sequentialNumber = receipts.length - index
+          receiptNumber = `Rbo - ${sequentialNumber.toString().padStart(6, "0")}`
+        }
+
+        return {
+          ...receipt,
+          client_name: `${receipt.clients.first_name} ${receipt.clients.last_name}`,
+          receipt_number: receiptNumber,
+        }
+      }) || []
 
     return NextResponse.json(formattedReceipts)
   } catch (error) {
