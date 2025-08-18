@@ -342,7 +342,7 @@ export default function LoansPage() {
             .schedule-section {
               margin-top: 3mm;
             }
-            .schedule-title {
+            .section-header {
               font-weight: bold;
               font-size: 11px;
               text-align: center;
@@ -368,22 +368,6 @@ export default function LoansPage() {
             }
             .schedule-table tr:nth-child(even) { 
               background-color: #f5f5f5; 
-            }
-            .total-section {
-              margin-top: 3mm;
-              padding: 2mm;
-              border: 2px solid #000;
-              background: #f0f0f0;
-              text-align: center;
-            }
-            .total-label {
-              font-size: 10px;
-              font-weight: bold;
-            }
-            .total-amount {
-              font-size: 14px;
-              font-weight: bold;
-              margin-top: 1mm;
             }
             .footer {
               margin-top: 4mm;
@@ -457,7 +441,7 @@ export default function LoansPage() {
           <div class="separator"></div>
 
           <div class="schedule-section">
-            <div class="schedule-title">CRONOGRAMA DE CUOTAS</div>
+            <div class="section-header">CRONOGRAMA DE CUOTAS</div>
             <table class="schedule-table">
               <thead>
                 <tr>
@@ -469,9 +453,9 @@ export default function LoansPage() {
               <tbody>
                 ${schedule
                   .map(
-                    (payment) => `
+                    (payment, index) => `
                   <tr>
-                    <td>${payment.installment}</td>
+                    <td>${index + 1}</td>
                     <td>${payment.date.toLocaleDateString("es-AR")}</td>
                     <td>$${payment.amount.toFixed(2)}</td>
                   </tr>
@@ -480,11 +464,6 @@ export default function LoansPage() {
                   .join("")}
               </tbody>
             </table>
-          </div>
-
-          <div class="total-section">
-            <div class="total-label">TOTAL A DEVOLVER</div>
-            <div class="total-amount">$${((loan.installment_amount || 0) * loan.installments).toFixed(2)}</div>
           </div>
 
           <div class="footer">
@@ -1074,12 +1053,6 @@ export default function LoansPage() {
                   <div className="flex justify-between">
                     <span className="text-gray-400">Tasa de Interés:</span>
                     <span className="text-gray-200 font-semibold">{calculateInterestRate(currentLoan)}%</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">Total a Cobrar:</span>
-                    <span className="text-gray-200 font-bold">
-                      ${((currentLoan.installment_amount || 0) * currentLoan.installments).toFixed(2)}
-                    </span>
                   </div>
                 </div>
               </div>
