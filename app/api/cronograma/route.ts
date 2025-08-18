@@ -62,17 +62,61 @@ export async function GET(request: NextRequest) {
       }
     })
 
-    // Filtrar cuotas por categorías
     const todayStr = today.toISOString().split("T")[0]
-    const todayInstallments = allInstallments.filter((inst) => inst.due_date === todayStr)
-    const overdueInstallments = allInstallments.filter((inst) => inst.status === "overdue")
+    const { data: todayReceipts, error: receiptsError } = await supabase
+      .from("receipts")
+      .select(`
+        id,
+        receipt_number,
+        total_amount,
+        receipt_date,
+        payment_type,
+        observations,
+        selected_loans,
+        client_id,
+        clients!inner(
+          id,
+          first_name,
+          last_name,
+          phone
+        )
+      `)
+      .eq("receipt_date", todayStr)
+      .order("created_at", { ascending: false })
+
+    if (receiptsError) {
+      console.error("Error fetching today receipts:", receiptsError)
+    }
+
+    const paidInstallmentIds = new Set()
+    todayReceipts?.forEach((receipt) => {
+      if (receipt.selected_loans) {
+        receipt.selected_loans.forEach((loan: any) => {
+          if (loan.loan_code && loan.installment_number) {
+            paidInstallmentIds.add(`${loan.loan_code}-${loan.installment_number}`)
+          }
+        })
+      }
+    })
+
+    // Filtrar cuotas por categorías excluyendo las pagadas
+    const todayInstallments = allInstallments.filter(
+      (inst) => inst.due_date === todayStr && !paidInstallmentIds.has(`${inst.loan_code}-${inst.installment_number}`),
+    )
+    const overdueInstallments = allInstallments.filter(
+      (inst) => inst.status === "overdue" && !paidInstallmentIds.has(`${inst.loan_code}-${inst.installment_number}`),
+    )
     const monthInstallments = allInstallments.filter((inst) => {
       const dueDate = new Date(inst.due_date)
-      return dueDate >= startOfMonth && dueDate <= endOfMonth
+      return (
+        dueDate >= startOfMonth &&
+        dueDate <= endOfMonth &&
+        !paidInstallmentIds.has(`${inst.loan_code}-${inst.installment_number}`)
+      )
     })
 
     // Obtener recibos para calcular montos cobrados
-    const { data: receipts, error: receiptsError } = await supabase
+    const { data: receipts, error: allReceiptsError } = await supabase
       .from("receipts")
       .select("total_amount, receipt_date")
       .gte("receipt_date", startOfMonth.toISOString().split("T")[0])
@@ -97,6 +141,7 @@ export async function GET(request: NextRequest) {
       today: todayInstallments,
       overdue: overdueInstallments,
       month: monthInstallments,
+      todayReceipts: todayReceipts || [], // Agregar recibos del día
       summary,
     })
   } catch (error) {

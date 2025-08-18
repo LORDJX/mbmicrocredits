@@ -44,10 +44,28 @@ interface ReceiptFormData {
   observations: string
 }
 
+interface Receipt {
+  id: string
+  receipt_number: string
+  total_amount: number
+  receipt_date: string
+  payment_type: string
+  observations: string
+  selected_loans: any[]
+  client_id: string
+  clients: {
+    id: string
+    first_name: string
+    last_name: string
+    phone: string
+  }
+}
+
 export default function CronogramaPage() {
   const [todayInstallments, setTodayInstallments] = useState<Installment[]>([])
   const [overdueInstallments, setOverdueInstallments] = useState<Installment[]>([])
   const [monthInstallments, setMonthInstallments] = useState<Installment[]>([])
+  const [todayReceipts, setTodayReceipts] = useState<Receipt[]>([]) // Agregar estado para recibos del día
   const [summary, setSummary] = useState<DailySummary>({
     total_due_today: 0,
     total_received_today: 0,
@@ -84,6 +102,7 @@ export default function CronogramaPage() {
         setTodayInstallments(data.today || [])
         setOverdueInstallments(data.overdue || [])
         setMonthInstallments(data.month || [])
+        setTodayReceipts(data.todayReceipts || []) // Cargar recibos del día
         setSummary(data.summary || {})
       }
     } catch (error) {
@@ -245,6 +264,36 @@ BM Microcréditos`
     }
   }
 
+  const shareReceiptViaWhatsApp = (receipt: Receipt) => {
+    const phoneNumber = receipt.clients.phone?.replace(/[^\d]/g, "") // Remove non-numeric characters
+
+    if (!phoneNumber) {
+      toast.error("No se encontró número de teléfono para este cliente")
+      return
+    }
+
+    const clientName = `${receipt.clients.first_name} ${receipt.clients.last_name}`
+    const loanInfo = receipt.selected_loans?.[0] || {}
+
+    const message = `Hola ${clientName}! 
+
+Su recibo N° ${receipt.receipt_number || receipt.id} ha sido generado exitosamente.
+
+Detalle del pago:
+- Monto: ${formatCurrency(receipt.total_amount)}
+- Fecha: ${formatDate(receipt.receipt_date)}
+- Tipo: ${receipt.payment_type}
+${loanInfo.loan_code ? `- Préstamo: ${loanInfo.loan_code}` : ""}
+${loanInfo.installment_number ? `- Cuota: ${loanInfo.installment_number}` : ""}
+
+Gracias por su pago.
+
+BM Microcréditos`
+
+    const whatsappUrl = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`
+    window.open(whatsappUrl, "_blank")
+  }
+
   const InstallmentCard = ({ installment }: { installment: Installment }) => (
     <Card className="mb-3">
       <CardContent className="p-4">
@@ -277,6 +326,42 @@ BM Microcréditos`
                 Compartir
               </Button>
             )}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  )
+
+  const ReceiptCard = ({ receipt }: { receipt: Receipt }) => (
+    <Card className="mb-3 border-green-200 bg-green-50">
+      <CardContent className="p-4">
+        <div className="flex justify-between items-start">
+          <div className="flex-1">
+            <h4 className="font-semibold text-lg text-green-800">
+              {receipt.clients.first_name} {receipt.clients.last_name}
+            </h4>
+            <p className="text-sm text-green-600">Recibo N° {receipt.receipt_number || receipt.id}</p>
+            <p className="text-sm text-green-600">
+              {receipt.selected_loans?.[0]?.loan_code && <>Préstamo: {receipt.selected_loans[0].loan_code}</>}
+            </p>
+            <p className="text-sm text-muted-foreground">
+              Tipo: {receipt.payment_type} - {formatDate(receipt.receipt_date)}
+            </p>
+          </div>
+          <div className="text-right space-y-2">
+            <p className="text-xl font-bold text-green-700">{formatCurrency(receipt.total_amount)}</p>
+            <Badge variant="secondary" className="block bg-green-100 text-green-800">
+              Pagado
+            </Badge>
+            <Button
+              size="sm"
+              variant="outline"
+              className="w-full mt-2 bg-green-100 border-green-300 text-green-700 hover:bg-green-200"
+              onClick={() => shareReceiptViaWhatsApp(receipt)}
+            >
+              <MessageCircle className="h-4 w-4 mr-1" />
+              Compartir
+            </Button>
           </div>
         </div>
       </CardContent>
@@ -326,12 +411,27 @@ BM Microcréditos`
               </div>
 
               <div className="space-y-2 max-h-96 overflow-y-auto">
-                {todayInstallments.length > 0 ? (
-                  todayInstallments.map((installment) => (
-                    <InstallmentCard key={installment.id} installment={installment} />
-                  ))
-                ) : (
-                  <p className="text-center text-muted-foreground py-4">No hay cuotas para hoy</p>
+                {todayReceipts.length > 0 && (
+                  <div className="mb-4">
+                    <h5 className="text-sm font-semibold text-green-700 mb-2">Recibos Generados Hoy</h5>
+                    {todayReceipts.map((receipt) => (
+                      <ReceiptCard key={receipt.id} receipt={receipt} />
+                    ))}
+                  </div>
+                )}
+
+                {/* Cuotas pendientes para hoy */}
+                {todayInstallments.length > 0 && (
+                  <div>
+                    <h5 className="text-sm font-semibold text-blue-700 mb-2">Cuotas Pendientes</h5>
+                    {todayInstallments.map((installment) => (
+                      <InstallmentCard key={installment.id} installment={installment} />
+                    ))}
+                  </div>
+                )}
+
+                {todayInstallments.length === 0 && todayReceipts.length === 0 && (
+                  <p className="text-center text-muted-foreground py-4">No hay cuotas ni recibos para hoy</p>
                 )}
               </div>
             </CardContent>
