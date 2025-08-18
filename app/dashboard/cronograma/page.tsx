@@ -3,8 +3,10 @@
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Calendar, AlertTriangle, DollarSign } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Calendar, AlertTriangle, DollarSign, Plus } from "lucide-react"
 import { AppHeader } from "@/components/app-header"
+import Link from "next/link"
 
 interface Installment {
   id: string
@@ -83,11 +85,21 @@ export default function CronogramaPage() {
             </p>
             <p className="text-sm text-muted-foreground">Vencimiento: {formatDate(installment.due_date)}</p>
           </div>
-          <div className="text-right">
+          <div className="text-right space-y-2">
             <p className="text-xl font-bold">{formatCurrency(installment.amount)}</p>
-            <Badge variant={installment.status === "overdue" ? "destructive" : "secondary"} className="mt-1">
+            <Badge variant={installment.status === "overdue" ? "destructive" : "secondary"} className="block">
               {installment.status === "overdue" ? "Vencida" : installment.status === "paid" ? "Pagada" : "Pendiente"}
             </Badge>
+            {installment.status !== "paid" && (
+              <Link
+                href={`/dashboard/receipts?client=${encodeURIComponent(installment.client_name)}&loan=${installment.loan_code}&amount=${installment.amount}`}
+              >
+                <Button size="sm" className="w-full mt-2">
+                  <Plus className="h-4 w-4 mr-1" />
+                  Nuevo Recibo
+                </Button>
+              </Link>
+            )}
           </div>
         </div>
       </CardContent>
@@ -123,14 +135,16 @@ export default function CronogramaPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-2 mb-4">
+              <div className="space-y-3 mb-4 bg-white/50 p-3 rounded-lg border">
                 <div className="flex justify-between text-sm">
-                  <span>Por cobrar hoy:</span>
-                  <span className="font-semibold">{formatCurrency(summary.total_due_today)}</span>
+                  <span className="font-medium text-gray-700">Por cobrar hoy:</span>
+                  <span className="font-bold text-lg text-blue-700">{formatCurrency(summary.total_due_today)}</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span>Cobrado hoy:</span>
-                  <span className="font-semibold text-green-600">{formatCurrency(summary.total_received_today)}</span>
+                  <span className="font-medium text-gray-700">Cobrado hoy:</span>
+                  <span className="font-bold text-lg text-green-700">
+                    {formatCurrency(summary.total_received_today)}
+                  </span>
                 </div>
               </div>
 
@@ -157,14 +171,16 @@ export default function CronogramaPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-2 mb-4">
+              <div className="space-y-3 mb-4 bg-white/50 p-3 rounded-lg border">
                 <div className="flex justify-between text-sm">
-                  <span>Total vencido:</span>
-                  <span className="font-semibold text-red-600">{formatCurrency(summary.total_overdue)}</span>
+                  <span className="font-medium text-gray-700">Total vencido:</span>
+                  <span className="font-bold text-lg text-red-700">{formatCurrency(summary.total_overdue)}</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span>Cobrado este mes:</span>
-                  <span className="font-semibold text-green-600">{formatCurrency(summary.total_received_month)}</span>
+                  <span className="font-medium text-gray-700">Cobrado este mes:</span>
+                  <span className="font-bold text-lg text-green-700">
+                    {formatCurrency(summary.total_received_month)}
+                  </span>
                 </div>
               </div>
 
@@ -191,18 +207,20 @@ export default function CronogramaPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-2 mb-4">
+              <div className="space-y-3 mb-4 bg-white/50 p-3 rounded-lg border">
                 <div className="flex justify-between text-sm">
-                  <span>Total a cobrar:</span>
-                  <span className="font-semibold">{formatCurrency(summary.total_due_month)}</span>
+                  <span className="font-medium text-gray-700">Total a cobrar:</span>
+                  <span className="font-bold text-lg text-gray-800">{formatCurrency(summary.total_due_month)}</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span>Ya cobrado:</span>
-                  <span className="font-semibold text-green-600">{formatCurrency(summary.total_received_month)}</span>
+                  <span className="font-medium text-gray-700">Ya cobrado:</span>
+                  <span className="font-bold text-lg text-green-700">
+                    {formatCurrency(summary.total_received_month)}
+                  </span>
                 </div>
-                <div className="flex justify-between text-sm border-t pt-2">
-                  <span>Pendiente:</span>
-                  <span className="font-semibold">
+                <div className="flex justify-between text-sm border-t pt-2 mt-2">
+                  <span className="font-semibold text-gray-800">Pendiente:</span>
+                  <span className="font-bold text-xl text-orange-600">
                     {formatCurrency(summary.total_due_month - summary.total_received_month)}
                   </span>
                 </div>
