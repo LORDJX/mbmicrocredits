@@ -134,6 +134,12 @@ export default function CronogramaPage() {
       setIsCreatingReceipt(true)
       console.log("[v0] Starting receipt creation")
 
+      if (!receiptForm.client_id || !selectedInstallment) {
+        console.log("[v0] Missing required data for receipt creation")
+        toast.error("Faltan datos requeridos para crear el recibo")
+        return
+      }
+
       const receiptData = {
         receipt_date: receiptForm.receipt_date,
         client_id: receiptForm.client_id,
@@ -152,6 +158,8 @@ export default function CronogramaPage() {
         ],
       }
 
+      console.log("[v0] Sending receipt data:", receiptData)
+
       const response = await fetch("/api/receipts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -159,8 +167,9 @@ export default function CronogramaPage() {
       })
 
       const result = await response.json()
+      console.log("[v0] Receipt API response:", result)
 
-      if (result.success) {
+      if (response.ok && result.success) {
         console.log("[v0] Receipt created successfully")
         toast.success("Recibo creado exitosamente")
 
@@ -190,14 +199,16 @@ export default function CronogramaPage() {
 
         setTimeout(() => {
           fetchCronogramaData()
-        }, 1000)
+        }, 500)
       } else {
-        console.log("[v0] Receipt creation failed:", result.error)
-        toast.error("Error al crear recibo: " + (result.error || "Error desconocido"))
+        const errorMessage = result.error || result.message || "Error desconocido"
+        console.log("[v0] Receipt creation failed:", errorMessage)
+        toast.error("Error al crear recibo: " + errorMessage)
       }
     } catch (error) {
-      console.error("Error creating receipt:", error)
-      toast.error("Error al crear recibo")
+      console.error("[v0] Error creating receipt:", error)
+      console.log("[v0] Receipt creation failed:", error)
+      toast.error("Error al crear recibo: " + (error instanceof Error ? error.message : "Error de conexión"))
     } finally {
       setIsCreatingReceipt(false)
       console.log("[v0] Receipt creation process completed")
