@@ -341,37 +341,147 @@ export default function ReceiptsPage() {
       <!DOCTYPE html>
       <html>
         <head>
-          <title>Detalle de Recibo - ${receipt.receipt_number}</title>
+          <title>Recibo - ${receipt.receipt_number}</title>
           <style>
-            body { font-family: Arial, sans-serif; margin: 20px; }
-            .header { text-align: center; margin-bottom: 30px; }
-            .logo { width: 80px; height: 80px; margin: 0 auto 20px; }
-            .title { font-size: 24px; font-weight: bold; color: #333; }
-            .subtitle { color: #666; margin-top: 5px; }
-            .content { max-width: 600px; margin: 0 auto; }
-            .section { margin-bottom: 20px; }
-            .section-title { font-size: 18px; font-weight: bold; color: #333; margin-bottom: 10px; border-bottom: 2px solid #f0f0f0; padding-bottom: 5px; }
-            .field { display: flex; justify-content: space-between; margin-bottom: 8px; }
-            .field-label { font-weight: bold; color: #555; }
-            .field-value { color: #333; }
-            .total { background: #f8f9fa; padding: 15px; border-radius: 8px; margin-top: 20px; }
-            .total-amount { font-size: 20px; font-weight: bold; color: #2563eb; }
+            * { 
+              margin: 0; 
+              padding: 0; 
+              box-sizing: border-box; 
+            }
+            
+            @page {
+              size: 80mm 200mm; /* Ticket size */
+              margin: 5mm; /* Minimal margins */
+            }
+            
+            body { 
+              font-family: 'Courier New', monospace; 
+              font-size: 11px;
+              line-height: 1.2;
+              color: #000;
+              background: white;
+              width: 100%;
+              height: 100%;
+            }
+            
+            .receipt-container {
+              width: 100%;
+              max-width: 70mm;
+              margin: 0 auto;
+              padding: 2mm;
+            }
+            
+            .header { 
+              text-align: center; 
+              margin-bottom: 8px;
+              border-bottom: 1px dashed #000;
+              padding-bottom: 6px;
+            }
+            
+            .logo { 
+              width: 25mm; 
+              height: 25mm; 
+              margin: 0 auto 4px;
+              border-radius: 50%;
+            }
+            
+            .company-name { 
+              font-size: 14px; 
+              font-weight: bold; 
+              margin-bottom: 2px;
+            }
+            
+            .document-title { 
+              font-size: 10px; 
+              color: #666; 
+            }
+            
+            .section { 
+              margin-bottom: 8px; 
+            }
+            
+            .section-title { 
+              font-size: 10px; 
+              font-weight: bold; 
+              text-transform: uppercase;
+              margin-bottom: 4px;
+              border-bottom: 1px solid #ccc;
+              padding-bottom: 1px;
+            }
+            
+            .field { 
+              display: flex; 
+              justify-content: space-between; 
+              margin-bottom: 2px;
+              font-size: 10px;
+            }
+            
+            .field-label { 
+              font-weight: bold; 
+              flex: 1;
+            }
+            
+            .field-value { 
+              text-align: right;
+              flex: 1;
+            }
+            
+            .total-section { 
+              background: #f0f0f0; 
+              padding: 4px; 
+              margin: 8px 0;
+              border: 1px solid #000;
+              text-align: center;
+            }
+            
+            .total-amount { 
+              font-size: 16px; 
+              font-weight: bold; 
+            }
+            
+            .observations {
+              font-size: 9px;
+              margin: 6px 0;
+              padding: 3px;
+              border: 1px solid #ccc;
+              background: #f9f9f9;
+            }
+            
+            .footer { 
+              text-align: center; 
+              font-size: 8px; 
+              color: #666; 
+              margin-top: 10px;
+              border-top: 1px dashed #000;
+              padding-top: 4px;
+            }
+            
+            .separator {
+              text-align: center;
+              margin: 6px 0;
+              font-size: 12px;
+            }
+            
             @media print {
-              body { margin: 0; }
-              .no-print { display: none; }
+              body { 
+                margin: 0 !important; 
+                padding: 0 !important;
+              }
+              .no-print { 
+                display: none !important; 
+              }
             }
           </style>
         </head>
         <body>
-          <div class="header">
-            <img src="/images/logo-bm-circular.jpg" alt="BM Microcréditos" class="logo" style="border-radius: 50%;">
-            <div class="title">BM MICROCRÉDITOS</div>
-            <div class="subtitle">Detalle de Recibo</div>
-          </div>
-          
-          <div class="content">
+          <div class="receipt-container">
+            <div class="header">
+              <img src="/images/logo-bm-circular.jpg" alt="BM" class="logo">
+              <div class="company-name">BM MICROCRÉDITOS</div>
+              <div class="document-title">RECIBO DE PAGO</div>
+            </div>
+            
             <div class="section">
-              <div class="section-title">Información General</div>
               <div class="field">
                 <span class="field-label">N° Recibo:</span>
                 <span class="field-value">${receipt.receipt_number}</span>
@@ -385,19 +495,21 @@ export default function ReceiptsPage() {
                 <span class="field-value">${receipt.client_name}</span>
               </div>
               <div class="field">
-                <span class="field-label">Tipo de Pago:</span>
+                <span class="field-label">Tipo:</span>
                 <span class="field-value">${receipt.payment_type}</span>
               </div>
             </div>
 
+            <div class="separator">• • • • • • • • • • • • • • • •</div>
+
             <div class="section">
               <div class="section-title">Detalle de Pagos</div>
               <div class="field">
-                <span class="field-label">Importe en Efectivo:</span>
+                <span class="field-label">Efectivo:</span>
                 <span class="field-value">$${receipt.cash_amount.toFixed(2)}</span>
               </div>
               <div class="field">
-                <span class="field-label">Importe en Transferencia:</span>
+                <span class="field-label">Transferencia:</span>
                 <span class="field-value">$${receipt.transfer_amount.toFixed(2)}</span>
               </div>
             </div>
@@ -405,23 +517,26 @@ export default function ReceiptsPage() {
             ${
               receipt.observations
                 ? `
-            <div class="section">
-              <div class="section-title">Observaciones</div>
-              <div class="field-value">${receipt.observations}</div>
+            <div class="observations">
+              <strong>Observaciones:</strong><br>
+              ${receipt.observations}
             </div>
             `
                 : ""
             }
 
-            <div class="total">
-              <div class="field">
-                <span class="field-label">TOTAL PAGADO:</span>
-                <span class="total-amount">$${receipt.total_amount.toFixed(2)}</span>
-              </div>
+            <div class="total-section">
+              <div style="font-size: 12px; margin-bottom: 2px;">TOTAL PAGADO</div>
+              <div class="total-amount">$${receipt.total_amount.toFixed(2)}</div>
             </div>
 
-            <div style="margin-top: 40px; text-align: center; color: #666; font-size: 12px;">
-              Generado el ${new Date().toLocaleDateString("es-ES")} a las ${new Date().toLocaleTimeString("es-ES")}
+            <div class="separator">• • • • • • • • • • • • • • • •</div>
+
+            <div class="footer">
+              <div>¡Gracias por su pago!</div>
+              <div style="margin-top: 2px;">
+                ${new Date().toLocaleDateString("es-ES")} - ${new Date().toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })}
+              </div>
             </div>
           </div>
         </body>
@@ -780,17 +895,17 @@ export default function ReceiptsPage() {
                   <p className="text-sm">{selectedReceipt.client_name}</p>
                 </div>
                 <div>
-                  <Label className="text-sm font-medium text-muted-foreground">Tipo de Pago</Label>
+                  <Label className="text-sm font-medium text-muted-foreground">Tipo</Label>
                   <Badge variant={selectedReceipt.payment_type === "Total" ? "default" : "secondary"}>
                     {selectedReceipt.payment_type}
                   </Badge>
                 </div>
                 <div>
-                  <Label className="text-sm font-medium text-muted-foreground">Importe en Efectivo</Label>
+                  <Label className="text-sm font-medium text-muted-foreground">Efectivo</Label>
                   <p className="text-sm font-medium">${selectedReceipt.cash_amount.toFixed(2)}</p>
                 </div>
                 <div>
-                  <Label className="text-sm font-medium text-muted-foreground">Importe en Transferencia</Label>
+                  <Label className="text-sm font-medium text-muted-foreground">Transferencia</Label>
                   <p className="text-sm font-medium">${selectedReceipt.transfer_amount.toFixed(2)}</p>
                 </div>
               </div>
