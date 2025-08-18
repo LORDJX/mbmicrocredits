@@ -4,9 +4,14 @@ import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Calendar, AlertTriangle, DollarSign, Plus } from "lucide-react"
 import { AppHeader } from "@/components/app-header"
-import Link from "next/link"
+import { toast } from "sonner"
 
 interface Installment {
   id: string
@@ -27,6 +32,17 @@ interface DailySummary {
   total_due_month: number
 }
 
+interface ReceiptFormData {
+  receipt_date: string
+  client_id: string
+  client_name: string
+  loan_code: string
+  payment_type: string
+  cash_amount: string
+  transfer_amount: string
+  observations: string
+}
+
 export default function CronogramaPage() {
   const [todayInstallments, setTodayInstallments] = useState<Installment[]>([])
   const [overdueInstallments, setOverdueInstallments] = useState<Installment[]>([])
@@ -39,6 +55,19 @@ export default function CronogramaPage() {
     total_due_month: 0,
   })
   const [loading, setLoading] = useState(true)
+  const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false)
+  const [selectedInstallment, setSelectedInstallment] = useState<Installment | null>(null)
+  const [receiptForm, setReceiptForm] = useState<ReceiptFormData>({
+    receipt_date: new Date().toISOString().split("T")[0],
+    client_id: "",
+    client_name: "",
+    loan_code: "",
+    payment_type: "Total",
+    cash_amount: "",
+    transfer_amount: "0",
+    observations: "",
+  })
+  const [isCreatingReceipt, setIsCreatingReceipt] = useState(false)
 
   useEffect(() => {
     fetchCronogramaData()
@@ -74,6 +103,71 @@ export default function CronogramaPage() {
     return new Date(dateString).toLocaleDateString("es-AR")
   }
 
+  const formatCurrencyInput = (value: string) => {
+    const numericValue = value.replace(/[^\d.]/g, "")
+    return numericValue
+  }
+
+  const openReceiptModal = (installment: Installment) => {
+    setSelectedInstallment(installment)
+    setReceiptForm({
+      receipt_date: new Date().toISOString().split("T")[0],
+      client_id: installment.id, // Using installment ID as client reference
+      client_name: installment.client_name,
+      loan_code: installment.loan_code,
+      payment_type: "Total",
+      cash_amount: installment.amount.toString(),
+      transfer_amount: "0",
+      observations: `Pago cuota ${installment.installment_number} de ${installment.total_installments}`,
+    })
+    setIsReceiptModalOpen(true)
+  }
+
+  const handleCreateReceipt = async () => {
+    try {
+      setIsCreatingReceipt(true)
+
+      const receiptData = {
+        receipt_date: receiptForm.receipt_date,
+        client_id: receiptForm.client_id,
+        payment_type: receiptForm.payment_type,
+        cash_amount: Number.parseFloat(receiptForm.cash_amount) || 0,
+        transfer_amount: Number.parseFloat(receiptForm.transfer_amount) || 0,
+        total_amount:
+          (Number.parseFloat(receiptForm.cash_amount) || 0) + (Number.parseFloat(receiptForm.transfer_amount) || 0),
+        observations: receiptForm.observations,
+        selected_loans: [
+          {
+            loan_code: receiptForm.loan_code,
+            installment_number: selectedInstallment?.installment_number,
+            amount: selectedInstallment?.amount,
+          },
+        ],
+      }
+
+      const response = await fetch("/api/receipts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(receiptData),
+      })
+
+      const result = await response.json()
+
+      if (result.success) {
+        toast.success("Recibo creado exitosamente")
+        setIsReceiptModalOpen(false)
+        fetchCronogramaData() // Refresh data
+      } else {
+        toast.error("Error al crear recibo: " + (result.error || "Error desconocido"))
+      }
+    } catch (error) {
+      console.error("Error creating receipt:", error)
+      toast.error("Error al crear recibo")
+    } finally {
+      setIsCreatingReceipt(false)
+    }
+  }
+
   const InstallmentCard = ({ installment }: { installment: Installment }) => (
     <Card className="mb-3">
       <CardContent className="p-4">
@@ -91,14 +185,10 @@ export default function CronogramaPage() {
               {installment.status === "overdue" ? "Vencida" : installment.status === "paid" ? "Pagada" : "Pendiente"}
             </Badge>
             {installment.status !== "paid" && (
-              <Link
-                href={`/dashboard/receipts?client=${encodeURIComponent(installment.client_name)}&loan=${installment.loan_code}&amount=${installment.amount}`}
-              >
-                <Button size="sm" className="w-full mt-2">
-                  <Plus className="h-4 w-4 mr-1" />
-                  Nuevo Recibo
-                </Button>
-              </Link>
+              <Button size="sm" className="w-full mt-2" onClick={() => openReceiptModal(installment)}>
+                <Plus className="h-4 w-4 mr-1" />
+                Nuevo Recibo
+              </Button>
             )}
           </div>
         </div>
@@ -239,6 +329,113 @@ export default function CronogramaPage() {
           </Card>
         </div>
       </div>
+
+      {/* Receipt Modal */}
+      <Dialog open={isReceiptModalOpen} onOpenChange={setIsReceiptModalOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Nuevo Recibo - {receiptForm.client_name}</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="receipt_date">Fecha</Label>
+                <Input
+                  id="receipt_date"
+                  type="date"
+                  value={receiptForm.receipt_date}
+                  onChange={(e) => setReceiptForm({ ...receiptForm, receipt_date: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label htmlFor="payment_type">Tipo de Pago</Label>
+                <Select
+                  value={receiptForm.payment_type}
+                  onValueChange={(value) => setReceiptForm({ ...receiptForm, payment_type: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Total">Total</SelectItem>
+                    <SelectItem value="Parcial">Parcial</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="cash_amount">Importe en Efectivo</Label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">$</span>
+                  <Input
+                    id="cash_amount"
+                    type="text"
+                    placeholder="Ej: 15000.50"
+                    className="pl-8"
+                    value={receiptForm.cash_amount}
+                    onChange={(e) =>
+                      setReceiptForm({ ...receiptForm, cash_amount: formatCurrencyInput(e.target.value) })
+                    }
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">Formato: 15000.50 (sin puntos ni espacios)</p>
+              </div>
+              <div>
+                <Label htmlFor="transfer_amount">Importe en Transferencia</Label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">$</span>
+                  <Input
+                    id="transfer_amount"
+                    type="text"
+                    placeholder="Ej: 5000.00"
+                    className="pl-8"
+                    value={receiptForm.transfer_amount}
+                    onChange={(e) =>
+                      setReceiptForm({ ...receiptForm, transfer_amount: formatCurrencyInput(e.target.value) })
+                    }
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">Formato: 5000.00 (sin puntos ni espacios)</p>
+              </div>
+            </div>
+
+            <div>
+              <Label htmlFor="observations">Observaciones</Label>
+              <Textarea
+                id="observations"
+                rows={3}
+                placeholder="Observaciones adicionales..."
+                value={receiptForm.observations}
+                onChange={(e) => setReceiptForm({ ...receiptForm, observations: e.target.value })}
+              />
+            </div>
+
+            <div className="bg-gray-50 p-3 rounded-lg">
+              <h4 className="font-semibold mb-2">Detalle del Pago</h4>
+              <p className="text-sm text-muted-foreground">Cliente: {receiptForm.client_name}</p>
+              <p className="text-sm text-muted-foreground">Préstamo: {receiptForm.loan_code}</p>
+              <p className="text-sm text-muted-foreground">
+                Cuota: {selectedInstallment?.installment_number} de {selectedInstallment?.total_installments}
+              </p>
+              <p className="text-sm font-semibold">
+                Monto: {selectedInstallment ? formatCurrency(selectedInstallment.amount) : "$0.00"}
+              </p>
+            </div>
+
+            <div className="flex justify-end space-x-2 pt-4">
+              <Button variant="outline" onClick={() => setIsReceiptModalOpen(false)}>
+                Cancelar
+              </Button>
+              <Button onClick={handleCreateReceipt} disabled={isCreatingReceipt}>
+                {isCreatingReceipt ? "Creando..." : "Crear Recibo"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
