@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Calendar, AlertTriangle, DollarSign, Plus } from "lucide-react"
+import { Calendar, AlertTriangle, DollarSign, Plus, MessageCircle } from "lucide-react"
 import { AppHeader } from "@/components/app-header"
 import { toast } from "sonner"
 
@@ -204,6 +204,34 @@ export default function CronogramaPage() {
     }
   }
 
+  const shareViaWhatsApp = async (installment: Installment) => {
+    try {
+      // Get client phone number from database
+      const response = await fetch(`/api/clients/${installment.client_id}`)
+      const clientData = await response.json()
+
+      if (clientData.success && clientData.client.phone) {
+        const phoneNumber = clientData.client.phone.replace(/[^\d]/g, "") // Remove non-numeric characters
+        const message = `Hola ${installment.client_name}! 
+
+Su cuota ${installment.installment_number} de ${installment.total_installments} del préstamo ${installment.loan_code} por ${formatCurrency(installment.amount)} ha sido registrada como pagada.
+
+Gracias por su pago puntual.
+
+BM Microcréditos`
+
+        // Use WhatsApp Web API
+        const whatsappUrl = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`
+        window.open(whatsappUrl, "_blank")
+      } else {
+        toast.error("No se encontró número de teléfono para este cliente")
+      }
+    } catch (error) {
+      console.error("Error getting client phone:", error)
+      toast.error("Error al obtener datos del cliente")
+    }
+  }
+
   const InstallmentCard = ({ installment }: { installment: Installment }) => (
     <Card className="mb-3">
       <CardContent className="p-4">
@@ -220,10 +248,20 @@ export default function CronogramaPage() {
             <Badge variant={installment.status === "overdue" ? "destructive" : "secondary"} className="block">
               {installment.status === "overdue" ? "Vencida" : installment.status === "paid" ? "Pagada" : "Pendiente"}
             </Badge>
-            {installment.status !== "paid" && (
+            {installment.status !== "paid" ? (
               <Button size="sm" className="w-full mt-2" onClick={() => openReceiptModal(installment)}>
                 <Plus className="h-4 w-4 mr-1" />
                 Nuevo Recibo
+              </Button>
+            ) : (
+              <Button
+                size="sm"
+                variant="outline"
+                className="w-full mt-2 bg-green-50 border-green-200 text-green-700 hover:bg-green-100"
+                onClick={() => shareViaWhatsApp(installment)}
+              >
+                <MessageCircle className="h-4 w-4 mr-1" />
+                Compartir
               </Button>
             )}
           </div>
