@@ -53,6 +53,7 @@ export function DashboardSidebar() {
   const pathname = usePathname()
   const router = useRouter()
   const [userPermissions, setUserPermissions] = useState<string[]>([])
+  const [isAdmin, setIsAdmin] = useState(false) // Agregando estado de administrador
   const [permissionsLoaded, setPermissionsLoaded] = useState(false)
 
   useEffect(() => {
@@ -62,13 +63,21 @@ export function DashboardSidebar() {
           data: { user },
         } = await supabase.auth.getUser()
         if (user) {
-          const response = await fetch(`/api/users/permissions?userId=${user.id}`)
-          const data = await response.json()
+          const { data: profile } = await supabase.from("profiles").select("is_admin").eq("id", user.id).single()
 
-          if (data.permissions && Array.isArray(data.permissions)) {
-            setUserPermissions(data.permissions)
+          if (profile?.is_admin) {
+            setIsAdmin(true)
+            setUserPermissions(navItems.map((item) => item.route))
           } else {
-            setUserPermissions(["dashboard", "clients", "loans", "receipts", "cronograma", "transactions"])
+            // Usuarios normales obtienen permisos específicos
+            const response = await fetch(`/api/users/permissions?userId=${user.id}`)
+            const data = await response.json()
+
+            if (data.permissions && Array.isArray(data.permissions)) {
+              setUserPermissions(data.permissions)
+            } else {
+              setUserPermissions(["dashboard", "clients", "loans", "cronograma", "transactions"])
+            }
           }
         }
       } catch (error) {
@@ -82,7 +91,9 @@ export function DashboardSidebar() {
     loadUserPermissions()
   }, [])
 
-  const filteredNavItems = navItems.filter((item) => userPermissions.includes(item.route) || item.route === "dashboard")
+  const filteredNavItems = isAdmin
+    ? navItems
+    : navItems.filter((item) => userPermissions.includes(item.route) || item.route === "dashboard")
 
   const handleLogout = async () => {
     await supabase.auth.signOut()
