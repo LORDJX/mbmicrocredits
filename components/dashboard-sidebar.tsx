@@ -63,13 +63,29 @@ export function DashboardSidebar() {
         } = await supabase.auth.getUser()
         if (user) {
           const response = await fetch(`/api/users/permissions?userId=${user.id}`)
+
+          if (!response.ok) {
+            console.error(`API Error: ${response.status} ${response.statusText}`)
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+          }
+
+          const contentType = response.headers.get("content-type")
+          if (!contentType || !contentType.includes("application/json")) {
+            console.error("API returned non-JSON response:", contentType)
+            throw new Error("API returned non-JSON response")
+          }
+
           const data = await response.json()
 
           if (data.permissions && Array.isArray(data.permissions)) {
             setUserPermissions(data.permissions)
           } else {
+            console.warn("No permissions found, using defaults")
             setUserPermissions(["dashboard", "clients", "loans", "receipts", "cronograma", "transactions"])
           }
+        } else {
+          console.warn("No user found, using minimal permissions")
+          setUserPermissions(["dashboard"])
         }
       } catch (error) {
         console.error("Error loading permissions:", error)
