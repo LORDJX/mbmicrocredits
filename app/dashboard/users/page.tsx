@@ -23,6 +23,9 @@ interface User {
   full_name: string | null
   is_admin: boolean
   updated_at: string | null
+  created_at: string | null
+  email: string | null
+  last_sign_in_at: string | null
 }
 
 const createUserSchema = z.object({
@@ -398,7 +401,10 @@ export default function UsersPage() {
                 <TableRow className="bg-gray-700 hover:bg-gray-700 border-gray-600">
                   <TableHead className="text-gray-300">Email</TableHead>
                   <TableHead className="text-gray-300">Nombre Completo</TableHead>
+                  <TableHead className="text-gray-300">Contraseña</TableHead>
                   <TableHead className="text-gray-300">Rol</TableHead>
+                  <TableHead className="text-gray-300">Último Acceso</TableHead>
+                  <TableHead className="text-gray-300">Fecha Creación</TableHead>
                   <TableHead className="text-gray-300">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
@@ -407,6 +413,7 @@ export default function UsersPage() {
                   <TableRow key={user.id} className="border-gray-700 hover:bg-gray-700/50">
                     <TableCell className="font-medium text-gray-200">{user.username || "N/A"}</TableCell>
                     <TableCell className="text-gray-300">{user.full_name || "N/A"}</TableCell>
+                    <TableCell className="text-gray-300 font-mono">••••••••</TableCell>
                     <TableCell>
                       <span
                         className={`px-2 py-1 rounded-full text-xs font-semibold ${
@@ -415,6 +422,26 @@ export default function UsersPage() {
                       >
                         {user.is_admin ? "Administrador" : "Usuario"}
                       </span>
+                    </TableCell>
+                    <TableCell className="text-gray-300 text-sm">
+                      {user.last_sign_in_at
+                        ? new Date(user.last_sign_in_at).toLocaleDateString("es-ES", {
+                            day: "2-digit",
+                            month: "2-digit",
+                            year: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })
+                        : "Nunca"}
+                    </TableCell>
+                    <TableCell className="text-gray-300 text-sm">
+                      {user.created_at
+                        ? new Date(user.created_at).toLocaleDateString("es-ES", {
+                            day: "2-digit",
+                            month: "2-digit",
+                            year: "numeric",
+                          })
+                        : "N/A"}
                     </TableCell>
                     <TableCell>
                       <DropdownMenu>
@@ -540,7 +567,7 @@ export default function UsersPage() {
 
       {/* Diálogo: Editar Usuario */}
       <Dialog open={openEdit} onOpenChange={(o) => (!isEditing ? setOpenEdit(o) : null)}>
-        <DialogContent className="bg-gray-800 text-gray-100 border-gray-700">
+        <DialogContent className="bg-gray-800 text-gray-100 border-gray-700 max-w-md">
           <DialogHeader>
             <DialogTitle>Editar Usuario</DialogTitle>
           </DialogHeader>
@@ -583,6 +610,55 @@ export default function UsersPage() {
               <Switch id="is_admin_edit" {...registerEdit("is_admin")} />
               <Label htmlFor="is_admin_edit">Administrador</Label>
             </div>
+            {editingUser && (
+              <div className="space-y-2 pt-4 border-t border-gray-600">
+                <h4 className="text-sm font-medium text-gray-300">Información del Sistema (Solo lectura)</h4>
+                <div className="grid grid-cols-1 gap-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Fecha de creación:</span>
+                    <span className="text-gray-300">
+                      {editingUser.created_at
+                        ? new Date(editingUser.created_at).toLocaleDateString("es-ES", {
+                            day: "2-digit",
+                            month: "2-digit",
+                            year: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })
+                        : "N/A"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Último acceso:</span>
+                    <span className="text-gray-300">
+                      {editingUser.last_sign_in_at
+                        ? new Date(editingUser.last_sign_in_at).toLocaleDateString("es-ES", {
+                            day: "2-digit",
+                            month: "2-digit",
+                            year: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })
+                        : "Nunca"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Última actualización:</span>
+                    <span className="text-gray-300">
+                      {editingUser.updated_at
+                        ? new Date(editingUser.updated_at).toLocaleDateString("es-ES", {
+                            day: "2-digit",
+                            month: "2-digit",
+                            year: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })
+                        : "N/A"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
 
             <DialogFooter className="gap-2">
               <Button
