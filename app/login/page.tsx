@@ -1,14 +1,14 @@
 "use client"
 
 import type React from "react"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { createClient } from "@/lib/supabase/client"
+import { supabase } from "@/lib/supabaseClient"
 import { LogIn } from "lucide-react"
 
 export default function LoginPage() {
@@ -18,47 +18,47 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
 
-  const normalizeEmailInput = (input: string): string => {
-    if (input === "jcadmin") {
-      return "jcadmin@microcreditos.com"
+  useEffect(() => {
+    const clearSession = async () => {
+      try {
+        await supabase.auth.signOut()
+      } catch (error) {
+        console.log("Error clearing session:", error)
+      }
     }
-    if (!input.includes("@")) {
-      return `${input}@somosecoclean.com.ar`
-    }
-    return input
-  }
+    clearSession()
+  }, [])
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
-    const supabase = createClient()
     setLoading(true)
     setError(null)
 
     try {
-      const normalizedEmail = normalizeEmailInput(email)
-      console.log("[v0] Intentando login con email:", normalizedEmail)
-
-      const { error } = await supabase.auth.signInWithPassword({
-        email: normalizedEmail,
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
         password,
-        options: {
-          emailRedirectTo: process.env.NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL || `${window.location.origin}/dashboard`,
-        },
       })
 
       if (error) {
-        console.log("[v0] Error de login:", error.message)
-        setError("Credenciales inválidas. Verifica tu usuario/email y contraseña.")
-      } else {
-        console.log("[v0] Login exitoso, redirigiendo al dashboard")
+        if (error.message.includes("Invalid login credentials")) {
+          setError("Credenciales inválidas. Verifica tu email y contraseña.")
+        } else if (error.message.includes("Supabase no configurado")) {
+          setError("Sistema en modo desarrollo. Contacta al administrador.")
+        } else {
+          setError(error.message)
+        }
+      } else if (data?.user) {
         router.push("/dashboard")
+      } else {
+        setError("Error inesperado durante el login")
       }
     } catch (err) {
       console.error("Login error:", err)
       setError("Error de conexión. Intenta nuevamente.")
-    } finally {
-      setLoading(false)
     }
+
+    setLoading(false)
   }
 
   return (
@@ -76,11 +76,11 @@ export default function LoginPage() {
         <CardContent>
           <form onSubmit={handleLogin} className="space-y-6">
             <div className="grid gap-2">
-              <Label htmlFor="email">Usuario o Correo Electrónico</Label>
+              <Label htmlFor="email">Correo Electrónico</Label>
               <Input
                 id="email"
-                type="text"
-                placeholder="jcadmin o tu@ejemplo.com"
+                type="email"
+                placeholder="tu@ejemplo.com"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -104,9 +104,6 @@ export default function LoginPage() {
               />
             </div>
             {error && <p className="text-red-400 text-sm text-center">{error}</p>}
-            <div className="text-xs text-muted-foreground text-center">
-              <p>Superadministrador: usa "jcadmin" como usuario</p>
-            </div>
             <Button
               type="submit"
               className="w-full bg-gradient-to-r from-primary/80 to-primary text-primary-foreground font-semibold shadow-md transition-all hover:from-primary hover:to-primary/90 hover:shadow-lg hover:shadow-primary/20"

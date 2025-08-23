@@ -22,7 +22,6 @@ interface User {
   username: string | null // Se usa como "Email" visible
   full_name: string | null
   is_admin: boolean
-  is_superadmin?: boolean // Agregando campo superadmin
   updated_at: string | null
 }
 
@@ -46,7 +45,6 @@ type EditUserInput = z.infer<typeof editUserSchema>
 
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([])
-  const [currentUser, setCurrentUser] = useState<User | null>(null) // Agregando usuario actual
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState<string>("")
@@ -65,7 +63,6 @@ export default function UsersPage() {
 
   useEffect(() => {
     fetchUsers()
-    fetchCurrentUser() // Obtener datos del usuario actual
   }, [searchTerm])
 
   const fetchUsers = async () => {
@@ -108,71 +105,29 @@ export default function UsersPage() {
     }
   }
 
-  const fetchCurrentUser = async () => {
+  const handleToggleAdmin = async (userId: string, currentIsAdmin: boolean) => {
     try {
-      const response = await fetch("/api/profile")
-      if (response.ok) {
-        const userData = await response.json()
-        setCurrentUser(userData)
-      }
-    } catch (error) {
-      console.error("Error fetching current user:", error)
-    }
-  }
-
-  const handleToggleAdmin = async (userId: string, currentIsAdmin: boolean, targetUser: User) => {
-    // Solo administradores pueden cambiar roles
-    if (!currentUser?.is_admin) {
-      toast({
-        title: "Sin permisos",
-        description: "Solo los administradores pueden cambiar roles de usuario.",
-        variant: "destructive",
-      })
-      return
-    }
-
-    // Solo superadministradores pueden promover a administrador
-    if (!currentIsAdmin && !currentUser?.is_superadmin) {
-      toast({
-        title: "Sin permisos",
-        description: "Solo los superadministradores pueden promover usuarios a administrador.",
-        variant: "destructive",
-      })
-      return
-    }
-
-    // No se puede degradar a un superadministrador
-    if (targetUser.is_superadmin && currentIsAdmin) {
-      toast({
-        title: "Acción no permitida",
-        description: "No se puede degradar a un superadministrador.",
-        variant: "destructive",
-      })
-      return
-    }
-
-    try {
-      const response = await fetch(`/api/users/${userId}/promote`, {
-        method: "POST",
+      const response = await fetch(`/api/users/${userId}`, {
+        method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: currentIsAdmin ? "demote" : "promote" }),
+        body: JSON.stringify({ is_admin: !currentIsAdmin }),
       })
 
       if (!response.ok) {
         const errorData = await response.json()
-        throw new Error(errorData.error || "Error al actualizar el rol del usuario.")
+        throw new Error(errorData.detail || "Error al actualizar el rol del usuario.")
       }
 
       toast({
         title: "Éxito",
-        description: `Usuario ${currentIsAdmin ? "degradado" : "promovido"} correctamente.`,
+        description: `Rol de usuario actualizado correctamente.`,
       })
       fetchUsers()
     } catch (err: any) {
       console.error("Error al actualizar rol:", err)
       toast({
         title: "Error",
-        description: err.message,
+        description: `No se pudo actualizar el rol del usuario: ${err.message}`,
         variant: "destructive",
       })
     }
@@ -198,26 +153,6 @@ export default function UsersPage() {
   })
 
   const onSubmitCreate = async (values: CreateUserInput) => {
-    // Solo administradores pueden crear usuarios
-    if (!currentUser?.is_admin) {
-      toast({
-        title: "Sin permisos",
-        description: "Solo los administradores pueden crear usuarios.",
-        variant: "destructive",
-      })
-      return
-    }
-
-    // Solo superadministradores pueden crear administradores
-    if (values.is_admin && !currentUser?.is_superadmin) {
-      toast({
-        title: "Sin permisos",
-        description: "Solo los superadministradores pueden crear usuarios administradores.",
-        variant: "destructive",
-      })
-      return
-    }
-
     try {
       const payload = {
         email: values.email,
@@ -271,18 +206,7 @@ export default function UsersPage() {
   }
 
   const onSubmitEdit = async (values: EditUserInput) => {
-    if (!editingUser || !currentUser?.is_admin) return
-
-    // Solo superadministradores pueden cambiar el estado de admin
-    if (editingUser.is_admin !== values.is_admin && !currentUser?.is_superadmin) {
-      toast({
-        title: "Sin permisos",
-        description: "Solo los superadministradores pueden cambiar roles de administrador.",
-        variant: "destructive",
-      })
-      return
-    }
-
+    if (!editingUser) return
     try {
       const payload: any = {
         full_name: values.full_name,
@@ -312,27 +236,7 @@ export default function UsersPage() {
     }
   }
 
-  const handleDeleteUser = async (userId: string, userName: string, targetUser: User) => {
-    // Solo administradores pueden eliminar usuarios
-    if (!currentUser?.is_admin) {
-      toast({
-        title: "Sin permisos",
-        description: "Solo los administradores pueden eliminar usuarios.",
-        variant: "destructive",
-      })
-      return
-    }
-
-    // No se puede eliminar a un superadministrador
-    if (targetUser.is_superadmin) {
-      toast({
-        title: "Acción no permitida",
-        description: "No se puede eliminar a un superadministrador.",
-        variant: "destructive",
-      })
-      return
-    }
-
+  const handleDeleteUser = async (userId: string, userName: string) => {
     if (!confirm(`¿Estás seguro de que deseas eliminar al usuario "${userName}"? Esta acción no se puede deshacer.`)) {
       return
     }
@@ -424,19 +328,6 @@ export default function UsersPage() {
     setUserRoutes((prev) => (prev.includes(routePath) ? prev.filter((r) => r !== routePath) : [...prev, routePath]))
   }
 
-  if (currentUser && !currentUser.is_admin) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-900 text-gray-100">
-        <Card className="bg-gray-800 text-gray-100 border border-gray-700">
-          <CardContent className="p-6 text-center">
-            <h2 className="text-xl font-bold mb-2">Acceso Restringido</h2>
-            <p className="text-gray-400">Solo los administradores pueden acceder a la gestión de usuarios.</p>
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
-
   if (loading && !users.length) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-900 text-gray-100">
@@ -499,14 +390,10 @@ export default function UsersPage() {
                     <TableCell>
                       <span
                         className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                          user.is_superadmin
-                            ? "bg-red-600 text-red-50"
-                            : user.is_admin
-                              ? "bg-purple-600 text-purple-50"
-                              : "bg-blue-600 text-blue-50"
+                          user.is_admin ? "bg-purple-600 text-purple-50" : "bg-blue-600 text-blue-50"
                         }`}
                       >
-                        {user.is_superadmin ? "Superadmin" : user.is_admin ? "Administrador" : "Usuario"}
+                        {user.is_admin ? "Administrador" : "Usuario"}
                       </span>
                     </TableCell>
                     <TableCell>
@@ -518,19 +405,15 @@ export default function UsersPage() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="bg-gray-700 border border-gray-600 text-gray-100">
-                          {!user.is_superadmin && (
-                            <DropdownMenuItem
-                              onClick={() => handleToggleAdmin(user.id, user.is_admin, user)}
-                              className="hover:bg-gray-600 focus:bg-gray-600 cursor-pointer"
-                              disabled={!currentUser?.is_admin || (user.is_admin && !currentUser?.is_superadmin)}
-                            >
-                              {user.is_admin ? "Degradar a Usuario" : "Promover a Admin"}
-                            </DropdownMenuItem>
-                          )}
+                          <DropdownMenuItem
+                            onClick={() => handleToggleAdmin(user.id, user.is_admin)}
+                            className="hover:bg-gray-600 focus:bg-gray-600 cursor-pointer"
+                          >
+                            {user.is_admin ? "Degradar a Usuario" : "Promover a Admin"}
+                          </DropdownMenuItem>
                           <DropdownMenuItem
                             onClick={() => openEditDialog(user)}
                             className="hover:bg-gray-600 focus:bg-gray-600 cursor-pointer"
-                            disabled={!currentUser?.is_admin}
                           >
                             <Pencil className="h-4 w-4 mr-2" />
                             Editar
@@ -538,23 +421,17 @@ export default function UsersPage() {
                           <DropdownMenuItem
                             onClick={() => openPermissionsDialog(user)}
                             className="hover:bg-gray-600 focus:bg-gray-600 cursor-pointer"
-                            disabled={!currentUser?.is_admin}
                           >
                             <Shield className="h-4 w-4 mr-2" />
                             Permisos
                           </DropdownMenuItem>
-                          {!user.is_superadmin && (
-                            <DropdownMenuItem
-                              onClick={() =>
-                                handleDeleteUser(user.id, user.full_name || user.username || "Usuario", user)
-                              }
-                              className="hover:bg-red-600 focus:bg-red-600 cursor-pointer text-red-400"
-                              disabled={!currentUser?.is_admin}
-                            >
-                              <Trash2 className="h-4 w-4 mr-2" />
-                              Eliminar
-                            </DropdownMenuItem>
-                          )}
+                          <DropdownMenuItem
+                            onClick={() => handleDeleteUser(user.id, user.full_name || user.username || "Usuario")}
+                            className="hover:bg-red-600 focus:bg-red-600 cursor-pointer text-red-400"
+                          >
+                            <Trash2 className="h-4 w-4 mr-2" />
+                            Eliminar
+                          </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </TableCell>

@@ -53,7 +53,6 @@ export function DashboardSidebar() {
   const pathname = usePathname()
   const router = useRouter()
   const [userPermissions, setUserPermissions] = useState<string[]>([])
-  const [isAdmin, setIsAdmin] = useState(false)
   const [permissionsLoaded, setPermissionsLoaded] = useState(false)
 
   useEffect(() => {
@@ -62,102 +61,28 @@ export function DashboardSidebar() {
         const {
           data: { user },
         } = await supabase.auth.getUser()
-
         if (user) {
-          console.log("[v0] Cargando permisos para usuario:", user.email)
+          const response = await fetch(`/api/users/permissions?userId=${user.id}`)
+          const data = await response.json()
 
-          let profile = null
-          try {
-            const { data: profileData, error: profileError } = await supabase
-              .from("profiles")
-              .select("is_admin, is_superadmin, role")
-              .eq("id", user.id)
-              .single()
-
-            if (profileError && profileError.code === "PGRST116") {
-              console.log("[v0] Creando perfil para usuario:", user.email)
-              const { data: newProfile, error: createError } = await supabase
-                .from("profiles")
-                .insert({
-                  id: user.id,
-                  email: user.email,
-                  full_name: user.user_metadata?.full_name || user.email?.split("@")[0] || "Usuario",
-                  username: user.user_metadata?.username || user.email?.split("@")[0],
-                  is_admin: user.email === "jcadmin@microcreditos.com",
-                  is_superadmin: user.email === "jcadmin@microcreditos.com",
-                  role: user.email === "jcadmin@microcreditos.com" ? "superadmin" : "user",
-                })
-                .select("is_admin, is_superadmin, role")
-                .single()
-
-              if (createError) {
-                console.error("[v0] Error creando perfil:", createError)
-                profile = { is_admin: false, is_superadmin: false, role: "user" }
-              } else {
-                profile = newProfile
-              }
-            } else if (!profileError) {
-              profile = profileData
-            } else {
-              console.error("[v0] Error obteniendo perfil:", profileError)
-              profile = { is_admin: false, is_superadmin: false, role: "user" }
-            }
-          } catch (profileErr) {
-            console.error("[v0] Error con perfil:", profileErr)
-            profile = { is_admin: false, is_superadmin: false, role: "user" }
-          }
-
-          if (
-            profile?.is_admin ||
-            profile?.is_superadmin ||
-            profile?.role === "admin" ||
-            profile?.role === "superadmin"
-          ) {
-            console.log("[v0] Usuario es administrador/superadministrador")
-            setIsAdmin(true)
-            setUserPermissions(navItems.map((item) => item.route))
+          if (data.permissions && Array.isArray(data.permissions)) {
+            setUserPermissions(data.permissions)
           } else {
-            console.log("[v0] Usuario normal, obteniendo permisos específicos")
-            // Usuarios normales obtienen permisos específicos
-            try {
-              const response = await fetch(`/api/users/permissions?userId=${user.id}`)
-              if (response.ok) {
-                const data = await response.json()
-                if (data.permissions && Array.isArray(data.permissions)) {
-                  setUserPermissions(data.permissions)
-                } else {
-                  // Permisos por defecto para usuarios normales
-                  setUserPermissions(["dashboard", "clients", "loans", "cronograma", "transactions"])
-                }
-              } else {
-                console.log("[v0] API de permisos no disponible, usando permisos por defecto")
-                setUserPermissions(["dashboard", "clients", "loans", "cronograma", "transactions"])
-              }
-            } catch (permErr) {
-              console.error("[v0] Error obteniendo permisos:", permErr)
-              // Permisos por defecto en caso de error
-              setUserPermissions(["dashboard", "clients", "loans", "cronograma", "transactions"])
-            }
+            setUserPermissions(["dashboard", "clients", "loans", "receipts", "cronograma", "transactions"])
           }
-        } else {
-          console.log("[v0] No hay usuario autenticado, redirigiendo al login")
-          router.push("/login")
-          return
         }
       } catch (error) {
-        console.error("[v0] Error loading permissions:", error)
-        setUserPermissions(["dashboard"])
+        console.error("Error loading permissions:", error)
+        setUserPermissions(["dashboard", "clients", "loans", "cronograma"])
       } finally {
         setPermissionsLoaded(true)
       }
     }
 
     loadUserPermissions()
-  }, [router])
+  }, [])
 
-  const filteredNavItems = isAdmin
-    ? navItems
-    : navItems.filter((item) => userPermissions.includes(item.route) || item.route === "dashboard")
+  const filteredNavItems = navItems.filter((item) => userPermissions.includes(item.route) || item.route === "dashboard")
 
   const handleLogout = async () => {
     await supabase.auth.signOut()
@@ -221,10 +146,8 @@ export function DashboardSidebar() {
             align="start"
             className="w-[--radix-popper-anchor-width] bg-popover text-popover-foreground border-border"
           >
-            <DropdownMenuItem asChild className="cursor-pointer hover:!bg-primary/10">
-              <Link href="/dashboard/profile">
-                <span>Perfil</span>
-              </Link>
+            <DropdownMenuItem className="cursor-pointer hover:!bg-primary/10">
+              <span>Perfil</span>
             </DropdownMenuItem>
             <DropdownMenuItem
               onClick={handleLogout}
