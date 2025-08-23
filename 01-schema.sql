@@ -67,6 +67,26 @@ CREATE TABLE IF NOT EXISTS follow_ups (
     updated_at TIMESTAMPTZ
 );
 
+-- Crear tabla de recibos que faltaba
+-- Crear tabla de recibos
+CREATE TABLE IF NOT EXISTS receipts (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    receipt_number TEXT,
+    receipt_date DATE NOT NULL,
+    client_id UUID NOT NULL REFERENCES clients(id),
+    payment_type TEXT NOT NULL,
+    cash_amount NUMERIC(10, 2) DEFAULT 0.00,
+    transfer_amount NUMERIC(10, 2) DEFAULT 0.00,
+    total_amount NUMERIC(10, 2) NOT NULL,
+    observations TEXT,
+    attachment_url TEXT,
+    selected_loans JSONB,
+    selected_installments JSONB,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ,
+    deleted_at TIMESTAMPTZ
+);
+
 -- Crear tabla de perfiles de usuario
 CREATE TABLE IF NOT EXISTS profiles (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
