@@ -1,85 +1,64 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { supabase } from "@/lib/supabaseClient"
+import { createClient } from "@/lib/supabase/client"
 import { LogIn } from "lucide-react"
 
 export default function LoginPage() {
-  const [emailOrUsername, setEmailOrUsername] = useState("")
+  const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
 
-  useEffect(() => {
-    const clearSession = async () => {
-      try {
-        await supabase.auth.signOut()
-      } catch (error) {
-        console.log("Error clearing session:", error)
-      }
-    }
-    clearSession()
-  }, [])
-
   const normalizeEmailInput = (input: string): string => {
-    // Si el input es "jcadmin", convertirlo al email completo
     if (input === "jcadmin") {
       return "jcadmin@microcreditos.com"
     }
-
-    // Si no contiene @ y no es un email válido, asumir que es username y buscar el email
     if (!input.includes("@")) {
-      // Para otros usernames, agregar el dominio por defecto
-      return `${input}@microcreditos.com`
+      return `${input}@somosecoclean.com.ar`
     }
-
     return input
   }
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
+    const supabase = createClient()
     setLoading(true)
     setError(null)
 
     try {
-      const email = normalizeEmailInput(emailOrUsername)
+      const normalizedEmail = normalizeEmailInput(email)
+      console.log("[v0] Intentando login con email:", normalizedEmail)
 
-      console.log("[v0] Intentando login con email:", email)
-
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
+      const { error } = await supabase.auth.signInWithPassword({
+        email: normalizedEmail,
         password,
+        options: {
+          emailRedirectTo: process.env.NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL || `${window.location.origin}/dashboard`,
+        },
       })
 
       if (error) {
-        console.log("[v0] Error de login:", error)
-        if (error.message.includes("Invalid login credentials")) {
-          setError("Credenciales inválidas. Verifica tu usuario/email y contraseña.")
-        } else if (error.message.includes("Supabase no configurado")) {
-          setError("Sistema en modo desarrollo. Contacta al administrador.")
-        } else {
-          setError(error.message)
-        }
-      } else if (data?.user) {
+        console.log("[v0] Error de login:", error.message)
+        setError("Credenciales inválidas. Verifica tu usuario/email y contraseña.")
+      } else {
         console.log("[v0] Login exitoso, redirigiendo al dashboard")
         router.push("/dashboard")
-      } else {
-        setError("Error inesperado durante el login")
       }
     } catch (err) {
       console.error("Login error:", err)
       setError("Error de conexión. Intenta nuevamente.")
+    } finally {
+      setLoading(false)
     }
-
-    setLoading(false)
   }
 
   return (
@@ -97,14 +76,14 @@ export default function LoginPage() {
         <CardContent>
           <form onSubmit={handleLogin} className="space-y-6">
             <div className="grid gap-2">
-              <Label htmlFor="emailOrUsername">Usuario o Correo Electrónico</Label>
+              <Label htmlFor="email">Usuario o Correo Electrónico</Label>
               <Input
-                id="emailOrUsername"
+                id="email"
                 type="text"
                 placeholder="jcadmin o tu@ejemplo.com"
                 required
-                value={emailOrUsername}
-                onChange={(e) => setEmailOrUsername(e.target.value)}
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 className="bg-background/50 focus:shadow-inner focus:shadow-primary/10"
               />
             </div>
