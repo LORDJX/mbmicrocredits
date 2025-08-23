@@ -1,14 +1,14 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { createClient } from "@/lib/supabase/client"
+import { supabase } from "@/lib/supabaseClient"
 import { LogIn } from "lucide-react"
 
 export default function LoginPage() {
@@ -18,53 +18,30 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
 
-  useEffect(() => {
-    const clearSession = async () => {
-      try {
-        const supabase = createClient()
-        console.log("[v0] Limpiando sesión anterior...")
-        await supabase.auth.signOut()
-        console.log("[v0] Sesión limpiada exitosamente")
-      } catch (error) {
-        console.log("[v0] Error clearing session:", error)
-      }
-    }
-    clearSession()
-  }, [])
-
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
     setError(null)
 
     try {
-      const supabase = createClient()
-      console.log("[v0] Intentando login con email:", email)
-
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
-        options: {
-          emailRedirectTo: process.env.NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL || `${window.location.origin}/dashboard`,
-        },
       })
 
       if (error) {
-        console.log("[v0] Error en login:", error.message)
         if (error.message.includes("Invalid login credentials")) {
           setError("Credenciales inválidas. Verifica tu email y contraseña.")
         } else {
           setError(error.message)
         }
       } else if (data?.user) {
-        console.log("[v0] Login exitoso, redirigiendo al dashboard...")
         router.push("/dashboard")
       } else {
-        console.log("[v0] Login sin error pero sin usuario")
         setError("Error inesperado durante el login")
       }
     } catch (err) {
-      console.error("[v0] Login error:", err)
+      console.error("Login error:", err)
       setError("Error de conexión. Intenta nuevamente.")
     }
 

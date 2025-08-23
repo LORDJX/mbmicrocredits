@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { createClient } from "@/lib/supabase/client"
+import { supabase } from "@/lib/supabaseClient"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 
 export default function DashboardPage() {
@@ -12,22 +12,14 @@ export default function DashboardPage() {
 
   useEffect(() => {
     const checkUser = async () => {
-      const supabase = createClient()
-      console.log("[v0] Verificando usuario en dashboard...")
-
       const {
         data: { user },
         error,
       } = await supabase.auth.getUser()
 
-      if (error) {
-        console.log("[v0] Error obteniendo usuario:", error)
-        router.push("/login")
-      } else if (!user) {
-        console.log("[v0] No hay usuario autenticado, redirigiendo al login")
+      if (error || !user) {
         router.push("/login")
       } else {
-        console.log("[v0] Usuario autenticado:", user.email)
         setUser(user)
       }
       setLoading(false)
@@ -35,9 +27,7 @@ export default function DashboardPage() {
 
     checkUser()
 
-    const supabase = createClient()
     const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
-      console.log("[v0] Cambio en estado de auth:", _event, session?.user?.email)
       if (!session) {
         router.push("/login")
       } else {
