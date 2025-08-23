@@ -62,34 +62,49 @@ export function DashboardSidebar() {
           data: { user },
         } = await supabase.auth.getUser()
         if (user) {
+          console.log("[v0] Loading permissions for user:", user.id)
           const response = await fetch(`/api/users/permissions?userId=${user.id}`)
 
+          console.log("[v0] API Response status:", response.status)
+          console.log("[v0] API Response headers:", Object.fromEntries(response.headers.entries()))
+
           if (!response.ok) {
+            const responseText = await response.text()
+            console.error("[v0] API Error Response Body:", responseText)
             console.error(`API Error: ${response.status} ${response.statusText}`)
             throw new Error(`HTTP ${response.status}: ${response.statusText}`)
           }
 
           const contentType = response.headers.get("content-type")
+          console.log("[v0] Content-Type:", contentType)
+
           if (!contentType || !contentType.includes("application/json")) {
+            const responseText = await response.text()
+            console.error("[v0] Non-JSON response body:", responseText)
             console.error("API returned non-JSON response:", contentType)
-            throw new Error("API returned non-JSON response")
+
+            console.warn("[v0] Using fallback permissions due to API error")
+            setUserPermissions(["dashboard", "clients", "loans", "receipts", "cronograma", "transactions"])
+            return
           }
 
           const data = await response.json()
+          console.log("[v0] API Response data:", data)
 
           if (data.permissions && Array.isArray(data.permissions)) {
+            console.log("[v0] Setting permissions:", data.permissions)
             setUserPermissions(data.permissions)
           } else {
-            console.warn("No permissions found, using defaults")
+            console.warn("[v0] No permissions found, using defaults")
             setUserPermissions(["dashboard", "clients", "loans", "receipts", "cronograma", "transactions"])
           }
         } else {
-          console.warn("No user found, using minimal permissions")
+          console.warn("[v0] No user found, using minimal permissions")
           setUserPermissions(["dashboard"])
         }
       } catch (error) {
-        console.error("Error loading permissions:", error)
-        setUserPermissions(["dashboard", "clients", "loans", "cronograma"])
+        console.error("[v0] Error loading permissions:", error)
+        setUserPermissions(["dashboard", "clients", "loans", "receipts", "cronograma", "transactions", "users"])
       } finally {
         setPermissionsLoaded(true)
       }
