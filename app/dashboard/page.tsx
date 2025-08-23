@@ -2,22 +2,27 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { supabase } from "@/lib/supabaseClient"
+import { createClient } from "@/lib/supabase/client"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 
 export default function DashboardPage() {
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const router = useRouter()
+  const supabase = createClient()
 
   useEffect(() => {
     const checkUser = async () => {
+      console.log("[v0] Verificando usuario en dashboard")
       const {
         data: { user },
       } = await supabase.auth.getUser()
+
       if (!user) {
-        router.push("/login") // Si no hay usuario, redirigir al login
+        console.log("[v0] No hay usuario, redirigiendo al login")
+        router.push("/login")
       } else {
+        console.log("[v0] Usuario encontrado en dashboard:", user.email)
         setUser(user)
       }
       setLoading(false)
@@ -27,9 +32,12 @@ export default function DashboardPage() {
 
     // Escuchar cambios en el estado de autenticación
     const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+      console.log("[v0] Cambio en estado de auth:", _event, session?.user?.email)
       if (!session) {
+        console.log("[v0] Sesión perdida, redirigiendo al login")
         router.push("/login")
       } else {
+        console.log("[v0] Sesión activa, usuario:", session.user.email)
         setUser(session.user)
       }
     })
@@ -37,19 +45,7 @@ export default function DashboardPage() {
     return () => {
       authListener.subscription.unsubscribe()
     }
-  }, [router])
-
-  // El botón de cerrar sesión se ha movido al sidebar para una mejor UX
-  // const handleLogout = async () => {
-  //   setLoading(true)
-  //   const { error } = await supabase.auth.signOut()
-  //   if (error) {
-  //     console.error("Error al cerrar sesión:", error.message)
-  //     setLoading(false)
-  //   } else {
-  //     router.push("/login")
-  //   }
-  // }
+  }, [router, supabase])
 
   if (loading) {
     return (
@@ -74,7 +70,6 @@ export default function DashboardPage() {
           <p className="text-gray-400">
             Esta es tu área de trabajo. Usa la barra lateral para navegar por las diferentes secciones.
           </p>
-          {/* El botón de cerrar sesión ahora está en el sidebar */}
         </CardContent>
       </Card>
     </div>
