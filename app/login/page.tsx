@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { supabase } from "@/lib/supabaseClient"
+import { createClient } from "@/lib/supabase/client"
 import { LogIn } from "lucide-react"
 
 export default function LoginPage() {
@@ -21,6 +21,7 @@ export default function LoginPage() {
   useEffect(() => {
     const clearSession = async () => {
       try {
+        const supabase = createClient()
         await supabase.auth.signOut()
       } catch (error) {
         console.log("Error clearing session:", error)
@@ -35,16 +36,18 @@ export default function LoginPage() {
     setError(null)
 
     try {
+      const supabase = createClient()
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
+        options: {
+          emailRedirectTo: process.env.NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL || `${window.location.origin}/dashboard`,
+        },
       })
 
       if (error) {
         if (error.message.includes("Invalid login credentials")) {
           setError("Credenciales inválidas. Verifica tu email y contraseña.")
-        } else if (error.message.includes("Supabase no configurado")) {
-          setError("Sistema en modo desarrollo. Contacta al administrador.")
         } else {
           setError(error.message)
         }
