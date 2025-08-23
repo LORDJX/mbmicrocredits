@@ -41,6 +41,7 @@ type CreateUserInput = z.infer<typeof createUserSchema>
 const editUserSchema = z.object({
   email: z.string().email("Ingresa un email válido."),
   full_name: z.string().trim().min(1, "El nombre es requerido.").max(120, "Máximo 120 caracteres."),
+  username: z.string().email("Debe ser un email válido."),
   is_admin: z.boolean().default(false),
   new_password: z.string().min(6, "Mínimo 6 caracteres.").optional().or(z.literal("")),
 })
@@ -195,6 +196,7 @@ export default function UsersPage() {
     defaultValues: {
       email: "",
       full_name: "",
+      username: "",
       is_admin: false,
       new_password: "",
     },
@@ -205,6 +207,7 @@ export default function UsersPage() {
     resetEdit({
       email: user.username || "",
       full_name: user.full_name || "",
+      username: user.username || "",
       is_admin: user.is_admin,
       new_password: "",
     })
@@ -218,7 +221,7 @@ export default function UsersPage() {
 
       const payload: any = {
         full_name: values.full_name,
-        username: values.email, // mantenemos username como email visible
+        username: values.username,
         is_admin: values.is_admin,
       }
       // También permitimos actualizar email de Auth si cambió
@@ -591,6 +594,16 @@ export default function UsersPage() {
                 {...registerEdit("full_name")}
               />
               {errorsEdit.full_name && <p className="text-red-400 text-sm">{errorsEdit.full_name.message}</p>}
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="username_edit">Usuario (email visible)</Label>
+              <Input
+                id="username_edit"
+                placeholder="usuario@correo.com"
+                className="bg-gray-700 border-gray-600 text-gray-100 placeholder:text-gray-400"
+                {...registerEdit("username")}
+              />
+              {errorsEdit.username && <p className="text-red-400 text-sm">{errorsEdit.username.message}</p>}
             </div>
             <div className="grid gap-2">
               <Label htmlFor="new_password_edit">Nueva Contraseña (opcional)</Label>
