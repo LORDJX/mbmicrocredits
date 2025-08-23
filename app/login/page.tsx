@@ -22,9 +22,11 @@ export default function LoginPage() {
     const clearSession = async () => {
       try {
         const supabase = createClient()
+        console.log("[v0] Limpiando sesión anterior...")
         await supabase.auth.signOut()
+        console.log("[v0] Sesión limpiada exitosamente")
       } catch (error) {
-        console.log("Error clearing session:", error)
+        console.log("[v0] Error clearing session:", error)
       }
     }
     clearSession()
@@ -37,6 +39,8 @@ export default function LoginPage() {
 
     try {
       const supabase = createClient()
+      console.log("[v0] Intentando login con email:", email)
+
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
@@ -46,18 +50,21 @@ export default function LoginPage() {
       })
 
       if (error) {
+        console.log("[v0] Error en login:", error.message)
         if (error.message.includes("Invalid login credentials")) {
           setError("Credenciales inválidas. Verifica tu email y contraseña.")
         } else {
           setError(error.message)
         }
       } else if (data?.user) {
+        console.log("[v0] Login exitoso, redirigiendo al dashboard...")
         router.push("/dashboard")
       } else {
+        console.log("[v0] Login sin error pero sin usuario")
         setError("Error inesperado durante el login")
       }
     } catch (err) {
-      console.error("Login error:", err)
+      console.error("[v0] Login error:", err)
       setError("Error de conexión. Intenta nuevamente.")
     }
 
