@@ -2,21 +2,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useEffect, useState } from "react"
-import {
-  Home,
-  Users,
-  Handshake,
-  DollarSign,
-  CreditCard,
-  CalendarCheck,
-  BarChart2,
-  LogOut,
-  ChevronDown,
-  User2,
-  FileText,
-  Receipt,
-  Calendar,
-} from "lucide-react"
+import { Home, Users, Handshake, DollarSign, CreditCard, CalendarCheck, BarChart2, LogOut, ChevronDown, User2, FileText, Receipt, Calendar } from 'lucide-react'
 import { Button } from "@/components/ui/button"
 import {
   Sidebar,
@@ -53,7 +39,7 @@ export function DashboardSidebar() {
   const pathname = usePathname()
   const router = useRouter()
   const [userPermissions, setUserPermissions] = useState<string[]>([])
-  const [isAdmin, setIsAdmin] = useState(false) // Agregando estado de administrador
+  const [isAdmin, setIsAdmin] = useState(false)
   const [permissionsLoaded, setPermissionsLoaded] = useState(false)
 
   useEffect(() => {
@@ -62,26 +48,70 @@ export function DashboardSidebar() {
         const {
           data: { user },
         } = await supabase.auth.getUser()
+        
         if (user) {
-          const { data: profile } = await supabase.from("profiles").select("is_admin").eq("id", user.id).single()
+          console.log("[v0] Cargando permisos para usuario:", user.email)
+          
+          let profile = null
+          try {
+            const { data: profileData, error: profileError } = await supabase
+              .from("profiles")
+              .select("is_admin, is_superadmin")
+              .eq("id", user.id)
+              .single()
+            
+            if (profileError && profileError.code === 'PGRST116') {
+              // Usuario no tiene perfil, crear uno
+              console.log("[v0] Creando perfil para usuario:", user.email)
+              const { data: newProfile } = await supabase
+                .from("profiles")
+                .insert({
+                  id: user.id,
+                  email: user.email,
+                  full_name: user.email?.split('@')[0] || 'Usuario',
+                  is_admin: false,
+                  is_superadmin: false
+                })
+                .select("is_admin, is_superadmin")
+                .single()
+              
+              profile = newProfile
+            } else if (!profileError) {
+              profile = profileData
+            }
+          } catch (profileErr) {
+            console.error("[v0] Error con perfil:", profileErr)
+          }
 
-          if (profile?.is_admin) {
+          if (profile?.is_admin || profile?.is_superadmin) {
+            console.log("[v0] Usuario es administrador")
             setIsAdmin(true)
             setUserPermissions(navItems.map((item) => item.route))
           } else {
+            console.log("[v0] Usuario normal, obteniendo permisos específicos")
             // Usuarios normales obtienen permisos específicos
-            const response = await fetch(`/api/users/permissions?userId=${user.id}`)
-            const data = await response.json()
+            try {
+              const response = await fetch(`/api/users/permissions?userId=${user.id}`)
+              const data = await response.json()
 
-            if (data.permissions && Array.isArray(data.permissions)) {
-              setUserPermissions(data.permissions)
-            } else {
+              if (data.permissions && Array.isArray(data.permissions)) {
+                setUserPermissions(data.permissions)
+              } else {
+                // Permisos por defecto para usuarios normales
+                setUserPermissions(["dashboard", "clients", "loans", "cronograma", "transactions"])
+              }
+            } catch (permErr) {
+              console.error("[v0] Error obteniendo permisos:", permErr)
+              // Permisos por defecto en caso de error
               setUserPermissions(["dashboard", "clients", "loans", "cronograma", "transactions"])
             }
           }
+        } else {
+          console.log("[v0] No hay usuario autenticado")
+          router.push("/login")
         }
       } catch (error) {
-        console.error("Error loading permissions:", error)
+        console.error("[v0] Error loading permissions:", error)
         setUserPermissions(["dashboard", "clients", "loans", "cronograma"])
       } finally {
         setPermissionsLoaded(true)
@@ -89,7 +119,7 @@ export function DashboardSidebar() {
     }
 
     loadUserPermissions()
-  }, [])
+  }, [router])
 
   const filteredNavItems = isAdmin
     ? navItems
