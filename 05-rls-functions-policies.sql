@@ -23,6 +23,7 @@ ALTER TABLE public.loans ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.transactions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.follow_ups ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.receipts ENABLE ROW LEVEL SECURITY; -- Habilitar RLS en la tabla receipts
 
 -- Políticas simplificadas que NO usan funciones que consulten otras tablas
 -- Políticas para la tabla 'profiles' - Acceso básico sin recursión
@@ -49,6 +50,9 @@ CREATE POLICY "Allow all authenticated users full access" ON public.transactions
 CREATE POLICY "Allow all authenticated users full access" ON public.follow_ups 
   FOR ALL USING (auth.uid() IS NOT NULL);
 
+CREATE POLICY "Allow all authenticated users full access" ON public.receipts 
+  FOR ALL USING (auth.uid() IS NOT NULL); -- Políticas para la tabla receipts - permitir acceso completo a usuarios autenticados
+
 -- Política especial para service role que bypasea todo
 CREATE POLICY "Allow service role full access" ON public.profiles 
   FOR ALL USING (auth.jwt() ->> 'role' = 'service_role');
@@ -67,3 +71,6 @@ CREATE POLICY "Allow service role full access" ON public.transactions
 
 CREATE POLICY "Allow service role full access" ON public.follow_ups 
   FOR ALL USING (auth.jwt() ->> 'role' = 'service_role');
+
+CREATE POLICY "Allow service role full access" ON public.receipts 
+  FOR ALL USING (auth.jwt() ->> 'role' = 'service_role'); -- Política especial para service role en receipts
