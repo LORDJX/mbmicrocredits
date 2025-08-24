@@ -26,7 +26,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { toast } from "sonner"
-import { Plus, Eye } from "lucide-react"
+import { Plus, Eye, Edit, Share2, Search } from "lucide-react"
 import { AppHeader } from "@/components/app-header"
 
 interface Client {
@@ -72,14 +72,17 @@ interface Receipt {
 
 export default function ReceiptsPage() {
   const [receipts, setReceipts] = useState<Receipt[]>([])
+  const [filteredReceipts, setFilteredReceipts] = useState<Receipt[]>([])
   const [clients, setClients] = useState<Client[]>([])
   const [activeLoans, setActiveLoans] = useState<Loan[]>([])
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false)
   const [selectedReceipt, setSelectedReceipt] = useState<Receipt | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [selectedDate, setSelectedDate] = useState<Date>(new Date())
+  const [searchTerm, setSearchTerm] = useState("")
 
   const [selectedLoanId, setSelectedLoanId] = useState<string>("")
   const [loanInstallments, setLoanInstallments] = useState<Installment[]>([])
@@ -96,10 +99,42 @@ export default function ReceiptsPage() {
     observations: "",
   })
 
+  const [editReceipt, setEditReceipt] = useState({
+    id: "",
+    date: new Date(),
+    client_id: "",
+    selected_loans: [] as string[],
+    selected_installments: [] as number[],
+    payment_type: "",
+    cash_amount: "",
+    transfer_amount: "",
+    observations: "",
+  })
+
   useEffect(() => {
     fetchReceipts()
     fetchClients()
   }, [])
+
+  useEffect(() => {
+    if (!searchTerm.trim()) {
+      setFilteredReceipts(receipts)
+    } else {
+      const filtered = receipts.filter((receipt) => {
+        const client = clients.find((c) => c.id === receipt.client_id)
+        if (!client) return false
+
+        const searchLower = searchTerm.toLowerCase()
+        return (
+          client.first_name.toLowerCase().includes(searchLower) ||
+          client.last_name.toLowerCase().includes(searchLower) ||
+          client.client_code.toLowerCase().includes(searchLower) ||
+          receipt.receipt_number.toLowerCase().includes(searchLower)
+        )
+      })
+      setFilteredReceipts(filtered)
+    }
+  }, [searchTerm, receipts, clients])
 
   useEffect(() => {
     if (newReceipt.client_id) {
@@ -124,6 +159,7 @@ export default function ReceiptsPage() {
       if (response.ok) {
         const data = await response.json()
         setReceipts(data)
+        setFilteredReceipts(data)
       }
     } catch (error) {
       console.error("Error fetching receipts:", error)
@@ -328,9 +364,98 @@ export default function ReceiptsPage() {
     }
   }
 
+  const handleEditReceipt = (receipt: Receipt) => {
+    setEditReceipt({
+      id: receipt.id,
+      date: new Date(receipt.receipt_date),
+      client_id: receipt.client_id,
+      selected_loans: [],
+      selected_installments: [],
+      payment_type: receipt.payment_type,
+      cash_amount: receipt.cash_amount.toString(),
+      transfer_amount: receipt.transfer_amount.toString(),
+      observations: receipt.observations || "",
+    })
+    setSelectedReceipt(receipt)
+    setIsEditDialogOpen(true)
+  }
+
+  const handleUpdateReceipt = async () => {
+    if (!editReceipt.id) return
+
+    const cashAmount = Number.parseFloat(editReceipt.cash_amount) || 0
+    const transferAmount = Number.parseFloat(editReceipt.transfer_amount) || 0
+
+    if (cashAmount === 0 && transferAmount === 0) {
+      toast.error("Debe ingresar al menos un importe")
+      return
+    }
+
+    setIsLoading(true)
+
+    try {
+      const receiptData = {
+        receipt_date: editReceipt.date.toISOString().split("T")[0],
+        payment_type: editReceipt.payment_type,
+        cash_amount: cashAmount,
+        transfer_amount: transferAmount,
+        total_amount: cashAmount + transferAmount,
+        observations: editReceipt.observations,
+      }
+
+      const response = await fetch(`/api/receipts/${editReceipt.id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(receiptData),
+      })
+
+      if (response.ok) {
+        toast.success("Recibo actualizado exitosamente")
+        setIsEditDialogOpen(false)
+        fetchReceipts()
+      } else {
+        const errorData = await response.json()
+        toast.error(errorData.error || "Error al actualizar el recibo")
+      }
+    } catch (error) {
+      console.error("Error updating receipt:", error)
+      toast.error("Error al actualizar el recibo")
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   const handleViewDetail = (receipt: Receipt) => {
     setSelectedReceipt(receipt)
     setIsDetailDialogOpen(true)
+  }
+
+  const shareReceiptViaWhatsApp = (receipt: Receipt) => {
+    const client = clients.find((c) => c.id === receipt.client_id)
+    const clientName = client ? `${client.first_name} ${client.last_name}` : receipt.client_name
+
+    const message = `🧾 *RECIBO DE PAGO*
+    
+📋 *Recibo N°:* ${receipt.receipt_number}
+📅 *Fecha:* ${new Date(receipt.receipt_date).toLocaleDateString("es-ES")}
+👤 *Cliente:* ${clientName}
+💰 *Total Pagado:* $${receipt.total_amount.toFixed(2)}
+
+💵 *Efectivo:* $${receipt.cash_amount.toFixed(2)}
+🏦 *Transferencia:* $${receipt.transfer_amount.toFixed(2)}
+📝 *Tipo:* ${receipt.payment_type}
+
+${receipt.observations ? `📋 *Observaciones:* ${receipt.observations}` : ""}
+
+¡Gracias por su pago! 🙏
+
+*BM Microcréditos*`
+
+    const encodedMessage = encodeURIComponent(message)
+    const whatsappUrl = `https://wa.me/?text=${encodedMessage}`
+    window.open(whatsappUrl, "_blank")
   }
 
   const handlePrintReceipt = (receipt: Receipt) => {
@@ -816,6 +941,15 @@ export default function ReceiptsPage() {
         <CardHeader>
           <CardTitle>Lista de Recibos</CardTitle>
           <CardDescription>Historial de recibos de pagos registrados</CardDescription>
+          <div className="flex items-center space-x-2 mt-4">
+            <Search className="h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar por cliente, DNI o número de recibo..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="max-w-sm"
+            />
+          </div>
         </CardHeader>
         <CardContent>
           <Table>
@@ -832,7 +966,7 @@ export default function ReceiptsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {receipts.map((receipt) => (
+              {filteredReceipts.map((receipt) => (
                 <TableRow key={receipt.id}>
                   <TableCell className="font-medium">{receipt.receipt_number}</TableCell>
                   <TableCell>
@@ -850,16 +984,26 @@ export default function ReceiptsPage() {
                   <TableCell>${receipt.transfer_amount.toFixed(2)}</TableCell>
                   <TableCell className="font-medium">${receipt.total_amount.toFixed(2)}</TableCell>
                   <TableCell>
-                    <Button variant="ghost" size="sm" onClick={() => handleViewDetail(receipt)}>
-                      <Eye className="h-4 w-4" />
-                    </Button>
+                    <div className="flex space-x-1">
+                      <Button variant="ghost" size="sm" onClick={() => handleViewDetail(receipt)}>
+                        <Eye className="h-4 w-4" />
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => handleEditReceipt(receipt)}>
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => shareReceiptViaWhatsApp(receipt)}>
+                        <Share2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
-              {receipts.length === 0 && (
+              {filteredReceipts.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={8} className="text-center text-muted-foreground">
-                    No hay recibos registrados
+                    {searchTerm
+                      ? "No se encontraron recibos que coincidan con la búsqueda"
+                      : "No hay recibos registrados"}
                   </TableCell>
                 </TableRow>
               )}
@@ -867,6 +1011,129 @@ export default function ReceiptsPage() {
           </Table>
         </CardContent>
       </Card>
+
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Editar Recibo</DialogTitle>
+            <DialogDescription>Modifique la información del recibo de pago</DialogDescription>
+          </DialogHeader>
+
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-date">Fecha *</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className="w-full justify-start text-left font-normal bg-transparent">
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {editReceipt.date ? format(editReceipt.date, "PPP", { locale: es }) : "Seleccionar fecha"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0">
+                    <Calendar
+                      mode="single"
+                      selected={editReceipt.date}
+                      onSelect={(date) => {
+                        const selectedDate = date || new Date()
+                        setEditReceipt((prev) => ({ ...prev, date: selectedDate }))
+                      }}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="edit-payment-type">Tipo de Pago *</Label>
+                <Select
+                  value={editReceipt.payment_type}
+                  onValueChange={(value) => setEditReceipt((prev) => ({ ...prev, payment_type: value }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar tipo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Total">Total</SelectItem>
+                    <SelectItem value="Parcial">Parcial</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-cash-amount">Importe en Efectivo</Label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground">$</span>
+                  <Input
+                    id="edit-cash-amount"
+                    type="text"
+                    placeholder="Ej: 15000.50"
+                    value={editReceipt.cash_amount}
+                    onChange={(e) => {
+                      const formatted = formatCurrency(e.target.value)
+                      setEditReceipt((prev) => ({ ...prev, cash_amount: formatted }))
+                    }}
+                    className="pl-8"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="edit-transfer-amount">Importe en Transferencia</Label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground">$</span>
+                  <Input
+                    id="edit-transfer-amount"
+                    type="text"
+                    placeholder="Ej: 5000.00"
+                    value={editReceipt.transfer_amount}
+                    onChange={(e) => {
+                      const formatted = formatCurrency(e.target.value)
+                      setEditReceipt((prev) => ({ ...prev, transfer_amount: formatted }))
+                    }}
+                    className="pl-8"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {(Number.parseFloat(editReceipt.cash_amount) || 0) + (Number.parseFloat(editReceipt.transfer_amount) || 0) >
+              0 && (
+              <div className="p-3 bg-muted rounded-lg">
+                <div className="font-medium">
+                  Total: $
+                  {(
+                    (Number.parseFloat(editReceipt.cash_amount) || 0) +
+                    (Number.parseFloat(editReceipt.transfer_amount) || 0)
+                  ).toFixed(2)}
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <Label htmlFor="edit-observations">Observaciones</Label>
+              <Textarea
+                id="edit-observations"
+                placeholder="Ingrese observaciones adicionales..."
+                value={editReceipt.observations}
+                onChange={(e) => setEditReceipt((prev) => ({ ...prev, observations: e.target.value }))}
+                rows={3}
+              />
+            </div>
+          </div>
+
+          <div className="flex justify-end space-x-2">
+            <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={handleUpdateReceipt} disabled={isLoading}>
+              {isLoading ? "Actualizando..." : "Actualizar Recibo"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={isDetailDialogOpen} onOpenChange={setIsDetailDialogOpen}>
         <DialogContent className="max-w-2xl">
