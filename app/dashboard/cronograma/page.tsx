@@ -231,18 +231,32 @@ export default function CronogramaPage() {
         newPaidInstallments.add(installmentKey)
         setPaidInstallments(newPaidInstallments)
 
-        if (selectedInstallment) {
-          const updateInstallmentStatus = (installments: Installment[]) =>
-            installments.map((inst) =>
-              inst.id === selectedInstallment.id ? { ...inst, status: "paid" as const } : inst,
-            )
+        const removeInstallment = (installments: Installment[]) =>
+          installments.filter((inst) => inst.id !== selectedInstallment.id)
 
-          setTodayInstallments((prev) => updateInstallmentStatus(prev))
-          setOverdueInstallments((prev) => updateInstallmentStatus(prev))
-          setMonthInstallments((prev) => updateInstallmentStatus(prev))
+        setTodayInstallments((prev) => removeInstallment(prev))
+        setOverdueInstallments((prev) => removeInstallment(prev))
+        setMonthInstallments((prev) => removeInstallment(prev))
 
-          console.log("[v0] Updated installment status to paid")
+        const newReceipt: Receipt = {
+          id: result.id,
+          receipt_number: result.receipt_number,
+          total_amount: result.total_amount,
+          receipt_date: result.receipt_date,
+          payment_type: result.payment_type,
+          observations: result.observations,
+          selected_loans: result.selected_loans,
+          client_id: result.client_id,
+          clients: {
+            id: selectedInstallment.client_id,
+            first_name: selectedInstallment.client_name.split(" ")[0] || "",
+            last_name: selectedInstallment.client_name.split(" ").slice(1).join(" ") || "",
+            phone: "", // Se obtendrá cuando se necesite para WhatsApp
+          },
         }
+        setTodayReceipts((prev) => [newReceipt, ...prev])
+
+        console.log("[v0] Updated installment status to paid")
 
         setIsReceiptModalOpen(false)
         setSelectedInstallment(null)
@@ -257,9 +271,7 @@ export default function CronogramaPage() {
           observations: "",
         })
 
-        setTimeout(() => {
-          fetchCronogramaData()
-        }, 1000)
+        fetchCronogramaData()
       } else {
         const errorMessage = result.error || result.message || "Error desconocido"
         console.log("[v0] Receipt creation failed:", errorMessage)
@@ -345,6 +357,10 @@ _Su confianza es nuestro compromiso_`
     const hasReceipt = paidInstallments.has(installmentKey)
     const isPaid = installment.status === "paid" || hasReceipt
 
+    if (hasReceipt || isPaid) {
+      return null
+    }
+
     return (
       <Card className="mb-3">
         <CardContent className="p-4">
@@ -358,28 +374,13 @@ _Su confianza es nuestro compromiso_`
             </div>
             <div className="text-right space-y-2">
               <p className="text-xl font-bold">{formatCurrency(installment.amount)}</p>
-              <Badge
-                variant={installment.status === "overdue" ? "destructive" : isPaid ? "default" : "secondary"}
-                className="block"
-              >
-                {installment.status === "overdue" && !isPaid ? "Vencida" : isPaid ? "Pagada" : "Pendiente"}
+              <Badge variant={installment.status === "overdue" ? "destructive" : "secondary"} className="block">
+                {installment.status === "overdue" ? "Vencida" : "Pendiente"}
               </Badge>
-              {!isPaid ? (
-                <Button size="sm" className="w-full mt-2" onClick={() => openReceiptModal(installment)}>
-                  <Plus className="h-4 w-4 mr-1" />
-                  Nuevo Recibo
-                </Button>
-              ) : (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="w-full mt-2 bg-green-50 border-green-200 text-green-700 hover:bg-green-100"
-                  onClick={() => shareViaWhatsApp(installment)}
-                >
-                  <MessageCircle className="h-4 w-4 mr-1" />
-                  Compartir
-                </Button>
-              )}
+              <Button size="sm" className="w-full mt-2" onClick={() => openReceiptModal(installment)}>
+                <Plus className="h-4 w-4 mr-1" />
+                Nuevo Recibo
+              </Button>
             </div>
           </div>
         </CardContent>
@@ -528,7 +529,10 @@ _Su confianza es nuestro compromiso_`
                   </div>
                 )}
 
-                {filteredTodayInstallments.length > 0 && (
+                {filteredTodayInstallments.filter((inst) => {
+                  const key = `${inst.loan_code}-${inst.installment_number}`
+                  return !paidInstallments.has(key) && inst.status !== "paid"
+                }).length > 0 && (
                   <div>
                     <h5 className="text-sm font-semibold text-blue-700 mb-2">Cuotas Pendientes</h5>
                     {filteredTodayInstallments.map((installment) => (
@@ -537,11 +541,25 @@ _Su confianza es nuestro compromiso_`
                   </div>
                 )}
 
-                {filteredTodayInstallments.length === 0 && filteredTodayReceipts.length === 0 && (
-                  <p className="text-center text-muted-foreground py-4">
-                    {searchFilter ? "No se encontraron resultados" : "No hay cuotas ni recibos para hoy"}
-                  </p>
-                )}
+                {filteredTodayInstallments.filter((inst) => {
+                  const key = `${inst.loan_code}-${inst.installment_number}`
+                  return !paidInstallments.has(key) && inst.status !== "paid"
+                }).length === 0 &&
+                  filteredTodayReceipts.length === 0 && (
+                    <p className="text-center text-muted-foreground py-4">
+                      {searchFilter ? "No se encontraron resultados" : "No hay cuotas ni recibos para hoy"}
+                    </p>
+                  )}
+
+                {filteredTodayInstallments.filter((inst) => {
+                  const key = `${inst.loan_code}-${inst.installment_number}`
+                  return !paidInstallments.has(key) && inst.status !== "paid"
+                }).length === 0 &&
+                  filteredTodayReceipts.length > 0 && (
+                    <p className="text-center text-green-600 py-2 text-sm font-medium">
+                      ✅ Todas las cuotas de hoy han sido cobradas
+                    </p>
+                  )}
               </div>
             </CardContent>
           </Card>
