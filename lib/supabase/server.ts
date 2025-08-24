@@ -1,7 +1,9 @@
 import { createServerClient } from "@supabase/ssr"
+import { createClient as createSupabaseClient } from "@supabase/supabase-js"
 import { cookies } from "next/headers"
 
 /**
+ * Client for user-authenticated requests (uses anon key + user session)
  * Especially important if using Fluid compute: Don't put this client in a
  * global variable. Always create a new client within each function when using
  * it.
@@ -23,6 +25,19 @@ export async function createClient() {
           // user sessions.
         }
       },
+    },
+  })
+}
+
+/**
+ * Admin client for server-side operations that need to bypass RLS
+ * Uses service role key - should only be used in API routes
+ */
+export function createAdminClient() {
+  return createSupabaseClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
     },
   })
 }
