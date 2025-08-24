@@ -600,12 +600,6 @@ _Su confianza es nuestro compromiso_`
                   <span className="font-medium text-gray-700">Total vencido:</span>
                   <span className="font-bold text-lg text-red-700">{formatCurrency(summary.total_overdue)}</span>
                 </div>
-                <div className="flex justify-between text-sm">
-                  <span className="font-medium text-gray-700">Cobrado este mes:</span>
-                  <span className="font-bold text-lg text-green-700">
-                    {formatCurrency(summary.total_received_month)}
-                  </span>
-                </div>
               </div>
 
               <div className="space-y-2 max-h-96 overflow-y-auto">
@@ -641,7 +635,9 @@ _Su confianza es nuestro compromiso_`
               <div className="space-y-3 mb-4 bg-white/50 p-3 rounded-lg border">
                 <div className="flex justify-between text-sm">
                   <span className="font-medium text-gray-700">Total a cobrar:</span>
-                  <span className="font-bold text-lg text-gray-800">{formatCurrency(summary.total_due_month)}</span>
+                  <span className="font-bold text-lg text-gray-800">
+                    {formatCurrency(summary.total_due_month + summary.total_received_month)}
+                  </span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="font-medium text-gray-700">Ya cobrado:</span>
@@ -651,9 +647,7 @@ _Su confianza es nuestro compromiso_`
                 </div>
                 <div className="flex justify-between text-sm border-t pt-2 mt-2">
                   <span className="font-semibold text-gray-800">Pendiente:</span>
-                  <span className="font-bold text-xl text-orange-600">
-                    {formatCurrency(summary.total_due_month - summary.total_received_month)}
-                  </span>
+                  <span className="font-bold text-xl text-orange-600">{formatCurrency(summary.total_due_month)}</span>
                 </div>
               </div>
 
