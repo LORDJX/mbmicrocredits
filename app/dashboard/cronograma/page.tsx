@@ -227,6 +227,19 @@ export default function CronogramaPage() {
         console.log("[v0] Receipt created successfully")
         toast.success("Recibo creado exitosamente")
 
+        const receiptAmount = receiptData.total_amount
+        setSummary((prev) => ({
+          ...prev,
+          total_received_today: prev.total_received_today + receiptAmount,
+          total_received_month: prev.total_received_month + receiptAmount,
+          total_due_today: Math.max(0, prev.total_due_today - receiptAmount),
+          total_overdue:
+            selectedInstallment.status === "overdue"
+              ? Math.max(0, prev.total_overdue - receiptAmount)
+              : prev.total_overdue,
+          total_due_month: Math.max(0, prev.total_due_month - receiptAmount),
+        }))
+
         const newPaidInstallments = new Set(paidInstallments)
         newPaidInstallments.add(installmentKey)
         setPaidInstallments(newPaidInstallments)
@@ -271,7 +284,9 @@ export default function CronogramaPage() {
           observations: "",
         })
 
-        fetchCronogramaData()
+        setTimeout(() => {
+          fetchCronogramaData()
+        }, 500)
       } else {
         const errorMessage = result.error || result.message || "Error desconocido"
         console.log("[v0] Receipt creation failed:", errorMessage)

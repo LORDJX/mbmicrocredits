@@ -89,7 +89,8 @@ export async function GET(request: NextRequest) {
     console.log("[v0] Total installments generated:", allInstallments.length)
 
     const todayStr = today.toISOString().split("T")[0]
-    const { data: todayReceipts, error: receiptsError } = await supabase
+
+    const { data: allReceipts, error: allReceiptsError } = await supabase
       .from("receipts")
       .select(`
         id,
@@ -99,6 +100,7 @@ export async function GET(request: NextRequest) {
         observations,
         selected_loans,
         client_id,
+        receipt_number,
         clients!inner(
           id,
           first_name,
@@ -106,15 +108,14 @@ export async function GET(request: NextRequest) {
           phone
         )
       `)
-      .eq("receipt_date", todayStr)
       .order("created_at", { ascending: false })
 
-    if (receiptsError) {
-      console.error("Error fetching today receipts:", receiptsError)
+    if (allReceiptsError) {
+      console.error("Error fetching all receipts:", allReceiptsError)
     }
 
     const paidInstallmentIds = new Set()
-    todayReceipts?.forEach((receipt) => {
+    allReceipts?.forEach((receipt) => {
       if (receipt.selected_loans) {
         receipt.selected_loans.forEach((loan: any) => {
           if (loan.loan_code && loan.installment_number) {
@@ -123,6 +124,10 @@ export async function GET(request: NextRequest) {
         })
       }
     })
+
+    console.log("[v0] Total paid installments found:", paidInstallmentIds.size)
+
+    const todayReceipts = allReceipts?.filter((receipt) => receipt.receipt_date === todayStr) || []
 
     const todayInstallments = allInstallments.filter((inst) => {
       const isDueToday = inst.due_date === todayStr || inst.status === "due_today"
@@ -147,16 +152,14 @@ export async function GET(request: NextRequest) {
     console.log("[v0] Overdue installments:", overdueInstallments.length)
     console.log("[v0] Month installments:", monthInstallments.length)
 
-    const { data: receipts, error: allReceiptsError } = await supabase
-      .from("receipts")
-      .select("total_amount, receipt_date")
-      .gte("receipt_date", startOfMonth.toISOString().split("T")[0])
-      .lte("receipt_date", endOfMonth.toISOString().split("T")[0])
+    const monthReceipts =
+      allReceipts?.filter((r) => {
+        const receiptDate = new Date(r.receipt_date)
+        return receiptDate >= startOfMonth && receiptDate <= endOfMonth
+      }) || []
 
-    const totalReceivedToday =
-      receipts?.filter((r) => r.receipt_date === todayStr).reduce((sum, r) => sum + (r.total_amount || 0), 0) || 0
-
-    const totalReceivedMonth = receipts?.reduce((sum, r) => sum + (r.total_amount || 0), 0) || 0
+    const totalReceivedToday = todayReceipts.reduce((sum, r) => sum + (r.total_amount || 0), 0)
+    const totalReceivedMonth = monthReceipts.reduce((sum, r) => sum + (r.total_amount || 0), 0)
 
     // Calcular resumen
     const summary = {
@@ -167,12 +170,14 @@ export async function GET(request: NextRequest) {
       total_due_month: monthInstallments.reduce((sum, inst) => sum + inst.amount, 0),
     }
 
+    console.log("[v0] Summary calculated:", summary)
+
     return NextResponse.json({
       success: true,
       today: todayInstallments,
       overdue: overdueInstallments,
       month: monthInstallments,
-      todayReceipts: todayReceipts || [], // Agregar recibos del día
+      todayReceipts: todayReceipts,
       summary,
     })
   } catch (error) {
