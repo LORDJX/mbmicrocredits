@@ -1,8 +1,10 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { supabase } from "@/lib/supabaseClient"
+import { createClient } from "@/lib/supabase/server"
 
 export async function GET(request: NextRequest) {
   try {
+    const supabase = await createClient()
+
     const { data: receipts, error } = await supabase
       .from("receipts")
       .select(`
@@ -42,6 +44,8 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const supabase = await createClient()
+
     const body = await request.json()
     console.log("Received body:", body)
 

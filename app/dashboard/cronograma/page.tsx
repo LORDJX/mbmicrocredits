@@ -82,7 +82,7 @@ export default function CronogramaPage() {
     client_name: "",
     loan_code: "",
     payment_type: "Total",
-    cash_amount: "",
+    cash_amount: "0",
     transfer_amount: "0",
     observations: "",
   })
@@ -214,7 +214,7 @@ export default function CronogramaPage() {
           client_name: "",
           loan_code: "",
           payment_type: "Total",
-          cash_amount: "",
+          cash_amount: "0",
           transfer_amount: "0",
           observations: "",
         })
@@ -631,7 +631,7 @@ BM Microcréditos`
                     type="text"
                     placeholder="Ej: 15000.50"
                     className="pl-8"
-                    value={receiptForm.cash_amount}
+                    value={receiptForm.cash_amount || "0"}
                     onChange={(e) =>
                       setReceiptForm({ ...receiptForm, cash_amount: formatCurrencyInput(e.target.value) })
                     }
@@ -648,7 +648,7 @@ BM Microcréditos`
                     type="text"
                     placeholder="Ej: 5000.00"
                     className="pl-8"
-                    value={receiptForm.transfer_amount}
+                    value={receiptForm.transfer_amount || "0"}
                     onChange={(e) =>
                       setReceiptForm({ ...receiptForm, transfer_amount: formatCurrencyInput(e.target.value) })
                     }
