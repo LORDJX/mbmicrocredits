@@ -88,6 +88,7 @@ export default function CronogramaPage() {
   })
   const [isCreatingReceipt, setIsCreatingReceipt] = useState(false)
   const [searchFilter, setSearchFilter] = useState("") // Added filter state for search functionality
+  const [paidInstallments, setPaidInstallments] = useState<Set<string>>(new Set()) // Agregar estado para cuotas pagadas
 
   useEffect(() => {
     fetchCronogramaData()
@@ -105,6 +106,16 @@ export default function CronogramaPage() {
         setMonthInstallments(data.month || [])
         setTodayReceipts(data.todayReceipts || []) // Cargar recibos del día
         setSummary(data.summary || {})
+
+        const paidIds = new Set<string>()
+        data.todayReceipts?.forEach((receipt: Receipt) => {
+          receipt.selected_loans?.forEach((loan: any) => {
+            if (loan.loan_code && loan.installment_number) {
+              paidIds.add(`${loan.loan_code}-${loan.installment_number}`)
+            }
+          })
+        })
+        setPaidInstallments(paidIds)
       }
     } catch (error) {
       console.error("Error fetching cronograma data:", error)
@@ -130,6 +141,17 @@ export default function CronogramaPage() {
   }
 
   const openReceiptModal = (installment: Installment) => {
+    const installmentKey = `${installment.loan_code}-${installment.installment_number}`
+    if (paidInstallments.has(installmentKey)) {
+      toast.error("Ya existe un recibo para esta cuota. No se pueden crear recibos duplicados.")
+      return
+    }
+
+    if (installment.status === "paid") {
+      toast.error("Esta cuota ya está marcada como pagada.")
+      return
+    }
+
     setSelectedInstallment(installment)
     setReceiptForm({
       receipt_date: new Date().toISOString().split("T")[0],
@@ -147,6 +169,18 @@ export default function CronogramaPage() {
   const handleCreateReceipt = async () => {
     if (isCreatingReceipt) {
       console.log("[v0] Already creating receipt, preventing duplicate")
+      return
+    }
+
+    if (!selectedInstallment) {
+      toast.error("No hay cuota seleccionada")
+      return
+    }
+
+    const installmentKey = `${selectedInstallment.loan_code}-${selectedInstallment.installment_number}`
+    if (paidInstallments.has(installmentKey)) {
+      toast.error("Ya existe un recibo para esta cuota. No se pueden crear recibos duplicados.")
+      setIsReceiptModalOpen(false)
       return
     }
 
@@ -193,6 +227,10 @@ export default function CronogramaPage() {
         console.log("[v0] Receipt created successfully")
         toast.success("Recibo creado exitosamente")
 
+        const newPaidInstallments = new Set(paidInstallments)
+        newPaidInstallments.add(installmentKey)
+        setPaidInstallments(newPaidInstallments)
+
         if (selectedInstallment) {
           const updateInstallmentStatus = (installments: Installment[]) =>
             installments.map((inst) =>
@@ -221,7 +259,7 @@ export default function CronogramaPage() {
 
         setTimeout(() => {
           fetchCronogramaData()
-        }, 500)
+        }, 1000)
       } else {
         const errorMessage = result.error || result.message || "Error desconocido"
         console.log("[v0] Receipt creation failed:", errorMessage)
@@ -256,6 +294,7 @@ BM Microcréditos`
         // Use WhatsApp Web API
         const whatsappUrl = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`
         window.open(whatsappUrl, "_blank")
+        toast.success("Mensaje de WhatsApp enviado")
       } else {
         toast.error("No se encontró número de teléfono para este cliente")
       }
@@ -276,62 +315,77 @@ BM Microcréditos`
     const clientName = `${receipt.clients.first_name} ${receipt.clients.last_name}`
     const loanInfo = receipt.selected_loans?.[0] || {}
 
-    const message = `Hola ${clientName}! 
+    const message = `🧾 *RECIBO DE PAGO* 🧾
 
-Su recibo N° ${receipt.receipt_number} ha sido generado exitosamente.
+Hola ${clientName}!
 
-Detalle del pago:
-- Monto: ${formatCurrency(receipt.total_amount)}
-- Fecha: ${formatDate(receipt.receipt_date)}
-- Tipo: ${receipt.payment_type}
-${loanInfo.loan_code ? `- Préstamo: ${loanInfo.loan_code}` : ""}
-${loanInfo.installment_number ? `- Cuota: ${loanInfo.installment_number}` : ""}
+Su recibo N° *${receipt.receipt_number}* ha sido generado exitosamente.
 
-Gracias por su pago.
+📋 *DETALLE DEL PAGO:*
+💰 Monto: *${formatCurrency(receipt.total_amount)}*
+📅 Fecha: ${formatDate(receipt.receipt_date)}
+💳 Tipo: ${receipt.payment_type}
+${loanInfo.loan_code ? `🏦 Préstamo: ${loanInfo.loan_code}` : ""}
+${loanInfo.installment_number ? `📊 Cuota: ${loanInfo.installment_number}` : ""}
 
-BM Microcréditos`
+${receipt.observations ? `📝 Observaciones: ${receipt.observations}` : ""}
+
+✅ Gracias por su pago puntual.
+
+*BM Microcréditos*
+_Su confianza es nuestro compromiso_`
 
     const whatsappUrl = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`
     window.open(whatsappUrl, "_blank")
+    toast.success("Recibo enviado por WhatsApp")
   }
 
-  const InstallmentCard = ({ installment }: { installment: Installment }) => (
-    <Card className="mb-3">
-      <CardContent className="p-4">
-        <div className="flex justify-between items-start">
-          <div className="flex-1">
-            <h4 className="font-semibold text-lg">{installment.client_name}</h4>
-            <p className="text-sm text-muted-foreground">
-              Cuota {installment.installment_number} de {installment.total_installments} - {installment.loan_code}
-            </p>
-            <p className="text-sm text-muted-foreground">Vencimiento: {formatDate(installment.due_date)}</p>
-          </div>
-          <div className="text-right space-y-2">
-            <p className="text-xl font-bold">{formatCurrency(installment.amount)}</p>
-            <Badge variant={installment.status === "overdue" ? "destructive" : "secondary"} className="block">
-              {installment.status === "overdue" ? "Vencida" : installment.status === "paid" ? "Pagada" : "Pendiente"}
-            </Badge>
-            {installment.status !== "paid" ? (
-              <Button size="sm" className="w-full mt-2" onClick={() => openReceiptModal(installment)}>
-                <Plus className="h-4 w-4 mr-1" />
-                Nuevo Recibo
-              </Button>
-            ) : (
-              <Button
-                size="sm"
-                variant="outline"
-                className="w-full mt-2 bg-green-50 border-green-200 text-green-700 hover:bg-green-100"
-                onClick={() => shareViaWhatsApp(installment)}
+  const InstallmentCard = ({ installment }: { installment: Installment }) => {
+    const installmentKey = `${installment.loan_code}-${installment.installment_number}`
+    const hasReceipt = paidInstallments.has(installmentKey)
+    const isPaid = installment.status === "paid" || hasReceipt
+
+    return (
+      <Card className="mb-3">
+        <CardContent className="p-4">
+          <div className="flex justify-between items-start">
+            <div className="flex-1">
+              <h4 className="font-semibold text-lg">{installment.client_name}</h4>
+              <p className="text-sm text-muted-foreground">
+                Cuota {installment.installment_number} de {installment.total_installments} - {installment.loan_code}
+              </p>
+              <p className="text-sm text-muted-foreground">Vencimiento: {formatDate(installment.due_date)}</p>
+            </div>
+            <div className="text-right space-y-2">
+              <p className="text-xl font-bold">{formatCurrency(installment.amount)}</p>
+              <Badge
+                variant={installment.status === "overdue" ? "destructive" : isPaid ? "default" : "secondary"}
+                className="block"
               >
-                <MessageCircle className="h-4 w-4 mr-1" />
-                Compartir
-              </Button>
-            )}
+                {installment.status === "overdue" && !isPaid ? "Vencida" : isPaid ? "Pagada" : "Pendiente"}
+              </Badge>
+              {!isPaid ? (
+                <Button size="sm" className="w-full mt-2" onClick={() => openReceiptModal(installment)}>
+                  <Plus className="h-4 w-4 mr-1" />
+                  Nuevo Recibo
+                </Button>
+              ) : (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="w-full mt-2 bg-green-50 border-green-200 text-green-700 hover:bg-green-100"
+                  onClick={() => shareViaWhatsApp(installment)}
+                >
+                  <MessageCircle className="h-4 w-4 mr-1" />
+                  Compartir
+                </Button>
+              )}
+            </div>
           </div>
-        </div>
-      </CardContent>
-    </Card>
-  )
+        </CardContent>
+      </Card>
+    )
+  }
 
   const ReceiptCard = ({ receipt }: { receipt: Receipt }) => (
     <Card className="mb-3 border-green-200 bg-green-50">
