@@ -634,7 +634,10 @@ export default function ClientsPage() {
 
   const handleCreateClient = async (e: React.FormEvent) => {
     e.preventDefault()
+    console.log("[v0] Iniciando creación de cliente:", newClient)
+
     if (!validateForm(newClient)) {
+      console.log("[v0] Validación fallida:", formErrors)
       toast({
         title: "Error de validación",
         description: "Por favor, corrige los errores en el formulario.",
@@ -644,10 +647,12 @@ export default function ClientsPage() {
     }
 
     try {
+      console.log("[v0] Verificando DNI duplicado:", newClient.dni)
       const dniCheckResponse = await fetch(`/api/clients?dni=${newClient.dni}`)
       if (dniCheckResponse.ok) {
         const existingClients = await dniCheckResponse.json()
         if (existingClients.length > 0) {
+          console.log("[v0] DNI duplicado encontrado")
           toast({
             title: "DNI duplicado",
             description: "Ya existe un cliente con este DNI.",
@@ -657,7 +662,7 @@ export default function ClientsPage() {
         }
       }
     } catch (error) {
-      console.error("Error verificando DNI:", error)
+      console.error("[v0] Error verificando DNI:", error)
     }
 
     try {
@@ -665,19 +670,34 @@ export default function ClientsPage() {
 
       // Subir imágenes si se eligieron
       if (newFrontFile) {
+        console.log("[v0] Subiendo imagen frontal del DNI")
         payload.dni_front_url = await uploadImage(newFrontFile, "dni-front")
         payload.dni_photo_url = payload.dni_front_url // legacy opcional
       }
       if (newBackFile) {
+        console.log("[v0] Subiendo imagen trasera del DNI")
         payload.dni_back_url = await uploadImage(newBackFile, "dni-back")
       }
+
+      console.log("[v0] Enviando payload a API:", payload)
 
       const response = await fetch("/api/clients/", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       })
-      if (!response.ok) throw new Error(await getErrorMessage(response, "Error al crear cliente"))
+
+      console.log("[v0] Respuesta de API:", response.status, response.statusText)
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error("[v0] Error de API:", errorText)
+        throw new Error(await getErrorMessage(response, "Error al crear cliente"))
+      }
+
+      const createdClient = await response.json()
+      console.log("[v0] Cliente creado exitosamente:", createdClient)
+
       toast({ title: "Éxito", description: "Cliente creado correctamente." })
       setIsCreateDialogOpen(false)
       setNewClient(initialNewClientState)
@@ -686,6 +706,7 @@ export default function ClientsPage() {
       setNewBackFile(null)
       fetchClients()
     } catch (err: any) {
+      console.error("[v0] Error final en creación de cliente:", err)
       toast({ title: "Error", description: err.message, variant: "destructive" })
     }
   }

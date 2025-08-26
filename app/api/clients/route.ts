@@ -2,32 +2,15 @@
 // Acceso directo a Supabase desde el servidor para evitar redirecciones (SSO) del backend.
 
 import { NextResponse } from "next/server"
-import { createClient } from "@supabase/supabase-js"
+import { createAdminClient } from "@/lib/supabase/server"
 
 export const dynamic = "force-dynamic"
 
-function tryGetAdminClient() {
-  const url = process.env.SUPABASE_URL
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!url || !serviceKey) return null
-  try {
-    return createClient(url, serviceKey)
-  } catch (e) {
-    console.error("Error creando cliente de Supabase:", e)
-    return null
-  }
-}
-
 export async function GET(request: Request) {
   try {
-    const supabase = tryGetAdminClient()
+    const supabase = createAdminClient()
     const { searchParams } = new URL(request.url)
     const search = (searchParams.get("search") || "").trim()
-
-    // Si no hay configuración de Supabase, devolvemos lista vacía para no romper la UI
-    if (!supabase) {
-      return NextResponse.json([], { status: 200, headers: { "x-debug": "supabase-not-configured" } })
-    }
 
     // Selección amplia para evitar errores por columnas inexistentes en distintas migraciones
     let query = supabase.from("clients").select("*").order("created_at", { ascending: false })
@@ -57,17 +40,12 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  try {
-    const supabase = tryGetAdminClient()
-    if (!supabase) {
-      // Sin Supabase, no podemos insertar. Devolvemos error claro para el formulario.
-      return NextResponse.json(
-        { detail: "Supabase no está configurado en el servidor (variables de entorno faltantes)." },
-        { status: 500 },
-      )
-    }
+  console.log("[v0] API POST /api/clients iniciada")
 
+  try {
+    const supabase = createAdminClient()
     const body = await request.json()
+    console.log("[v0] Datos recibidos en API:", body)
 
     // Campos permitidos (usa solo lo que exista en tu esquema actual)
     const insertData: Record<string, any> = {
@@ -86,19 +64,22 @@ export async function POST(request: Request) {
       dni_back_url: body.dni_back_url ?? null,
     }
 
+    console.log("[v0] Datos a insertar:", insertData)
+
     const { data, error } = await supabase.from("clients").insert(insertData).select("*").single()
 
     if (error) {
-      console.error("Supabase error en POST /api/clients:", error)
+      console.error("[v0] Error de Supabase en inserción:", error)
       return NextResponse.json(
         { detail: "Error al crear cliente en Supabase", error: { message: error.message, code: error.code } },
         { status: 500 },
       )
     }
 
+    console.log("[v0] Cliente insertado exitosamente:", data)
     return NextResponse.json(data, { status: 201 })
   } catch (err: any) {
-    console.error("❌ Error inesperado en POST /api/clients:", err)
+    console.error("[v0] Error inesperado en POST /api/clients:", err)
     return NextResponse.json({ detail: String(err) }, { status: 500 })
   }
 }

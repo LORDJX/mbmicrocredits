@@ -1,10 +1,8 @@
-import { NextResponse } from "next/server"
+import { updateSession } from "@/lib/supabase/middleware"
 import type { NextRequest } from "next/server"
 
 export async function middleware(request: NextRequest) {
-  // Permitir acceso a todas las rutas sin verificación compleja de autenticación
-  // La verificación de autenticación se maneja en cada página individual
-  return NextResponse.next()
+  return await updateSession(request)
 }
 
 export const config = {
