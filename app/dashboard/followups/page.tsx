@@ -17,9 +17,11 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { MoreHorizontal, PlusCircle } from "lucide-react"
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { MoreHorizontal, PlusCircle, Check, ChevronsUpDown } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { cn } from "@/lib/utils"
 
 interface FollowUp {
   id: string
@@ -79,6 +81,90 @@ function getClientFullName(client?: FollowUp["client"]) {
   const first = client.first_name ?? client.name ?? client.nombre ?? ""
   const last = client.last_name ?? client.surname ?? client.apellido ?? ""
   return [first, last].filter(Boolean).join(" ").trim()
+}
+
+interface ClientComboboxProps {
+  clients: Client[]
+  value: string
+  onValueChange: (value: string) => void
+  placeholder?: string
+  className?: string
+}
+
+function ClientCombobox({
+  clients,
+  value,
+  onValueChange,
+  placeholder = "Seleccionar cliente...",
+  className,
+}: ClientComboboxProps) {
+  const [open, setOpen] = useState(false)
+  const [searchValue, setSearchValue] = useState("")
+
+  const selectedClient = clients.find((client) => client.id === value)
+  const displayValue = selectedClient
+    ? `${selectedClient.first_name} ${selectedClient.last_name} (${selectedClient.dni})`
+    : placeholder
+
+  const filteredClients = clients.filter((client) => {
+    const fullName = `${client.first_name} ${client.last_name}`.toLowerCase()
+    const dni = client.dni.toLowerCase()
+    const search = searchValue.toLowerCase()
+    return fullName.includes(search) || dni.includes(search)
+  })
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          className={cn("justify-between bg-gray-700 border-gray-600 text-gray-100 hover:bg-gray-600", className)}
+        >
+          <span className="truncate">{displayValue}</span>
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-full p-0 bg-gray-700 border-gray-600">
+        <Command className="bg-gray-700">
+          <CommandInput
+            placeholder="Buscar cliente por nombre o DNI..."
+            value={searchValue}
+            onValueChange={setSearchValue}
+            className="bg-gray-700 text-gray-100 border-gray-600"
+          />
+          <CommandList>
+            <CommandEmpty className="text-gray-400 py-6 text-center text-sm">No se encontraron clientes.</CommandEmpty>
+            <CommandGroup>
+              {filteredClients.map((client) => (
+                <CommandItem
+                  key={client.id}
+                  value={client.id}
+                  onSelect={() => {
+                    onValueChange(client.id)
+                    setOpen(false)
+                    setSearchValue("")
+                  }}
+                  className="hover:bg-gray-600 text-gray-100"
+                >
+                  <Check className={cn("mr-2 h-4 w-4", value === client.id ? "opacity-100" : "opacity-0")} />
+                  <div className="flex flex-col">
+                    <span className="font-medium">
+                      {client.first_name} {client.last_name}
+                    </span>
+                    <span className="text-sm text-gray-400">
+                      DNI: {client.dni} • Código: {client.client_code}
+                    </span>
+                  </div>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  )
 }
 
 export default function FollowUpsPage() {
@@ -367,21 +453,15 @@ export default function FollowUpsPage() {
                 <Label htmlFor="client_id" className="text-right text-gray-300">
                   Cliente
                 </Label>
-                <Select
-                  value={currentFollowUp.client_id}
-                  onValueChange={(value) => setCurrentFollowUp({ ...currentFollowUp, client_id: value })}
-                >
-                  <SelectTrigger className="col-span-3 bg-gray-700 border-gray-600 text-gray-100">
-                    <SelectValue placeholder="Seleccionar cliente" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-gray-700 border-gray-600 text-gray-100">
-                    {clients.map((client) => (
-                      <SelectItem key={client.id} value={client.id} className="hover:bg-gray-600">
-                        {client.first_name} {client.last_name} ({client.dni})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="col-span-3">
+                  <ClientCombobox
+                    clients={clients}
+                    value={currentFollowUp.client_id}
+                    onValueChange={(value) => setCurrentFollowUp({ ...currentFollowUp, client_id: value })}
+                    placeholder="Seleccionar cliente"
+                    className="w-full"
+                  />
+                </div>
               </div>
               <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="date" className="text-right text-gray-300">
@@ -455,21 +535,15 @@ export default function FollowUpsPage() {
               <Label htmlFor="new_client_id" className="text-right text-gray-300">
                 Cliente
               </Label>
-              <Select
-                value={newFollowUp.client_id}
-                onValueChange={(value) => setNewFollowUp({ ...newFollowUp, client_id: value })}
-              >
-                <SelectTrigger className="col-span-3 bg-gray-700 border-gray-600 text-gray-100">
-                  <SelectValue placeholder="Seleccionar cliente" />
-                </SelectTrigger>
-                <SelectContent className="bg-gray-700 border-gray-600 text-gray-100">
-                  {clients.map((client) => (
-                    <SelectItem key={client.id} value={client.id} className="hover:bg-gray-600">
-                      {client.first_name} {client.last_name} ({client.dni})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="col-span-3">
+                <ClientCombobox
+                  clients={clients}
+                  value={newFollowUp.client_id}
+                  onValueChange={(value) => setNewFollowUp({ ...newFollowUp, client_id: value })}
+                  placeholder="Seleccionar cliente"
+                  className="w-full"
+                />
+              </div>
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="new_date" className="text-right text-gray-300">
