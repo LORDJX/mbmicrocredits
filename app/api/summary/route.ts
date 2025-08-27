@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
       throw clientsError
     }
 
-    const { data: partners, error: partnersError } = await supabase.from("partners").select("*").eq("status", "activo")
+    const { data: partners, error: partnersError } = await supabase.from("partners").select("*").is("deleted_at", null)
 
     if (partnersError) {
       console.error("[v0] Error al obtener socios:", partnersError)
