@@ -49,27 +49,46 @@ export async function GET(request: NextRequest) {
     loans?.forEach((loan) => {
       let startDate = new Date(loan.start_date)
 
-      // Si la fecha de inicio es muy antigua, ajustarla para generar cuotas recientes
-      const monthsAgo = new Date()
-      monthsAgo.setMonth(monthsAgo.getMonth() - 2)
+      // Si la fecha de inicio es muy antigua, calcular una fecha que genere cuotas distribuidas
+      const threeMonthsAgo = new Date()
+      threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3)
 
-      if (startDate < monthsAgo) {
-        startDate = monthsAgo
+      // Si el préstamo es muy antiguo, calcular una fecha de inicio que genere cuotas actuales
+      if (startDate < threeMonthsAgo) {
+        const intervalDays = loan.loan_type === "Semanal" ? 7 : loan.loan_type === "Quincenal" ? 15 : 30
+        const totalDays = intervalDays * loan.installments
+
+        // Calcular fecha de inicio para que algunas cuotas estén en el pasado, presente y futuro
+        const daysBack = Math.floor(totalDays * 0.6) // 60% de las cuotas en el pasado
+        startDate = new Date(today)
+        startDate.setDate(today.getDate() - daysBack)
       }
 
       const intervalDays = loan.loan_type === "Semanal" ? 7 : loan.loan_type === "Quincenal" ? 15 : 30
 
-      console.log("[v0] Processing loan:", loan.loan_code, "Start date:", startDate.toISOString().split("T")[0])
+      console.log(
+        "[v0] Processing loan:",
+        loan.loan_code,
+        "Start date:",
+        startDate.toISOString().split("T")[0],
+        "Interval:",
+        intervalDays,
+        "days",
+      )
 
       for (let i = 0; i < loan.installments; i++) {
         const dueDate = new Date(startDate)
         dueDate.setDate(startDate.getDate() + intervalDays * (i + 1))
 
         let status = "pending"
-        if (dueDate < today) {
+        const daysDiff = Math.floor((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+
+        if (daysDiff < 0) {
           status = "overdue"
-        } else if (dueDate.toDateString() === today.toDateString()) {
+        } else if (daysDiff === 0) {
           status = "due_today"
+        } else {
+          status = "pending"
         }
 
         const installment = {
@@ -85,6 +104,13 @@ export async function GET(request: NextRequest) {
         }
 
         allInstallments.push(installment)
+
+        if (i < 3 || i >= loan.installments - 3) {
+          // Log primeras y últimas 3 cuotas
+          console.log(
+            `[v0] Installment ${i + 1}/${loan.installments} - Due: ${installment.due_date}, Status: ${status}, Days diff: ${daysDiff}`,
+          )
+        }
       }
     })
 
@@ -129,12 +155,23 @@ export async function GET(request: NextRequest) {
 
     console.log("[v0] Total paid installments found:", paidInstallmentIds.size)
 
-    const todayReceipts = allReceipts?.filter((receipt) => receipt.receipt_date === todayStr) || []
+    console.log("[v0] Filtering installments...")
+    console.log("[v0] Today string:", todayStr)
+    console.log("[v0] Start of month:", startOfMonth.toISOString().split("T")[0])
+    console.log("[v0] End of month:", endOfMonth.toISOString().split("T")[0])
 
     const todayInstallments = allInstallments.filter((inst) => {
       const isDueToday = inst.due_date === todayStr || inst.status === "due_today"
       const isNotPaid = !paidInstallmentIds.has(`${inst.loan_code}-${inst.installment_number}`)
-      return isDueToday && isNotPaid
+      const result = isDueToday && isNotPaid
+
+      if (isDueToday) {
+        console.log(
+          `[v0] Today installment: ${inst.loan_code}-${inst.installment_number}, Due: ${inst.due_date}, Paid: ${!isNotPaid}, Include: ${result}`,
+        )
+      }
+
+      return result
     })
 
     const overdueInstallments = allInstallments.filter((inst) => {
@@ -147,7 +184,15 @@ export async function GET(request: NextRequest) {
       const dueDate = new Date(inst.due_date)
       const isInMonth = dueDate >= startOfMonth && dueDate <= endOfMonth
       const isNotPaid = !paidInstallmentIds.has(`${inst.loan_code}-${inst.installment_number}`)
-      return isInMonth && isNotPaid
+      const result = isInMonth && isNotPaid
+
+      if (isInMonth && inst.status !== "overdue") {
+        console.log(
+          `[v0] Month installment: ${inst.loan_code}-${inst.installment_number}, Due: ${inst.due_date}, Paid: ${!isNotPaid}, Include: ${result}`,
+        )
+      }
+
+      return result
     })
 
     console.log("[v0] Today installments:", todayInstallments.length)
@@ -160,7 +205,7 @@ export async function GET(request: NextRequest) {
         return receiptDate >= startOfMonth && receiptDate <= endOfMonth
       }) || []
 
-    const totalReceivedToday = todayReceipts.reduce((sum, r) => sum + (r.total_amount || 0), 0)
+    const totalReceivedToday = todayInstallments.reduce((sum, r) => sum + (r.amount || 0), 0)
     const totalReceivedMonth = monthReceipts.reduce((sum, r) => sum + (r.total_amount || 0), 0)
 
     // Calcular resumen
@@ -179,7 +224,7 @@ export async function GET(request: NextRequest) {
       today: todayInstallments,
       overdue: overdueInstallments,
       month: monthInstallments,
-      todayReceipts: todayReceipts,
+      todayReceipts: allReceipts?.filter((receipt) => receipt.receipt_date === todayStr) || [],
       summary,
     })
   } catch (error) {
