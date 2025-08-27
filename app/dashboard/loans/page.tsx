@@ -384,6 +384,10 @@ export default function LoansPage() {
                 <span class="value">${clientName}</span>
               </div>
               <div class="info-item">
+                <span class="label">TIPO DE PRÉSTAMO:</span>
+                <span class="value">${loan.loan_type || "No especificado"}</span>
+              </div>
+              <div class="info-item">
                 <span class="label">MONTO PRESTADO:</span>
                 <span class="value">$${loan.amount.toFixed(2)}</span>
               </div>

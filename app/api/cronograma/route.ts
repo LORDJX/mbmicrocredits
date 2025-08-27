@@ -199,14 +199,19 @@ export async function GET(request: NextRequest) {
     console.log("[v0] Overdue installments:", overdueInstallments.length)
     console.log("[v0] Month installments:", monthInstallments.length)
 
+    const todayReceipts = allReceipts?.filter((receipt) => receipt.receipt_date === todayStr) || []
+    const totalReceivedToday = todayReceipts.reduce((sum, r) => sum + (r.total_amount || 0), 0)
+
     const monthReceipts =
       allReceipts?.filter((r) => {
         const receiptDate = new Date(r.receipt_date)
         return receiptDate >= startOfMonth && receiptDate <= endOfMonth
       }) || []
 
-    const totalReceivedToday = todayInstallments.reduce((sum, r) => sum + (r.amount || 0), 0)
     const totalReceivedMonth = monthReceipts.reduce((sum, r) => sum + (r.total_amount || 0), 0)
+
+    console.log("[v0] Today receipts found:", todayReceipts.length, "Total amount:", totalReceivedToday)
+    console.log("[v0] Month receipts found:", monthReceipts.length, "Total amount:", totalReceivedMonth)
 
     // Calcular resumen
     const summary = {
@@ -224,7 +229,7 @@ export async function GET(request: NextRequest) {
       today: todayInstallments,
       overdue: overdueInstallments,
       month: monthInstallments,
-      todayReceipts: allReceipts?.filter((receipt) => receipt.receipt_date === todayStr) || [],
+      todayReceipts: todayReceipts,
       summary,
     })
   } catch (error) {
