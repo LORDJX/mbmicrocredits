@@ -28,7 +28,6 @@ const baseSelect = `
   status,
   observations,
   dni_photo_url,
-  dni_front_url,
   dni_back_url,
   created_at,
   updated_at,
