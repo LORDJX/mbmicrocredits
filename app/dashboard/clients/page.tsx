@@ -17,7 +17,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { MoreHorizontal, Search, PlusCircle, AlertCircle, Camera, X } from "lucide-react"
+import { MoreHorizontal, Search, PlusCircle, AlertCircle, Camera, X, FileImage } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
@@ -350,255 +350,218 @@ export default function ClientsPage() {
   }
 
   const handlePrintClient = (client: Client) => {
-    const printWindow = window.open("", "_blank")
-    if (!printWindow) return
+    try {
+      const printWindow = window.open("", "_blank")
+      if (!printWindow) {
+        alert("No se pudo abrir la ventana de impresión. Verifica que no esté bloqueada por el navegador.")
+        return
+      }
 
-    const referredByName = getReferredByName(client.referred_by)
+      const referredByName = getReferredByName(client.referred_by)
 
-    const printContent = `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>Detalle del Cliente - ${client.first_name} ${client.last_name}</title>
-          <style>
-            * { margin: 0; padding: 0; box-sizing: border-box; }
-            body { 
-              font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-              line-height: 1.6; 
-              color: #333; 
-              background: white;
-              padding: 40px;
-            }
-            .header { 
-              text-align: center; 
-              margin-bottom: 40px; 
-              border-bottom: 3px solid #2563eb;
-              padding-bottom: 20px;
-            }
-            .logo { 
-              width: 80px; 
-              height: 80px; 
-              margin: 0 auto 15px; 
-              background: linear-gradient(135deg, #f59e0b, #d97706);
-              border-radius: 12px;
-              display: flex;
-              align-items: center;
-              justify-content: center;
-              font-weight: bold;
-              font-size: 24px;
-              color: white;
-              text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
-            }
-            .company-name { 
-              font-size: 28px; 
-              font-weight: bold; 
-              color: #1e40af; 
-              margin-bottom: 5px;
-            }
-            .document-title { 
-              font-size: 20px; 
-              color: #64748b; 
-              font-weight: 500;
-            }
-            .client-info { 
-              background: #f8fafc; 
-              border-radius: 12px; 
-              padding: 30px; 
-              margin-bottom: 30px;
-              border-left: 5px solid #2563eb;
-            }
-            .info-grid { 
-              display: grid; 
-              grid-template-columns: repeat(2, 1fr); 
-              gap: 20px; 
-              margin-bottom: 20px;
-            }
-            .info-item { 
-              background: white; 
-              padding: 15px; 
-              border-radius: 8px; 
-              border: 1px solid #e2e8f0;
-            }
-            .info-label { 
-              font-weight: 600; 
-              color: #475569; 
-              font-size: 14px; 
-              margin-bottom: 5px;
-              text-transform: uppercase;
-              letter-spacing: 0.5px;
-            }
-            .info-value { 
-              font-size: 16px; 
-              color: #1e293b; 
-              font-weight: 500;
-            }
-            .observations { 
-              grid-column: span 2; 
-              background: white; 
-              padding: 20px; 
-              border-radius: 8px; 
-              border: 1px solid #e2e8f0;
-            }
-            .observations-text { 
-              background: #f1f5f9; 
-              padding: 15px; 
-              border-radius: 6px; 
-              font-style: italic; 
-              color: #475569;
-              min-height: 60px;
-            }
-            .photos-section { 
-              margin-top: 30px; 
-            }
-            .photo-container { 
-              text-align: center; 
-              background: white; 
-              padding: 20px; 
-              border-radius: 12px; 
-              border: 2px solid #e2e8f0;
-              margin-top: 20px;
-            }
-            .photo-title { 
-              font-weight: 600; 
-              color: #1e40af; 
-              margin-bottom: 15px; 
-              font-size: 16px;
-            }
-            .photo-img { 
-              max-width: 100%; 
-              height: 300px; 
-              object-fit: cover; 
-              border-radius: 8px; 
-              border: 1px solid #d1d5db;
-              box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            }
-            .no-photo { 
-              height: 200px; 
-              background: #f3f4f6; 
-              border: 2px dashed #d1d5db; 
-              border-radius: 8px; 
-              display: flex; 
-              align-items: center; 
-              justify-content: center; 
-              color: #9ca3af; 
-              font-style: italic;
-            }
-            .footer { 
-              margin-top: 40px; 
-              text-align: center; 
-              color: #64748b; 
-              font-size: 14px; 
-              border-top: 1px solid #e2e8f0; 
-              padding-top: 20px;
-            }
-            .status-badge { 
-              display: inline-block; 
-              padding: 6px 12px; 
-              border-radius: 20px; 
-              font-size: 12px; 
-              font-weight: 600; 
-              text-transform: uppercase; 
-              letter-spacing: 0.5px;
-            }
-            .status-active { 
-              background: #dcfce7; 
-              color: #166534; 
-            }
-            .status-inactive { 
-              background: #fee2e2; 
-              color: #991b1b; 
-            }
-            @media print {
-              body { padding: 20px; }
-              .photo-img { height: 250px; }
-            }
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <div class="logo">BM</div>
-            <div class="company-name">BM MICROCRÉDITOS</div>
-            <div class="document-title">Detalle del Cliente</div>
-          </div>
+      const printContent = `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>Detalle del Cliente - ${client.first_name} ${client.last_name}</title>
+            <meta charset="UTF-8">
+            <style>
+              * { margin: 0; padding: 0; box-sizing: border-box; }
+              body { 
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+                line-height: 1.6; 
+                color: #333; 
+                background: white;
+                padding: 20px;
+                max-width: 800px;
+                margin: 0 auto;
+              }
+              .header { 
+                text-align: center; 
+                margin-bottom: 30px; 
+                border-bottom: 3px solid #1e40af; 
+                padding-bottom: 20px; 
+              }
+              .header h1 { 
+                color: #1e40af; 
+                font-size: 28px; 
+                margin-bottom: 10px; 
+              }
+              .header p { 
+                color: #666; 
+                font-size: 16px; 
+              }
+              .section { 
+                margin-bottom: 25px; 
+                padding: 20px; 
+                border: 1px solid #e5e7eb; 
+                border-radius: 8px; 
+                background: #f9fafb; 
+              }
+              .section h3 { 
+                color: #1e40af; 
+                font-size: 18px; 
+                margin-bottom: 15px; 
+                border-bottom: 1px solid #d1d5db; 
+                padding-bottom: 5px; 
+              }
+              .info-grid { 
+                display: grid; 
+                grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); 
+                gap: 15px; 
+              }
+              .info-item { 
+                display: flex; 
+                flex-direction: column; 
+              }
+              .info-label { 
+                font-weight: 600; 
+                color: #374151; 
+                font-size: 14px; 
+                margin-bottom: 5px; 
+              }
+              .info-value { 
+                color: #111827; 
+                font-size: 16px; 
+              }
+              .photo-container { 
+                text-align: center; 
+                margin-top: 15px; 
+              }
+              .photo-title { 
+                font-weight: 600; 
+                margin-bottom: 10px; 
+                color: #374151; 
+              }
+              .photo-img { 
+                max-width: 100%; 
+                max-height: 300px; 
+                border: 2px solid #d1d5db; 
+                border-radius: 8px; 
+                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); 
+              }
+              .no-photo { 
+                padding: 40px; 
+                background: #f3f4f6; 
+                border: 2px dashed #d1d5db; 
+                border-radius: 8px; 
+                color: #6b7280; 
+                font-style: italic; 
+              }
+              .footer { 
+                margin-top: 40px; 
+                text-align: center; 
+                font-size: 12px; 
+                color: #6b7280; 
+                border-top: 1px solid #e5e7eb; 
+                padding-top: 20px; 
+              }
+              @media print {
+                body { padding: 10px; }
+                .section { break-inside: avoid; }
+              }
+            </style>
+          </head>
+          <body>
+            <div class="header">
+              <h1>Detalle del Cliente</h1>
+              <p>BM Microcréditos - Sistema de Gestión</p>
+            </div>
 
-          <div class="client-info">
-            <div class="info-grid">
-              <div class="info-item">
-                <div class="info-label">Código de Cliente</div>
-                <div class="info-value">${client.client_code}</div>
-              </div>
-              <div class="info-item">
-                <div class="info-label">Estado</div>
-                <div class="info-value">
-                  <span class="status-badge ${client.deleted_at ? "status-inactive" : "status-active"}">
-                    ${client.deleted_at ? "Inactivo" : "Activo"}
-                  </span>
+            <div class="section">
+              <h3>Información Personal</h3>
+              <div class="info-grid">
+                <div class="info-item">
+                  <span class="info-label">Código de Cliente</span>
+                  <span class="info-value">${client.client_code || "N/A"}</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">Nombre Completo</span>
+                  <span class="info-value">${client.first_name} ${client.last_name}</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">DNI</span>
+                  <span class="info-value">${client.dni}</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">Teléfono</span>
+                  <span class="info-value">${client.phone || "No especificado"}</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">Email</span>
+                  <span class="info-value">${client.email || "No especificado"}</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">Dirección</span>
+                  <span class="info-value">${client.address || "No especificada"}</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">Estado</span>
+                  <span class="info-value">${client.status || "Activo"}</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">Referido por</span>
+                  <span class="info-value">${referredByName || "No especificado"}</span>
                 </div>
               </div>
-              <div class="info-item">
-                <div class="info-label">Nombre Completo</div>
-                <div class="info-value">${client.first_name} ${client.last_name}</div>
-              </div>
-              <div class="info-item">
-                <div class="info-label">DNI</div>
-                <div class="info-value">${client.dni || "No especificado"}</div>
-              </div>
-              <div class="info-item">
-                <div class="info-label">Teléfono</div>
-                <div class="info-value">${client.phone || "No especificado"}</div>
-              </div>
-              <div class="info-item">
-                <div class="info-label">Email</div>
-                <div class="info-value">${client.email || "No especificado"}</div>
-              </div>
-              <div class="info-item">
-                <div class="info-label">Dirección</div>
-                <div class="info-value">${client.address || "No especificada"}</div>
-              </div>
-              <div class="info-item">
-                <div class="info-label">Referido por</div>
-                <div class="info-value">${referredByName}</div>
-              </div>
-              <div class="observations">
-                <div class="info-label">Observaciones</div>
-                <div class="observations-text">${client.observations || "Sin observaciones registradas"}</div>
-              </div>
-            </div>
-          </div>
-
-          <div class="photos-section">
-            <h3 style="color: #1e40af; font-size: 20px; margin-bottom: 10px;">Documentación DNI</h3>
-            <div class="photo-container">
-              <div class="photo-title">Documento Nacional de Identidad</div>
               ${
-                client.dni_photo_url
-                  ? `<img src="${client.dni_photo_url}" alt="DNI" class="photo-img" />`
-                  : '<div class="no-photo">Sin imagen del DNI</div>'
+                client.observations
+                  ? `
+                <div style="margin-top: 15px;">
+                  <span class="info-label">Observaciones</span>
+                  <div style="margin-top: 5px; padding: 10px; background: white; border-radius: 4px; border: 1px solid #d1d5db;">
+                    ${client.observations}
+                  </div>
+                </div>
+              `
+                  : ""
               }
             </div>
-          </div>
 
-          <div class="footer">
-            <p>Documento generado el ${new Date().toLocaleDateString("es-ES", {
-              year: "numeric",
-              month: "long",
-              day: "numeric",
-              hour: "2-digit",
-              minute: "2-digit",
-            })}</p>
-            <p>BM Microcréditos - Sistema de Gestión de Clientes</p>
-          </div>
-        </body>
-      </html>
-    `
+            <div class="section">
+              <h3>Documentación DNI</h3>
+              <div class="photo-container">
+                <div class="photo-title">Documento Nacional de Identidad</div>
+                ${
+                  client.dni_photo_url
+                    ? `<img src="${client.dni_photo_url}" alt="DNI" class="photo-img" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';" />
+                       <div class="no-photo" style="display: none;">Error al cargar la imagen del DNI</div>`
+                    : '<div class="no-photo">Sin imagen del DNI</div>'
+                }
+              </div>
+            </div>
 
-    printWindow.document.write(printContent)
-    printWindow.document.close()
-    printWindow.focus()
-    setTimeout(() => {
-      printWindow.print()
-      printWindow.close()
-    }, 500)
+            <div class="footer">
+              <p>Documento generado el ${new Date().toLocaleDateString("es-ES", {
+                year: "numeric",
+                month: "long",
+                day: "numeric",
+                hour: "2-digit",
+                minute: "2-digit",
+              })}</p>
+              <p>BM Microcréditos - Sistema de Gestión de Clientes</p>
+            </div>
+          </body>
+        </html>
+      `
+
+      printWindow.document.write(printContent)
+      printWindow.document.close()
+      printWindow.focus()
+
+      // Esperar a que se cargue el contenido antes de imprimir
+      setTimeout(() => {
+        try {
+          printWindow.print()
+        } catch (error) {
+          console.error("[v0] Error al imprimir:", error)
+          alert("Error al imprimir el documento. Intenta nuevamente.")
+        }
+      }, 1000)
+    } catch (error) {
+      console.error("[v0] Error en handlePrintClient:", error)
+      alert("Error al generar el documento para impresión.")
+    }
   }
 
   const handleSaveClient = async (e: React.FormEvent) => {
@@ -991,24 +954,52 @@ export default function ClientsPage() {
                 </div>
               </div>
 
-              {/* Fotos del DNI */}
               <div className="space-y-4">
                 <Label className="text-lg font-semibold text-primary">Documentación</Label>
-                <div className="space-y-2">
-                  <Label className="text-sm font-semibold text-muted-foreground">DNI - Documento</Label>
-                  <div className="border-2 border-dashed border-border rounded-lg p-4 text-center">
-                    {currentClient.dni_photo_url ? (
-                      <img
-                        src={currentClient.dni_photo_url || "/placeholder.svg"}
-                        alt="DNI"
-                        className="max-w-full h-48 object-cover rounded mx-auto border cursor-pointer"
-                        onClick={() => window.open(currentClient.dni_photo_url!, "_blank")}
-                      />
-                    ) : (
-                      <div className="h-48 flex items-center justify-center text-muted-foreground">
-                        Sin imagen del DNI
-                      </div>
-                    )}
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label className="text-sm font-semibold text-muted-foreground">DNI - Documento</Label>
+                    <div className="border-2 border-dashed border-border rounded-lg p-4 text-center">
+                      {currentClient.dni_photo_url ? (
+                        <div className="space-y-2">
+                          <img
+                            src={currentClient.dni_photo_url || "/placeholder.svg"}
+                            alt="DNI"
+                            className="max-w-full h-48 object-cover rounded mx-auto border cursor-pointer hover:opacity-80 transition-opacity"
+                            onClick={() => window.open(currentClient.dni_photo_url!, "_blank")}
+                            onError={(e) => {
+                              console.error("[v0] Error al cargar imagen:", currentClient.dni_photo_url)
+                              e.currentTarget.style.display = "none"
+                              e.currentTarget.nextElementSibling?.classList.remove("hidden")
+                            }}
+                          />
+                          <div className="hidden h-48 flex items-center justify-center text-muted-foreground">
+                            <div className="text-center">
+                              <AlertCircle className="mx-auto h-8 w-8 mb-2" />
+                              <p>Error al cargar la imagen</p>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="mt-2 bg-transparent"
+                                onClick={() => window.open(currentClient.dni_photo_url!, "_blank")}
+                              >
+                                Abrir en nueva ventana
+                              </Button>
+                            </div>
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            Haz clic en la imagen para verla en tamaño completo
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="h-48 flex items-center justify-center text-muted-foreground">
+                          <div className="text-center">
+                            <FileImage className="mx-auto h-12 w-12 mb-2 opacity-50" />
+                            <p>Sin imagen del DNI</p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1245,7 +1236,16 @@ export default function ClientsPage() {
                           src={URL.createObjectURL(newFrontFile) || "/placeholder.svg"}
                           alt="Preview DNI Frente"
                           className="max-w-full h-32 object-cover rounded mx-auto"
+                          onError={(e) => {
+                            console.error("[v0] Error al mostrar preview:", newFrontFile.name)
+                            e.currentTarget.style.display = "none"
+                            e.currentTarget.nextElementSibling?.classList.remove("hidden")
+                          }}
                         />
+                        <div className="hidden text-center text-muted-foreground p-4">
+                          <AlertCircle className="mx-auto h-6 w-6 mb-1" />
+                          <p className="text-xs">Error al mostrar preview</p>
+                        </div>
                       </div>
                     </div>
                   )}
@@ -1284,7 +1284,16 @@ export default function ClientsPage() {
                           src={URL.createObjectURL(newBackFile) || "/placeholder.svg"}
                           alt="Preview DNI Reverso"
                           className="max-w-full h-32 object-cover rounded mx-auto"
+                          onError={(e) => {
+                            console.error("[v0] Error al mostrar preview:", newBackFile.name)
+                            e.currentTarget.style.display = "none"
+                            e.currentTarget.nextElementSibling?.classList.remove("hidden")
+                          }}
                         />
+                        <div className="hidden text-center text-muted-foreground p-4">
+                          <AlertCircle className="mx-auto h-6 w-6 mb-1" />
+                          <p className="text-xs">Error al mostrar preview</p>
+                        </div>
                       </div>
                     </div>
                   )}
