@@ -369,7 +369,7 @@ export default function ClientsPage() {
             <style>
               @page {
                 size: A4;
-                margin: 15mm;
+                margin: 12mm;
               }
               * { 
                 margin: 0; 
@@ -378,8 +378,8 @@ export default function ClientsPage() {
               }
               body { 
                 font-family: 'Arial', sans-serif; 
-                font-size: 11pt;
-                line-height: 1.4; 
+                font-size: 10pt;
+                line-height: 1.3; 
                 color: #2d3748; 
                 background: white;
                 height: 100vh;
@@ -389,53 +389,47 @@ export default function ClientsPage() {
               .header { 
                 background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
                 color: white;
-                padding: 20px;
+                padding: 12px;
                 text-align: center;
-                border-radius: 8px;
-                margin-bottom: 20px;
-                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+                border-radius: 6px;
+                margin-bottom: 15px;
               }
               .header h1 { 
-                font-size: 24pt; 
+                font-size: 18pt; 
                 font-weight: bold;
-                margin-bottom: 5px;
-                text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+                margin-bottom: 3px;
               }
               .header .subtitle { 
-                font-size: 12pt; 
+                font-size: 10pt; 
                 opacity: 0.9;
               }
               .content {
                 flex: 1;
                 display: grid;
                 grid-template-columns: 1fr 1fr;
-                gap: 20px;
-                margin-bottom: 20px;
+                gap: 12px;
+                margin-bottom: 15px;
               }
               .section { 
                 background: #f8fafc;
                 border: 1px solid #e2e8f0;
-                border-radius: 8px;
-                padding: 15px;
+                border-radius: 6px;
+                padding: 10px;
                 break-inside: avoid;
               }
               .section-title { 
                 color: #4a5568;
-                font-size: 14pt;
+                font-size: 11pt;
                 font-weight: bold;
-                margin-bottom: 12px;
-                padding-bottom: 6px;
+                margin-bottom: 8px;
+                padding-bottom: 4px;
                 border-bottom: 2px solid #667eea;
-                display: flex;
-                align-items: center;
-                gap: 8px;
               }
               .info-row { 
                 display: flex;
                 justify-content: space-between;
-                align-items: flex-start;
-                margin-bottom: 8px;
-                padding: 6px 0;
+                margin-bottom: 5px;
+                padding: 3px 0;
                 border-bottom: 1px solid #e2e8f0;
               }
               .info-row:last-child {
@@ -445,13 +439,12 @@ export default function ClientsPage() {
               .info-label { 
                 font-weight: 600; 
                 color: #4a5568;
-                font-size: 10pt;
-                min-width: 100px;
-                flex-shrink: 0;
+                font-size: 9pt;
+                min-width: 80px;
               }
               .info-value { 
                 color: #2d3748;
-                font-size: 11pt;
+                font-size: 9pt;
                 text-align: right;
                 word-break: break-word;
               }
@@ -459,60 +452,69 @@ export default function ClientsPage() {
                 grid-column: 1 / -1;
               }
               .photo-section { 
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 10px;
                 text-align: center;
-                padding: 20px;
+                padding: 10px;
+              }
+              .photo-container {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+              }
+              .photo-title {
+                font-size: 9pt;
+                font-weight: bold;
+                color: #4a5568;
+                margin-bottom: 5px;
               }
               .photo-img { 
                 max-width: 100%;
-                max-height: 200px;
-                border: 2px solid #e2e8f0;
-                border-radius: 8px;
-                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+                max-height: 120px;
+                border: 1px solid #e2e8f0;
+                border-radius: 4px;
+                object-fit: cover;
               }
               .no-photo { 
-                padding: 30px;
+                padding: 15px;
                 background: #f1f5f9;
-                border: 2px dashed #cbd5e0;
-                border-radius: 8px;
+                border: 1px dashed #cbd5e0;
+                border-radius: 4px;
                 color: #718096;
                 font-style: italic;
-                font-size: 10pt;
+                font-size: 8pt;
               }
               .observations {
                 background: white;
                 border: 1px solid #e2e8f0;
-                border-radius: 6px;
-                padding: 12px;
-                margin-top: 8px;
-                font-size: 10pt;
-                line-height: 1.5;
+                border-radius: 4px;
+                padding: 8px;
+                margin-top: 5px;
+                font-size: 9pt;
+                line-height: 1.4;
                 color: #4a5568;
               }
               .footer { 
                 margin-top: auto;
                 text-align: center;
-                font-size: 9pt;
+                font-size: 8pt;
                 color: #718096;
                 border-top: 1px solid #e2e8f0;
-                padding-top: 15px;
+                padding-top: 10px;
                 background: #f8fafc;
-                border-radius: 6px;
-                padding: 15px;
+                border-radius: 4px;
+                padding: 10px;
               }
               .status-badge {
                 display: inline-block;
-                padding: 4px 12px;
-                border-radius: 20px;
-                font-size: 9pt;
+                padding: 2px 8px;
+                border-radius: 12px;
+                font-size: 8pt;
                 font-weight: bold;
                 text-transform: uppercase;
                 background: #48bb78;
                 color: white;
-              }
-              .icon {
-                width: 16px;
-                height: 16px;
-                fill: currentColor;
               }
               @media print {
                 body { 
@@ -534,12 +536,7 @@ export default function ClientsPage() {
 
             <div class="content">
               <div class="section">
-                <div class="section-title">
-                  <svg class="icon" viewBox="0 0 24 24">
-                    <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
-                  </svg>
-                  Datos Personales
-                </div>
+                <div class="section-title">Datos Personales</div>
                 <div class="info-row">
                   <span class="info-label">Código:</span>
                   <span class="info-value">${client.client_code || "N/A"}</span>
@@ -565,12 +562,7 @@ export default function ClientsPage() {
               </div>
 
               <div class="section">
-                <div class="section-title">
-                  <svg class="icon" viewBox="0 0 24 24">
-                    <path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/>
-                  </svg>
-                  Contacto
-                </div>
+                <div class="section-title">Contacto</div>
                 <div class="info-row">
                   <span class="info-label">Teléfono:</span>
                   <span class="info-value">${client.phone || "No especificado"}</span>
@@ -593,12 +585,7 @@ export default function ClientsPage() {
                 client.observations
                   ? `
                 <div class="section full-width">
-                  <div class="section-title">
-                    <svg class="icon" viewBox="0 0 24 24">
-                      <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
-                    </svg>
-                    Observaciones
-                  </div>
+                  <div class="section-title">Observaciones</div>
                   <div class="observations">${client.observations}</div>
                 </div>
               `
@@ -606,32 +593,39 @@ export default function ClientsPage() {
               }
 
               <div class="section full-width">
-                <div class="section-title">
-                  <svg class="icon" viewBox="0 0 24 24">
-                    <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                  </svg>
-                  Documentación
-                </div>
+                <div class="section-title">Documentación</div>
                 <div class="photo-section">
-                  ${
-                    client.dni_photo_url
-                      ? `<img src="${client.dni_photo_url}" alt="DNI" class="photo-img" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';" />
-                     <div class="no-photo" style="display: none;">Error al cargar imagen del DNI</div>`
-                      : '<div class="no-photo">Sin imagen del DNI disponible</div>'
-                  }
+                  <div class="photo-container">
+                    <div class="photo-title">DNI Frente</div>
+                    ${
+                      client.dni_photo_url
+                        ? `<img src="${client.dni_photo_url}" alt="DNI Frente" class="photo-img" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';" />
+                       <div class="no-photo" style="display: none;">Error al cargar imagen</div>`
+                        : '<div class="no-photo">Sin imagen disponible</div>'
+                    }
+                  </div>
+                  <div class="photo-container">
+                    <div class="photo-title">DNI Reverso</div>
+                    ${
+                      client.dni_back_url
+                        ? `<img src="${client.dni_back_url}" alt="DNI Reverso" class="photo-img" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';" />
+                       <div class="no-photo" style="display: none;">Error al cargar imagen</div>`
+                        : '<div class="no-photo">Sin imagen disponible</div>'
+                    }
+                  </div>
                 </div>
               </div>
             </div>
 
             <div class="footer">
-              <p><strong>Documento generado:</strong> ${new Date().toLocaleDateString("es-ES", {
+              <p><strong>Generado:</strong> ${new Date().toLocaleDateString("es-ES", {
                 year: "numeric",
                 month: "long",
                 day: "numeric",
                 hour: "2-digit",
                 minute: "2-digit",
               })}</p>
-              <p>BM Microcréditos - Sistema de Gestión de Clientes v2.0</p>
+              <p>BM Microcréditos - Sistema de Gestión v2.0</p>
             </div>
           </body>
         </html>
