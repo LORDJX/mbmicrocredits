@@ -341,9 +341,19 @@ export default function ClientsPage() {
     setIsDetailDialogOpen(true)
   }
 
+  const getReferredByName = (referredById: string | null): string => {
+    if (!referredById) return "No especificado"
+    const referredClient = clients.find((c) => c.id === referredById)
+    return referredClient
+      ? `${referredClient.first_name} ${referredClient.last_name} (${referredClient.client_code})`
+      : "Cliente no encontrado"
+  }
+
   const handlePrintClient = (client: Client) => {
     const printWindow = window.open("", "_blank")
     if (!printWindow) return
+
+    const referredByName = getReferredByName(client.referred_by)
 
     const printContent = `
       <!DOCTYPE html>
@@ -547,7 +557,7 @@ export default function ClientsPage() {
               </div>
               <div class="info-item">
                 <div class="info-label">Referido por</div>
-                <div class="info-value">${client.referred_by || "No especificado"}</div>
+                <div class="info-value">${referredByName}</div>
               </div>
               <div class="observations">
                 <div class="info-label">Observaciones</div>
@@ -733,24 +743,29 @@ export default function ClientsPage() {
   const handleCameraCapture = (file: File) => {
     console.log("[v0] Imagen capturada desde cámara:", file.name, file.size)
 
-    if (cameraOpen.type === "new-front") {
-      setNewFrontFile(file)
-      console.log("[v0] Imagen frontal asignada para nuevo cliente")
-    } else if (cameraOpen.type === "new-back") {
-      setNewBackFile(file)
-      console.log("[v0] Imagen trasera asignada para nuevo cliente")
-    } else if (cameraOpen.type === "edit-front") {
-      setEditFrontFile(file)
-      console.log("[v0] Imagen frontal asignada para edición")
-    } else if (cameraOpen.type === "edit-back") {
-      setEditBackFile(file)
-      console.log("[v0] Imagen trasera asignada para edición")
-    }
+    try {
+      if (cameraOpen.type === "new-front") {
+        setNewFrontFile(file)
+        console.log("[v0] Imagen frontal asignada para nuevo cliente")
+      } else if (cameraOpen.type === "new-back") {
+        setNewBackFile(file)
+        console.log("[v0] Imagen trasera asignada para nuevo cliente")
+      } else if (cameraOpen.type === "edit-front") {
+        setEditFrontFile(file)
+        console.log("[v0] Imagen frontal asignada para edición")
+      } else if (cameraOpen.type === "edit-back") {
+        setEditBackFile(file)
+        console.log("[v0] Imagen trasera asignada para edición")
+      }
 
-    setCameraOpen({ isOpen: false, type: "new-front", title: "" })
+      setCameraOpen({ isOpen: false, type: "new-front", title: "" })
+    } catch (error) {
+      console.error("[v0] Error al manejar captura de cámara:", error)
+    }
   }
 
   const openCamera = (type: typeof cameraOpen.type, title: string) => {
+    console.log("[v0] Abriendo cámara:", type, title)
     setCameraOpen({ isOpen: true, type, title })
   }
 
@@ -827,7 +842,7 @@ export default function ClientsPage() {
                   <TableHead>DNI</TableHead>
                   <TableHead>Teléfono</TableHead>
                   <TableHead>Email</TableHead>
-                  <TableHead>Referido por</TableHead>
+                  <TableHead className="text-center">Referido por</TableHead>
                   <TableHead>Estado</TableHead>
                   <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
@@ -842,7 +857,7 @@ export default function ClientsPage() {
                     <TableCell>{client.dni || "N/A"}</TableCell>
                     <TableCell>{client.phone || "N/A"}</TableCell>
                     <TableCell>{client.email || "N/A"}</TableCell>
-                    <TableCell>{client.referred_by || "—"}</TableCell>
+                    <TableCell className="text-center">{getReferredByName(client.referred_by)}</TableCell>
                     <TableCell>
                       <span
                         className={`px-2 py-1 rounded-full text-xs font-semibold ${
@@ -979,34 +994,21 @@ export default function ClientsPage() {
               {/* Fotos del DNI */}
               <div className="space-y-4">
                 <Label className="text-lg font-semibold text-primary">Documentación</Label>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-2">
-                    <Label className="text-sm font-semibold text-muted-foreground">DNI - Frente</Label>
-                    <div className="border-2 border-dashed border-border rounded-lg p-4 text-center">
-                      {currentClient.dni_front_url ? (
-                        <img
-                          src={currentClient.dni_front_url || "/placeholder.svg"}
-                          alt="DNI Frente"
-                          className="max-w-full h-48 object-cover rounded mx-auto border"
-                        />
-                      ) : (
-                        <div className="h-48 flex items-center justify-center text-muted-foreground">Sin imagen</div>
-                      )}
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-sm font-semibold text-muted-foreground">DNI - Reverso</Label>
-                    <div className="border-2 border-dashed border-border rounded-lg p-4 text-center">
-                      {currentClient.dni_back_url ? (
-                        <img
-                          src={currentClient.dni_back_url || "/placeholder.svg"}
-                          alt="DNI Reverso"
-                          className="max-w-full h-48 object-cover rounded mx-auto border"
-                        />
-                      ) : (
-                        <div className="h-48 flex items-center justify-center text-muted-foreground">Sin imagen</div>
-                      )}
-                    </div>
+                <div className="space-y-2">
+                  <Label className="text-sm font-semibold text-muted-foreground">DNI - Documento</Label>
+                  <div className="border-2 border-dashed border-border rounded-lg p-4 text-center">
+                    {currentClient.dni_photo_url ? (
+                      <img
+                        src={currentClient.dni_photo_url || "/placeholder.svg"}
+                        alt="DNI"
+                        className="max-w-full h-48 object-cover rounded mx-auto border cursor-pointer"
+                        onClick={() => window.open(currentClient.dni_photo_url!, "_blank")}
+                      />
+                    ) : (
+                      <div className="h-48 flex items-center justify-center text-muted-foreground">
+                        Sin imagen del DNI
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1218,7 +1220,10 @@ export default function ClientsPage() {
                       accept="image/*"
                       onChange={(e) => {
                         const file = e.target.files?.[0]
-                        if (file) setNewFrontFile(file)
+                        if (file) {
+                          console.log("[v0] Archivo seleccionado desde input:", file.name)
+                          setNewFrontFile(file)
+                        }
                       }}
                       className="flex-1"
                     />
@@ -1226,14 +1231,23 @@ export default function ClientsPage() {
                       type="button"
                       variant="outline"
                       size="sm"
-                      onClick={() => setCameraOpen({ isOpen: true, type: "new-front" })}
+                      onClick={() => openCamera("new-front", "Capturar DNI Frente")}
                       className="px-3"
                     >
                       <Camera className="h-4 w-4" />
                     </Button>
                   </div>
                   {newFrontFile && (
-                    <p className="text-sm text-muted-foreground">Archivo seleccionado: {newFrontFile.name}</p>
+                    <div className="space-y-2">
+                      <p className="text-sm text-muted-foreground">Archivo seleccionado: {newFrontFile.name}</p>
+                      <div className="border rounded-lg p-2">
+                        <img
+                          src={URL.createObjectURL(newFrontFile) || "/placeholder.svg"}
+                          alt="Preview DNI Frente"
+                          className="max-w-full h-32 object-cover rounded mx-auto"
+                        />
+                      </div>
+                    </div>
                   )}
                 </div>
 
@@ -1245,7 +1259,10 @@ export default function ClientsPage() {
                       accept="image/*"
                       onChange={(e) => {
                         const file = e.target.files?.[0]
-                        if (file) setNewBackFile(file)
+                        if (file) {
+                          console.log("[v0] Archivo seleccionado desde input:", file.name)
+                          setNewBackFile(file)
+                        }
                       }}
                       className="flex-1"
                     />
@@ -1253,14 +1270,23 @@ export default function ClientsPage() {
                       type="button"
                       variant="outline"
                       size="sm"
-                      onClick={() => setCameraOpen({ isOpen: true, type: "new-back" })}
+                      onClick={() => openCamera("new-back", "Capturar DNI Reverso")}
                       className="px-3"
                     >
                       <Camera className="h-4 w-4" />
                     </Button>
                   </div>
                   {newBackFile && (
-                    <p className="text-sm text-muted-foreground">Archivo seleccionado: {newBackFile.name}</p>
+                    <div className="space-y-2">
+                      <p className="text-sm text-muted-foreground">Archivo seleccionado: {newBackFile.name}</p>
+                      <div className="border rounded-lg p-2">
+                        <img
+                          src={URL.createObjectURL(newBackFile) || "/placeholder.svg"}
+                          alt="Preview DNI Reverso"
+                          className="max-w-full h-32 object-cover rounded mx-auto"
+                        />
+                      </div>
+                    </div>
                   )}
                 </div>
               </div>
@@ -1286,7 +1312,12 @@ export default function ClientsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* ... existing dialogs ... */}
+      <CameraCapture
+        isOpen={cameraOpen.isOpen}
+        onClose={() => setCameraOpen({ isOpen: false, type: "new-front", title: "" })}
+        onCapture={handleCameraCapture}
+        title={cameraOpen.title || "Capturar Imagen"}
+      />
     </>
   )
 }
