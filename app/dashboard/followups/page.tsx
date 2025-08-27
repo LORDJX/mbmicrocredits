@@ -126,7 +126,7 @@ function ClientCombobox({
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-full p-0 bg-gray-700 border-gray-600">
+      <PopoverContent className="w-full p-0 bg-gray-700 border border-gray-600">
         <Command className="bg-gray-700">
           <CommandInput
             placeholder="Buscar cliente por nombre o DNI..."
@@ -187,15 +187,22 @@ export default function FollowUpsPage() {
 
   const fetchClients = async () => {
     try {
+      console.log("[v0] Cargando clientes para desplegable...")
       const response = await fetch("/api/clients")
       if (response.ok) {
         const data = await response.json()
-        if (data.success && Array.isArray(data.clients)) {
-          setClients(data.clients)
+        console.log("[v0] Respuesta de API clientes:", data)
+        if (Array.isArray(data)) {
+          setClients(data)
+          console.log("[v0] Clientes cargados exitosamente:", data.length)
+        } else {
+          console.error("[v0] Respuesta de API no es un array:", data)
         }
+      } else {
+        console.error("[v0] Error en respuesta de API clientes:", response.status, response.statusText)
       }
     } catch (error) {
-      console.error("Error fetching clients:", error)
+      console.error("[v0] Error fetching clients:", error)
     }
   }
 

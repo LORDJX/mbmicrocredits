@@ -269,13 +269,12 @@ export default function LoansPage() {
       return
     }
 
-    // Mostrar indicador de carga
     toast({
       title: "Preparando impresión",
-      description: "Preparando documento para impresión...",
+      description: "Generando cronograma de pagos...",
     })
 
-    printWindow.document.write(`
+    const htmlContent = `
       <!DOCTYPE html>
       <html>
         <head>
@@ -432,24 +431,65 @@ export default function LoansPage() {
           </div>
           
           <script>
-            window.onload = function() {
-              setTimeout(function() {
+            console.log("[v0] Iniciando proceso de impresión...");
+            
+            function startPrint() {
+              try {
+                console.log("[v0] Ejecutando window.print()");
                 window.print();
+                
+                // Manejar el evento después de imprimir
                 window.onafterprint = function() {
-                  window.close();
+                  console.log("[v0] Impresión completada, cerrando ventana");
+                  setTimeout(function() {
+                    window.close();
+                  }, 1000);
                 }
-              }, 500);
+                
+                // Fallback para cerrar ventana si onafterprint no funciona
+                setTimeout(function() {
+                  if (!window.closed) {
+                    console.log("[v0] Cerrando ventana por timeout");
+                    window.close();
+                  }
+                }, 10000);
+                
+              } catch (error) {
+                console.error("[v0] Error en impresión:", error);
+                alert("Error al imprimir. Por favor, use Ctrl+P manualmente.");
+              }
+            }
+            
+            // Esperar a que el contenido se cargue completamente
+            if (document.readyState === 'complete') {
+              setTimeout(startPrint, 500);
+            } else {
+              window.onload = function() {
+                setTimeout(startPrint, 500);
+              }
             }
           </script>
         </body>
       </html>
-    `)
+    `
 
-    printWindow.document.close()
-    toast({
-      title: "Éxito",
-      description: "Documento preparado para impresión",
-    })
+    try {
+      printWindow.document.write(htmlContent)
+      printWindow.document.close()
+
+      toast({
+        title: "Éxito",
+        description: "Cronograma preparado para impresión",
+      })
+    } catch (error) {
+      console.error("[v0] Error escribiendo documento:", error)
+      toast({
+        title: "Error",
+        description: "Error al preparar el documento para impresión",
+        variant: "destructive",
+      })
+      printWindow.close()
+    }
   }
 
   const printLoanDetail = (loan: Loan) => {
@@ -468,10 +508,10 @@ export default function LoansPage() {
 
     toast({
       title: "Preparando impresión",
-      description: "Preparando detalle para impresión...",
+      description: "Generando detalle del préstamo...",
     })
 
-    printWindow.document.write(`
+    const htmlContent = `
       <!DOCTYPE html>
       <html>
         <head>
@@ -567,24 +607,62 @@ export default function LoansPage() {
           </div>
           
           <script>
-            window.onload = function() {
-              setTimeout(function() {
+            console.log("[v0] Iniciando proceso de impresión de detalle...");
+            
+            function startPrint() {
+              try {
+                console.log("[v0] Ejecutando window.print() para detalle");
                 window.print();
+                
                 window.onafterprint = function() {
-                  window.close();
+                  console.log("[v0] Impresión de detalle completada, cerrando ventana");
+                  setTimeout(function() {
+                    window.close();
+                  }, 1000);
                 }
-              }, 500);
+                
+                setTimeout(function() {
+                  if (!window.closed) {
+                    console.log("[v0] Cerrando ventana de detalle por timeout");
+                    window.close();
+                  }
+                }, 10000);
+                
+              } catch (error) {
+                console.error("[v0] Error en impresión de detalle:", error);
+                alert("Error al imprimir. Por favor, use Ctrl+P manualmente.");
+              }
+            }
+            
+            if (document.readyState === 'complete') {
+              setTimeout(startPrint, 500);
+            } else {
+              window.onload = function() {
+                setTimeout(startPrint, 500);
+              }
             }
           </script>
         </body>
       </html>
-    `)
+    `
 
-    printWindow.document.close()
-    toast({
-      title: "Éxito",
-      description: "Detalle preparado para impresión",
-    })
+    try {
+      printWindow.document.write(htmlContent)
+      printWindow.document.close()
+
+      toast({
+        title: "Éxito",
+        description: "Detalle preparado para impresión",
+      })
+    } catch (error) {
+      console.error("[v0] Error escribiendo documento de detalle:", error)
+      toast({
+        title: "Error",
+        description: "Error al preparar el detalle para impresión",
+        variant: "destructive",
+      })
+      printWindow.close()
+    }
   }
 
   if (loading && loans.length === 0) {
