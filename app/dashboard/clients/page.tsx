@@ -269,6 +269,7 @@ export default function ClientsPage() {
   // Archivos de fotos (edición)
   const [editFrontFile, setEditFrontFile] = useState<File | null>(null)
   const [editBackFile, setEditBackFile] = useState<File | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
 
   const [cameraOpen, setCameraOpen] = useState<{
     isOpen: boolean
@@ -363,183 +364,274 @@ export default function ClientsPage() {
         <!DOCTYPE html>
         <html>
           <head>
-            <title>Detalle del Cliente - ${client.first_name} ${client.last_name}</title>
+            <title>Cliente - ${client.first_name} ${client.last_name}</title>
             <meta charset="UTF-8">
             <style>
-              * { margin: 0; padding: 0; box-sizing: border-box; }
+              @page {
+                size: A4;
+                margin: 15mm;
+              }
+              * { 
+                margin: 0; 
+                padding: 0; 
+                box-sizing: border-box; 
+              }
               body { 
-                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-                line-height: 1.6; 
-                color: #333; 
+                font-family: 'Arial', sans-serif; 
+                font-size: 11pt;
+                line-height: 1.4; 
+                color: #2d3748; 
                 background: white;
-                padding: 20px;
-                max-width: 800px;
-                margin: 0 auto;
+                height: 100vh;
+                display: flex;
+                flex-direction: column;
               }
               .header { 
-                text-align: center; 
-                margin-bottom: 30px; 
-                border-bottom: 3px solid #1e40af; 
-                padding-bottom: 20px; 
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                padding: 20px;
+                text-align: center;
+                border-radius: 8px;
+                margin-bottom: 20px;
+                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
               }
               .header h1 { 
-                color: #1e40af; 
-                font-size: 28px; 
-                margin-bottom: 10px; 
+                font-size: 24pt; 
+                font-weight: bold;
+                margin-bottom: 5px;
+                text-shadow: 0 2px 4px rgba(0,0,0,0.3);
               }
-              .header p { 
-                color: #666; 
-                font-size: 16px; 
+              .header .subtitle { 
+                font-size: 12pt; 
+                opacity: 0.9;
+              }
+              .content {
+                flex: 1;
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 20px;
+                margin-bottom: 20px;
               }
               .section { 
-                margin-bottom: 25px; 
-                padding: 20px; 
-                border: 1px solid #e5e7eb; 
-                border-radius: 8px; 
-                background: #f9fafb; 
+                background: #f8fafc;
+                border: 1px solid #e2e8f0;
+                border-radius: 8px;
+                padding: 15px;
+                break-inside: avoid;
               }
-              .section h3 { 
-                color: #1e40af; 
-                font-size: 18px; 
-                margin-bottom: 15px; 
-                border-bottom: 1px solid #d1d5db; 
-                padding-bottom: 5px; 
+              .section-title { 
+                color: #4a5568;
+                font-size: 14pt;
+                font-weight: bold;
+                margin-bottom: 12px;
+                padding-bottom: 6px;
+                border-bottom: 2px solid #667eea;
+                display: flex;
+                align-items: center;
+                gap: 8px;
               }
-              .info-grid { 
-                display: grid; 
-                grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); 
-                gap: 15px; 
+              .info-row { 
+                display: flex;
+                justify-content: space-between;
+                align-items: flex-start;
+                margin-bottom: 8px;
+                padding: 6px 0;
+                border-bottom: 1px solid #e2e8f0;
               }
-              .info-item { 
-                display: flex; 
-                flex-direction: column; 
+              .info-row:last-child {
+                border-bottom: none;
+                margin-bottom: 0;
               }
               .info-label { 
                 font-weight: 600; 
-                color: #374151; 
-                font-size: 14px; 
-                margin-bottom: 5px; 
+                color: #4a5568;
+                font-size: 10pt;
+                min-width: 100px;
+                flex-shrink: 0;
               }
               .info-value { 
-                color: #111827; 
-                font-size: 16px; 
+                color: #2d3748;
+                font-size: 11pt;
+                text-align: right;
+                word-break: break-word;
               }
-              .photo-container { 
-                text-align: center; 
-                margin-top: 15px; 
+              .full-width {
+                grid-column: 1 / -1;
               }
-              .photo-title { 
-                font-weight: 600; 
-                margin-bottom: 10px; 
-                color: #374151; 
+              .photo-section { 
+                text-align: center;
+                padding: 20px;
               }
               .photo-img { 
-                max-width: 100%; 
-                max-height: 300px; 
-                border: 2px solid #d1d5db; 
-                border-radius: 8px; 
-                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); 
+                max-width: 100%;
+                max-height: 200px;
+                border: 2px solid #e2e8f0;
+                border-radius: 8px;
+                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
               }
               .no-photo { 
-                padding: 40px; 
-                background: #f3f4f6; 
-                border: 2px dashed #d1d5db; 
-                border-radius: 8px; 
-                color: #6b7280; 
-                font-style: italic; 
+                padding: 30px;
+                background: #f1f5f9;
+                border: 2px dashed #cbd5e0;
+                border-radius: 8px;
+                color: #718096;
+                font-style: italic;
+                font-size: 10pt;
+              }
+              .observations {
+                background: white;
+                border: 1px solid #e2e8f0;
+                border-radius: 6px;
+                padding: 12px;
+                margin-top: 8px;
+                font-size: 10pt;
+                line-height: 1.5;
+                color: #4a5568;
               }
               .footer { 
-                margin-top: 40px; 
-                text-align: center; 
-                font-size: 12px; 
-                color: #6b7280; 
-                border-top: 1px solid #e5e7eb; 
-                padding-top: 20px; 
+                margin-top: auto;
+                text-align: center;
+                font-size: 9pt;
+                color: #718096;
+                border-top: 1px solid #e2e8f0;
+                padding-top: 15px;
+                background: #f8fafc;
+                border-radius: 6px;
+                padding: 15px;
+              }
+              .status-badge {
+                display: inline-block;
+                padding: 4px 12px;
+                border-radius: 20px;
+                font-size: 9pt;
+                font-weight: bold;
+                text-transform: uppercase;
+                background: #48bb78;
+                color: white;
+              }
+              .icon {
+                width: 16px;
+                height: 16px;
+                fill: currentColor;
               }
               @media print {
-                body { padding: 10px; }
-                .section { break-inside: avoid; }
+                body { 
+                  -webkit-print-color-adjust: exact;
+                  print-color-adjust: exact;
+                }
+                .section { 
+                  break-inside: avoid;
+                  page-break-inside: avoid;
+                }
               }
             </style>
           </head>
           <body>
             <div class="header">
-              <h1>Detalle del Cliente</h1>
-              <p>BM Microcréditos - Sistema de Gestión</p>
+              <h1>FICHA DE CLIENTE</h1>
+              <div class="subtitle">BM Microcréditos - Sistema de Gestión</div>
             </div>
 
-            <div class="section">
-              <h3>Información Personal</h3>
-              <div class="info-grid">
-                <div class="info-item">
-                  <span class="info-label">Código de Cliente</span>
+            <div class="content">
+              <div class="section">
+                <div class="section-title">
+                  <svg class="icon" viewBox="0 0 24 24">
+                    <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+                  </svg>
+                  Datos Personales
+                </div>
+                <div class="info-row">
+                  <span class="info-label">Código:</span>
                   <span class="info-value">${client.client_code || "N/A"}</span>
                 </div>
-                <div class="info-item">
-                  <span class="info-label">Nombre Completo</span>
-                  <span class="info-value">${client.first_name} ${client.last_name}</span>
+                <div class="info-row">
+                  <span class="info-label">Nombre:</span>
+                  <span class="info-value">${client.first_name}</span>
                 </div>
-                <div class="info-item">
-                  <span class="info-label">DNI</span>
+                <div class="info-row">
+                  <span class="info-label">Apellido:</span>
+                  <span class="info-value">${client.last_name}</span>
+                </div>
+                <div class="info-row">
+                  <span class="info-label">DNI:</span>
                   <span class="info-value">${client.dni}</span>
                 </div>
-                <div class="info-item">
-                  <span class="info-label">Teléfono</span>
+                <div class="info-row">
+                  <span class="info-label">Estado:</span>
+                  <span class="info-value">
+                    <span class="status-badge">${client.status || "Activo"}</span>
+                  </span>
+                </div>
+              </div>
+
+              <div class="section">
+                <div class="section-title">
+                  <svg class="icon" viewBox="0 0 24 24">
+                    <path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/>
+                  </svg>
+                  Contacto
+                </div>
+                <div class="info-row">
+                  <span class="info-label">Teléfono:</span>
                   <span class="info-value">${client.phone || "No especificado"}</span>
                 </div>
-                <div class="info-item">
-                  <span class="info-label">Email</span>
+                <div class="info-row">
+                  <span class="info-label">Email:</span>
                   <span class="info-value">${client.email || "No especificado"}</span>
                 </div>
-                <div class="info-item">
-                  <span class="info-label">Dirección</span>
+                <div class="info-row">
+                  <span class="info-label">Dirección:</span>
                   <span class="info-value">${client.address || "No especificada"}</span>
                 </div>
-                <div class="info-item">
-                  <span class="info-label">Estado</span>
-                  <span class="info-value">${client.status || "Activo"}</span>
-                </div>
-                <div class="info-item">
-                  <span class="info-label">Referido por</span>
+                <div class="info-row">
+                  <span class="info-label">Referido por:</span>
                   <span class="info-value">${referredByName || "No especificado"}</span>
                 </div>
               </div>
+
               ${
                 client.observations
                   ? `
-                <div style="margin-top: 15px;">
-                  <span class="info-label">Observaciones</span>
-                  <div style="margin-top: 5px; padding: 10px; background: white; border-radius: 4px; border: 1px solid #d1d5db;">
-                    ${client.observations}
+                <div class="section full-width">
+                  <div class="section-title">
+                    <svg class="icon" viewBox="0 0 24 24">
+                      <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
+                    </svg>
+                    Observaciones
                   </div>
+                  <div class="observations">${client.observations}</div>
                 </div>
               `
                   : ""
               }
-            </div>
 
-            <div class="section">
-              <h3>Documentación DNI</h3>
-              <div class="photo-container">
-                <div class="photo-title">Documento Nacional de Identidad</div>
-                ${
-                  client.dni_photo_url
-                    ? `<img src="${client.dni_photo_url}" alt="DNI" class="photo-img" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';" />
-                       <div class="no-photo" style="display: none;">Error al cargar la imagen del DNI</div>`
-                    : '<div class="no-photo">Sin imagen del DNI</div>'
-                }
+              <div class="section full-width">
+                <div class="section-title">
+                  <svg class="icon" viewBox="0 0 24 24">
+                    <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                  </svg>
+                  Documentación
+                </div>
+                <div class="photo-section">
+                  ${
+                    client.dni_photo_url
+                      ? `<img src="${client.dni_photo_url}" alt="DNI" class="photo-img" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';" />
+                     <div class="no-photo" style="display: none;">Error al cargar imagen del DNI</div>`
+                      : '<div class="no-photo">Sin imagen del DNI disponible</div>'
+                  }
+                </div>
               </div>
             </div>
 
             <div class="footer">
-              <p>Documento generado el ${new Date().toLocaleDateString("es-ES", {
+              <p><strong>Documento generado:</strong> ${new Date().toLocaleDateString("es-ES", {
                 year: "numeric",
                 month: "long",
                 day: "numeric",
                 hour: "2-digit",
                 minute: "2-digit",
               })}</p>
-              <p>BM Microcréditos - Sistema de Gestión de Clientes</p>
+              <p>BM Microcréditos - Sistema de Gestión de Clientes v2.0</p>
             </div>
           </body>
         </html>
@@ -557,7 +649,7 @@ export default function ClientsPage() {
           console.error("[v0] Error al imprimir:", error)
           alert("Error al imprimir el documento. Intenta nuevamente.")
         }
-      }, 1000)
+      }, 1500)
     } catch (error) {
       console.error("[v0] Error en handlePrintClient:", error)
       alert("Error al generar el documento para impresión.")
@@ -597,6 +689,74 @@ export default function ClientsPage() {
       fetchClients()
     } catch (err: any) {
       toast({ title: "Error", description: err.message, variant: "destructive" })
+    }
+  }
+
+  const handleUpdateClient = async () => {
+    if (!validateForm(currentClient)) {
+      return
+    }
+
+    setIsLoading(true)
+    try {
+      console.log("[v0] Iniciando actualización de cliente:", currentClient.id)
+
+      // Subir imágenes si fueron seleccionadas
+      const payload: Record<string, any> = { ...currentClient }
+
+      if (editFrontFile) {
+        console.log("[v0] Subiendo imagen frontal...")
+        payload.dni_front_url = await uploadImage(editFrontFile, "dni-front", currentClient.id)
+        payload.dni_photo_url = payload.dni_front_url // Mantener compatibilidad
+      }
+
+      if (editBackFile) {
+        console.log("[v0] Subiendo imagen trasera...")
+        payload.dni_back_url = await uploadImage(editBackFile, "dni-back", currentClient.id)
+      }
+
+      console.log("[v0] Enviando datos de actualización:", payload)
+
+      const response = await fetch(`/api/clients/${currentClient.id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "no-cache",
+        },
+        body: JSON.stringify(payload),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.detail || `Error ${response.status}: ${response.statusText}`)
+      }
+
+      const updatedClient = await response.json()
+      console.log("[v0] Cliente actualizado exitosamente:", updatedClient)
+
+      toast({
+        title: "✅ Éxito",
+        description: "Cliente actualizado correctamente.",
+        duration: 3000,
+      })
+
+      setIsEditDialogOpen(false)
+      setEditFrontFile(null)
+      setEditBackFile(null)
+      setFormErrors({})
+
+      // Recargar la lista de clientes
+      await fetchClients()
+    } catch (err: any) {
+      console.error("[v0] Error al actualizar cliente:", err)
+      toast({
+        title: "❌ Error",
+        description: err.message || "Error desconocido al actualizar cliente",
+        variant: "destructive",
+        duration: 5000,
+      })
+    } finally {
+      setIsLoading(false)
     }
   }
 
@@ -730,6 +890,15 @@ export default function ClientsPage() {
   const openCamera = (type: typeof cameraOpen.type, title: string) => {
     console.log("[v0] Abriendo cámara:", type, title)
     setCameraOpen({ isOpen: true, type, title })
+  }
+
+  const handleEditInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    handleInputChange(e, setCurrentClient)
+  }
+
+  const handleEditSave = async (e: React.FormEvent) => {
+    e.preventDefault()
+    await handleUpdateClient()
   }
 
   const clientsForReferrals = useMemo(
@@ -1052,6 +1221,285 @@ export default function ClientsPage() {
           </DialogContent>
         </Dialog>
       )}
+
+      {/* Dialog para editar cliente */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto bg-card text-card-foreground border-border">
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-bold text-primary">Editar Cliente</DialogTitle>
+            <DialogDescription>Modifica la información del cliente</DialogDescription>
+          </DialogHeader>
+
+          {currentClient && (
+            <form onSubmit={handleEditSave} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="first_name">Nombre *</Label>
+                  <Input
+                    id="first_name"
+                    name="first_name"
+                    value={currentClient.first_name || ""}
+                    onChange={handleEditInputChange}
+                    className={formErrors.first_name ? "border-destructive" : ""}
+                  />
+                  {formErrors.first_name && <p className="text-sm text-destructive">{formErrors.first_name}</p>}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="last_name">Apellido *</Label>
+                  <Input
+                    id="last_name"
+                    name="last_name"
+                    value={currentClient.last_name || ""}
+                    onChange={handleEditInputChange}
+                    className={formErrors.last_name ? "border-destructive" : ""}
+                  />
+                  {formErrors.last_name && <p className="text-sm text-destructive">{formErrors.last_name}</p>}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="dni">DNI *</Label>
+                  <Input
+                    id="dni"
+                    name="dni"
+                    value={currentClient.dni || ""}
+                    onChange={handleEditInputChange}
+                    placeholder="Ej: 12345678"
+                    className={formErrors.dni ? "border-destructive" : ""}
+                  />
+                  {formErrors.dni && <p className="text-sm text-destructive">{formErrors.dni}</p>}
+                  <p className="text-xs text-muted-foreground">Solo números, 7 u 8 dígitos, sin puntos ni espacios</p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="phone">Teléfono</Label>
+                  <Input id="phone" name="phone" value={currentClient.phone || ""} onChange={handleEditInputChange} />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="email">Email</Label>
+                  <Input
+                    id="email"
+                    name="email"
+                    type="email"
+                    value={currentClient.email || ""}
+                    onChange={handleEditInputChange}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="address">Dirección</Label>
+                  <Input
+                    id="address"
+                    name="address"
+                    value={currentClient.address || ""}
+                    onChange={handleEditInputChange}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="referred_by">Referido por</Label>
+                  <Select
+                    value={currentClient.referred_by || "__none__"}
+                    onValueChange={(value) => {
+                      const referredBy = value === "__none__" ? undefined : value
+                      setCurrentClient((prev) => ({ ...prev, referred_by: referredBy }))
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecciona un cliente" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">Ninguno</SelectItem>
+                      {clients.map((client) => (
+                        <SelectItem key={client.id} value={client.id}>
+                          {client.first_name} {client.last_name} ({client.client_code})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="observations">Observaciones</Label>
+                  <Textarea
+                    id="observations"
+                    name="observations"
+                    value={currentClient.observations || ""}
+                    onChange={handleEditInputChange}
+                    rows={4}
+                    placeholder="Ingresa observaciones adicionales..."
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="cbu_cvu">CBU/CVU</Label>
+                  <Input
+                    id="cbu_cvu"
+                    name="cbu_cvu"
+                    value={currentClient.cbu_cvu || ""}
+                    onChange={handleEditInputChange}
+                    placeholder="Ingrese CBU o CVU"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="alias">Alias</Label>
+                  <Input
+                    id="alias"
+                    name="alias"
+                    value={currentClient.alias || ""}
+                    onChange={handleEditInputChange}
+                    placeholder="Ingrese alias bancario"
+                  />
+                </div>
+              </div>
+
+              {/* Fotos DNI */}
+              <div className="space-y-4">
+                <Label className="text-lg font-semibold">Fotos del DNI</Label>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Foto DNI Frente</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0]
+                          if (file) {
+                            console.log("[v0] Archivo seleccionado desde input:", file.name)
+                            setEditFrontFile(file)
+                          }
+                        }}
+                        className="flex-1"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => openCamera("edit-front", "Capturar DNI Frente")}
+                        className="px-3"
+                      >
+                        <Camera className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    {editFrontFile && (
+                      <div className="space-y-2">
+                        <p className="text-sm text-muted-foreground">Archivo seleccionado: {editFrontFile.name}</p>
+                        <div className="border rounded-lg p-2">
+                          <img
+                            src={URL.createObjectURL(editFrontFile) || "/placeholder.svg"}
+                            alt="Preview DNI Frente"
+                            className="max-w-full h-32 object-cover rounded mx-auto"
+                            onError={(e) => {
+                              console.error("[v0] Error al mostrar preview:", editFrontFile.name)
+                              e.currentTarget.style.display = "none"
+                              e.currentTarget.nextElementSibling?.classList.remove("hidden")
+                            }}
+                          />
+                          <div className="hidden text-center text-muted-foreground p-4">
+                            <AlertCircle className="mx-auto h-6 w-6 mb-1" />
+                            <p className="text-xs">Error al mostrar preview</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Foto DNI Reverso</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0]
+                          if (file) {
+                            console.log("[v0] Archivo seleccionado desde input:", file.name)
+                            setEditBackFile(file)
+                          }
+                        }}
+                        className="flex-1"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => openCamera("edit-back", "Capturar DNI Reverso")}
+                        className="px-3"
+                      >
+                        <Camera className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    {editBackFile && (
+                      <div className="space-y-2">
+                        <p className="text-sm text-muted-foreground">Archivo seleccionado: {editBackFile.name}</p>
+                        <div className="border rounded-lg p-2">
+                          <img
+                            src={URL.createObjectURL(editBackFile) || "/placeholder.svg"}
+                            alt="Preview DNI Reverso"
+                            className="max-w-full h-32 object-cover rounded mx-auto"
+                            onError={(e) => {
+                              console.error("[v0] Error al mostrar preview:", editBackFile.name)
+                              e.currentTarget.style.display = "none"
+                              e.currentTarget.nextElementSibling?.classList.remove("hidden")
+                            }}
+                          />
+                          <div className="hidden text-center text-muted-foreground p-4">
+                            <AlertCircle className="mx-auto h-6 w-6 mb-1" />
+                            <p className="text-xs">Error al mostrar preview</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setIsEditDialogOpen(false)
+                    setFormErrors({})
+                    setEditFrontFile(null)
+                    setEditBackFile(null)
+                  }}
+                  disabled={isLoading}
+                >
+                  Cancelar
+                </Button>
+                <Button type="submit" disabled={isLoading}>
+                  {isLoading ? (
+                    <>
+                      <svg className="animate-spin h-4 w-4 mr-2" viewBox="0 0 24 24">
+                        <path
+                          fill="currentColor"
+                          d="M12 4V2m0 20v-2m8-8h2M4 12H2m15.17 8.95l1.41-1.41M3.43 3.43l1.41 1.41m0 15.14l-1.41 1.41M19.77 4.86l-1.41-1.41M12 6a6 6 0 110 12 6 6 0 010-12z"
+                        />
+                      </svg>
+                      Guardando...
+                    </>
+                  ) : (
+                    "Guardar Cambios"
+                  )}
+                </Button>
+              </DialogFooter>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Dialog para crear cliente */}
       <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
