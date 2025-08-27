@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { DollarSign, Users, CreditCard } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { AppHeader } from "@/components/app-header"
+import { MetricWithFormula } from "@/components/metric-with-formula"
 import {
   XAxis,
   YAxis,
@@ -104,36 +105,12 @@ export default function ReportsPage() {
     : []
 
   const transactionTrendData = [
-    {
-      month: "Ene",
-      ingresos: Math.round((metrics?.totalIncome || 0) * 0.1),
-      egresos: Math.round((metrics?.totalExpenses || 0) * 0.1),
-    },
-    {
-      month: "Feb",
-      ingresos: Math.round((metrics?.totalIncome || 0) * 0.15),
-      egresos: Math.round((metrics?.totalExpenses || 0) * 0.15),
-    },
-    {
-      month: "Mar",
-      ingresos: Math.round((metrics?.totalIncome || 0) * 0.18),
-      egresos: Math.round((metrics?.totalExpenses || 0) * 0.18),
-    },
-    {
-      month: "Abr",
-      ingresos: Math.round((metrics?.totalIncome || 0) * 0.22),
-      egresos: Math.round((metrics?.totalExpenses || 0) * 0.22),
-    },
-    {
-      month: "May",
-      ingresos: Math.round((metrics?.totalIncome || 0) * 0.25),
-      egresos: Math.round((metrics?.totalExpenses || 0) * 0.25),
-    },
-    {
-      month: "Jun",
-      ingresos: Math.round((metrics?.totalIncome || 0) * 0.3),
-      egresos: Math.round((metrics?.totalExpenses || 0) * 0.3),
-    },
+    { month: "Ene", ingresos: 0, egresos: 0 },
+    { month: "Feb", ingresos: 0, egresos: 0 },
+    { month: "Mar", ingresos: 0, egresos: 0 },
+    { month: "Abr", ingresos: 0, egresos: 0 },
+    { month: "May", ingresos: 0, egresos: 0 },
+    { month: "Jun", ingresos: metrics?.totalIncome || 0, egresos: metrics?.totalExpenses || 0 },
   ]
 
   if (loading) {
@@ -161,55 +138,48 @@ export default function ReportsPage() {
           <CardHeader>
             <CardTitle className="text-2xl font-bold text-gray-50">Métricas Principales</CardTitle>
             <CardDescription className="text-gray-400">
-              Resumen de las métricas clave de tu negocio de microcréditos.
+              Resumen de las métricas clave con fórmulas transparentes.
             </CardDescription>
           </CardHeader>
           <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {metrics && (
               <>
-                <Card className="bg-gray-700 border border-gray-600 text-gray-100">
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium text-gray-300">Total Préstamos</CardTitle>
-                    <CreditCard className="h-4 w-4 text-gray-400" />
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold text-gray-50">{metrics.totalLoans}</div>
-                    <p className="text-xs text-gray-400">Préstamos activos y finalizados</p>
-                  </CardContent>
-                </Card>
+                <MetricWithFormula
+                  title="Total Préstamos"
+                  value={metrics.totalLoans}
+                  description="Préstamos activos y finalizados"
+                  formula="COUNT(loans WHERE deleted_at IS NULL)"
+                  calculation={`Conteo de todos los préstamos no eliminados = ${metrics.totalLoans}`}
+                  icon={<CreditCard className="h-4 w-4 text-gray-400" />}
+                />
 
-                <Card className="bg-gray-700 border border-gray-600 text-gray-100">
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium text-gray-300">Monto Total Préstamos</CardTitle>
-                    <DollarSign className="h-4 w-4 text-gray-400" />
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold text-gray-50">${metrics.totalLoanAmount.toLocaleString()}</div>
-                    <p className="text-xs text-gray-400">Monto total desembolsado</p>
-                  </CardContent>
-                </Card>
+                <MetricWithFormula
+                  title="Monto Total Préstamos"
+                  value={`$${metrics.totalLoanAmount.toLocaleString()}`}
+                  description="Monto total desembolsado"
+                  formula="SUM(loans.amount WHERE deleted_at IS NULL)"
+                  calculation={`Suma de todos los montos de préstamos = $${metrics.totalLoanAmount.toLocaleString()}`}
+                  icon={<DollarSign className="h-4 w-4 text-gray-400" />}
+                />
 
-                <Card className="bg-gray-700 border border-gray-600 text-gray-100">
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium text-gray-300">Total Clientes</CardTitle>
-                    <Users className="h-4 w-4 text-gray-400" />
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold text-gray-50">{metrics.totalClients}</div>
-                    <p className="text-xs text-gray-400">Clientes registrados</p>
-                  </CardContent>
-                </Card>
+                <MetricWithFormula
+                  title="Total Clientes"
+                  value={metrics.totalClients}
+                  description="Clientes registrados"
+                  formula="COUNT(clients WHERE deleted_at IS NULL)"
+                  calculation={`Conteo de todos los clientes activos = ${metrics.totalClients}`}
+                  icon={<Users className="h-4 w-4 text-gray-400" />}
+                />
 
-                <Card className="bg-gray-700 border border-gray-600 text-gray-100">
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium text-gray-300">Balance Neto</CardTitle>
-                    <DollarSign className="h-4 w-4 text-gray-400" />
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold text-gray-50">${metrics.netBalance.toLocaleString()}</div>
-                    <p className="text-xs text-gray-400">Ingresos - Egresos</p>
-                  </CardContent>
-                </Card>
+                <MetricWithFormula
+                  title="Balance Neto"
+                  value={`$${metrics.netBalance.toLocaleString()}`}
+                  description="Ingresos - Egresos"
+                  formula="SUM(receipts.amount) - SUM(transactions.amount WHERE type='expense')"
+                  calculation={`${metrics.totalIncome.toLocaleString()} - ${metrics.totalExpenses.toLocaleString()} = $${metrics.netBalance.toLocaleString()}`}
+                  icon={<DollarSign className="h-4 w-4 text-gray-400" />}
+                  colorClass={metrics.netBalance >= 0 ? "text-green-400" : "text-red-400"}
+                />
               </>
             )}
           </CardContent>

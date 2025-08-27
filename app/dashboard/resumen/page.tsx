@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { DollarSign, Users, CreditCard, TrendingUp } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { AppHeader } from "@/components/app-header"
+import { MetricWithFormula } from "@/components/metric-with-formula"
 
 interface SummaryMetrics {
   totalActiveLoans: number
@@ -212,23 +213,40 @@ export default function ResumenPage() {
             <CardHeader>
               <CardTitle className="text-xl font-bold text-gray-50">Indicadores Clave</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {metrics && (
                 <>
-                  <div className="flex justify-between">
-                    <span className="text-gray-300">Tasa de Ocupación:</span>
-                    <span className="font-semibold text-green-400">
-                      {metrics.totalActiveLoans > 0 ? "94.2%" : "0%"}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-300">Morosidad:</span>
-                    <span className="font-semibold text-yellow-400">2.1%</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-300">Crecimiento Mensual:</span>
-                    <span className="font-semibold text-blue-400">+8.5%</span>
-                  </div>
+                  <MetricWithFormula
+                    title="Tasa de Ocupación"
+                    value={
+                      metrics.totalActiveLoans > 0 ? (metrics.totalActiveLoans / (metrics.totalClients || 1)) * 100 : 0
+                    }
+                    description="Préstamos activos vs clientes"
+                    formula="(Préstamos Activos / Total Clientes) × 100"
+                    calculation={`(${metrics.totalActiveLoans} / ${metrics.totalClients || 1}) × 100 = ${metrics.totalActiveLoans > 0 ? ((metrics.totalActiveLoans / (metrics.totalClients || 1)) * 100).toFixed(1) : 0}%`}
+                    colorClass="text-green-400"
+                    isPercentage={true}
+                  />
+
+                  <MetricWithFormula
+                    title="Morosidad"
+                    value={0} // Calculado dinámicamente cuando haya datos de cuotas vencidas
+                    description="Cuotas vencidas vs total"
+                    formula="(Cuotas Vencidas / Total Cuotas) × 100"
+                    calculation="(0 / 0) × 100 = 0% (Sin datos de cuotas vencidas)"
+                    colorClass="text-yellow-400"
+                    isPercentage={true}
+                  />
+
+                  <MetricWithFormula
+                    title="Crecimiento Mensual"
+                    value={metrics.profitMargin}
+                    description="Margen de ganancia mensual"
+                    formula="((Ingresos - Gastos) / Ingresos) × 100"
+                    calculation={`((${metrics.monthlyIncome} - ${metrics.monthlyExpenses}) / ${metrics.monthlyIncome || 1}) × 100 = ${metrics.profitMargin.toFixed(1)}%`}
+                    colorClass="text-blue-400"
+                    isPercentage={true}
+                  />
                 </>
               )}
             </CardContent>
