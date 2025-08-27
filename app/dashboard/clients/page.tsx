@@ -84,16 +84,35 @@ const getErrorMessage = async (response: Response, defaultMessage: string): Prom
 }
 
 async function uploadImage(file: File, hint: string, clientId?: string): Promise<string> {
-  const form = new FormData()
-  form.append("file", file)
-  form.append("hint", hint)
-  if (clientId) form.append("clientId", clientId)
-  const res = await fetch("/api/upload", { method: "POST", body: form })
-  if (!res.ok) {
-    throw new Error(await getErrorMessage(res, "Error al subir imagen"))
+  console.log("[v0] Iniciando subida de imagen:", { fileName: file.name, size: file.size, hint, clientId })
+
+  try {
+    const form = new FormData()
+    form.append("file", file)
+    form.append("hint", hint)
+    if (clientId) form.append("clientId", clientId)
+
+    const res = await fetch("/api/upload", {
+      method: "POST",
+      body: form,
+      headers: {
+        Accept: "application/json",
+      },
+    })
+
+    if (!res.ok) {
+      const errorText = await res.text()
+      console.error("[v0] Error en respuesta de upload:", res.status, errorText)
+      throw new Error(`Error al subir imagen: ${res.status} - ${errorText}`)
+    }
+
+    const json = await res.json()
+    console.log("[v0] Imagen subida exitosamente:", json.url)
+    return json.url as string
+  } catch (error) {
+    console.error("[v0] Error en uploadImage:", error)
+    throw error
   }
-  const json = await res.json()
-  return json.url as string
 }
 
 interface CameraCaptureProps {
@@ -421,18 +440,13 @@ export default function ClientsPage() {
             .photos-section { 
               margin-top: 30px; 
             }
-            .photos-grid { 
-              display: grid; 
-              grid-template-columns: repeat(2, 1fr); 
-              gap: 30px; 
-              margin-top: 20px;
-            }
             .photo-container { 
               text-align: center; 
               background: white; 
               padding: 20px; 
               border-radius: 12px; 
               border: 2px solid #e2e8f0;
+              margin-top: 20px;
             }
             .photo-title { 
               font-weight: 600; 
@@ -442,7 +456,7 @@ export default function ClientsPage() {
             }
             .photo-img { 
               max-width: 100%; 
-              height: 200px; 
+              height: 300px; 
               object-fit: cover; 
               border-radius: 8px; 
               border: 1px solid #d1d5db;
@@ -486,8 +500,7 @@ export default function ClientsPage() {
             }
             @media print {
               body { padding: 20px; }
-              .photos-grid { grid-template-columns: 1fr; gap: 20px; }
-              .photo-img { height: 150px; }
+              .photo-img { height: 250px; }
             }
           </style>
         </head>
@@ -536,14 +549,6 @@ export default function ClientsPage() {
                 <div class="info-label">Referido por</div>
                 <div class="info-value">${client.referred_by || "No especificado"}</div>
               </div>
-              <div class="info-item">
-                <div class="info-label">CBU/CVU</div>
-                <div class="info-value">${client.cbu_cvu || "No especificado"}</div>
-              </div>
-              <div class="info-item">
-                <div class="info-label">Alias</div>
-                <div class="info-value">${client.alias || "No especificado"}</div>
-              </div>
               <div class="observations">
                 <div class="info-label">Observaciones</div>
                 <div class="observations-text">${client.observations || "Sin observaciones registradas"}</div>
@@ -552,24 +557,14 @@ export default function ClientsPage() {
           </div>
 
           <div class="photos-section">
-            <h3 style="color: #1e40af; font-size: 20px; margin-bottom: 10px;">Documentación</h3>
-            <div class="photos-grid">
-              <div class="photo-container">
-                <div class="photo-title">DNI - Frente</div>
-                ${
-                  client.dni_front_url
-                    ? `<img src="${client.dni_front_url}" alt="DNI Frente" class="photo-img" />`
-                    : '<div class="no-photo">Sin imagen</div>'
-                }
-              </div>
-              <div class="photo-container">
-                <div class="photo-title">DNI - Reverso</div>
-                ${
-                  client.dni_back_url
-                    ? `<img src="${client.dni_back_url}" alt="DNI Reverso" class="photo-img" />`
-                    : '<div class="no-photo">Sin imagen</div>'
-                }
-              </div>
+            <h3 style="color: #1e40af; font-size: 20px; margin-bottom: 10px;">Documentación DNI</h3>
+            <div class="photo-container">
+              <div class="photo-title">Documento Nacional de Identidad</div>
+              ${
+                client.dni_photo_url
+                  ? `<img src="${client.dni_photo_url}" alt="DNI" class="photo-img" />`
+                  : '<div class="no-photo">Sin imagen del DNI</div>'
+              }
             </div>
           </div>
 
@@ -736,24 +731,23 @@ export default function ClientsPage() {
   }
 
   const handleCameraCapture = (file: File) => {
-    switch (cameraOpen.type) {
-      case "new-front":
-        setNewFrontFile(file)
-        break
-      case "new-back":
-        setNewBackFile(file)
-        break
-      case "edit-front":
-        setEditFrontFile(file)
-        break
-      case "edit-back":
-        setEditBackFile(file)
-        break
+    console.log("[v0] Imagen capturada desde cámara:", file.name, file.size)
+
+    if (cameraOpen.type === "new-front") {
+      setNewFrontFile(file)
+      console.log("[v0] Imagen frontal asignada para nuevo cliente")
+    } else if (cameraOpen.type === "new-back") {
+      setNewBackFile(file)
+      console.log("[v0] Imagen trasera asignada para nuevo cliente")
+    } else if (cameraOpen.type === "edit-front") {
+      setEditFrontFile(file)
+      console.log("[v0] Imagen frontal asignada para edición")
+    } else if (cameraOpen.type === "edit-back") {
+      setEditBackFile(file)
+      console.log("[v0] Imagen trasera asignada para edición")
     }
-    toast({
-      title: "Foto capturada",
-      description: "La imagen se ha capturado correctamente.",
-    })
+
+    setCameraOpen({ isOpen: false, type: "new-front", title: "" })
   }
 
   const openCamera = (type: typeof cameraOpen.type, title: string) => {
