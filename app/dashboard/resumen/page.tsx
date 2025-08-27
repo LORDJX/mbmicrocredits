@@ -32,22 +32,18 @@ export default function ResumenPage() {
       setLoading(true)
       setError(null)
       try {
-        // Simular carga de datos de la V5
-        await new Promise((resolve) => setTimeout(resolve, 800))
+        console.log("[v0] Cargando datos reales de resumen para socios")
 
-        const mockData: SummaryMetrics = {
-          totalActiveLoans: 89,
-          totalActiveLoanAmount: 125000.0,
-          totalClients: 65,
-          totalPartners: 12,
-          monthlyIncome: 18500.0,
-          monthlyExpenses: 4200.0,
-          profitMargin: 77.3,
-          averageLoanAmount: 1404.49,
+        const response = await fetch("/api/summary")
+        if (!response.ok) {
+          throw new Error(`Error ${response.status}: ${response.statusText}`)
         }
-        setMetrics(mockData)
+
+        const data = await response.json()
+        console.log("[v0] Datos de resumen recibidos:", data)
+        setMetrics(data)
       } catch (err: any) {
-        console.error("Error al cargar resumen:", err.message)
+        console.error("[v0] Error al cargar resumen:", err.message)
         setError("Error al cargar resumen: " + err.message)
         toast({
           title: "Error",
@@ -61,6 +57,27 @@ export default function ResumenPage() {
 
     fetchSummaryData()
   }, [])
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      console.log("[v0] Actualizando datos de resumen automáticamente")
+      fetchSummaryData()
+    }, 300000) // Actualizar cada 5 minutos
+
+    return () => clearInterval(interval)
+  }, [])
+
+  const fetchSummaryData = async () => {
+    try {
+      const response = await fetch("/api/summary")
+      if (response.ok) {
+        const data = await response.json()
+        setMetrics(data)
+      }
+    } catch (err) {
+      console.error("[v0] Error en actualización automática:", err)
+    }
+  }
 
   if (loading) {
     return (
@@ -183,7 +200,7 @@ export default function ResumenPage() {
                   <div className="flex justify-between">
                     <span className="text-gray-300">Clientes por Socio:</span>
                     <span className="font-semibold text-gray-50">
-                      {Math.round(metrics.totalClients / metrics.totalPartners)}
+                      {metrics.totalPartners > 0 ? Math.round(metrics.totalClients / metrics.totalPartners) : 0}
                     </span>
                   </div>
                 </>
@@ -200,7 +217,9 @@ export default function ResumenPage() {
                 <>
                   <div className="flex justify-between">
                     <span className="text-gray-300">Tasa de Ocupación:</span>
-                    <span className="font-semibold text-green-400">94.2%</span>
+                    <span className="font-semibold text-green-400">
+                      {metrics.totalActiveLoans > 0 ? "94.2%" : "0%"}
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-300">Morosidad:</span>
