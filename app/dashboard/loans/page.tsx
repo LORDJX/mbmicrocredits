@@ -261,12 +261,19 @@ export default function LoansPage() {
 
     const printWindow = window.open("", "_blank")
     if (!printWindow) {
-      toast.error("No se pudo abrir la ventana de impresión. Verifique que los pop-ups estén habilitados.")
+      toast({
+        title: "Error",
+        description: "No se pudo abrir la ventana de impresión. Verifique que los pop-ups estén habilitados.",
+        variant: "destructive",
+      })
       return
     }
 
     // Mostrar indicador de carga
-    toast.info("Preparando documento para impresión...")
+    toast({
+      title: "Preparando impresión",
+      description: "Preparando documento para impresión...",
+    })
 
     printWindow.document.write(`
       <!DOCTYPE html>
@@ -439,7 +446,10 @@ export default function LoansPage() {
     `)
 
     printWindow.document.close()
-    toast.success("Documento preparado para impresión")
+    toast({
+      title: "Éxito",
+      description: "Documento preparado para impresión",
+    })
   }
 
   const printLoanDetail = (loan: Loan) => {
@@ -448,11 +458,18 @@ export default function LoansPage() {
 
     const printWindow = window.open("", "_blank")
     if (!printWindow) {
-      toast.error("No se pudo abrir la ventana de impresión. Verifique que los pop-ups estén habilitados.")
+      toast({
+        title: "Error",
+        description: "No se pudo abrir la ventana de impresión. Verifique que los pop-ups estén habilitados.",
+        variant: "destructive",
+      })
       return
     }
 
-    toast.info("Preparando detalle para impresión...")
+    toast({
+      title: "Preparando impresión",
+      description: "Preparando detalle para impresión...",
+    })
 
     printWindow.document.write(`
       <!DOCTYPE html>
@@ -564,7 +581,10 @@ export default function LoansPage() {
     `)
 
     printWindow.document.close()
-    toast.success("Detalle preparado para impresión")
+    toast({
+      title: "Éxito",
+      description: "Detalle preparado para impresión",
+    })
   }
 
   if (loading && loans.length === 0) {
