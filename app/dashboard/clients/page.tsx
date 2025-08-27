@@ -1105,7 +1105,7 @@ export default function ClientsPage() {
 
               <div className="space-y-2">
                 <Label className="text-sm font-semibold text-muted-foreground">Referido por</Label>
-                <p className="text-lg">{currentClient.referred_by || "No especificado"}</p>
+                <p className="text-lg">{getReferredByName(currentClient.referred_by) || "No especificado"}</p>
               </div>
 
               <div className="space-y-2">

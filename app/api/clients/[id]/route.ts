@@ -29,6 +29,8 @@ const baseSelect = `
   observations,
   dni_photo_url,
   dni_back_url,
+  cbu_cvu,
+  alias,
   created_at,
   updated_at,
   deleted_at
@@ -77,6 +79,8 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
       "observations",
       "dni_photo_url", // imagen frontal
       "dni_back_url", // imagen trasera
+      "cbu_cvu", // CBU/CVU del cliente
+      "alias", // Alias bancario del cliente
     ]
 
     for (const key of allowed) {
