@@ -40,7 +40,18 @@ export async function GET(request: NextRequest) {
     const totalPartners = allPartners?.length || 0
     const totalPartnerCapital = allPartners?.reduce((sum, partner) => sum + (partner.capital || 0), 0) || 0
     const totalIncome = allReceipts?.reduce((sum, receipt) => sum + (receipt.total_amount || 0), 0) || 0
-    const totalExpenses = 20000.25 // Valor fijo por ahora, se puede obtener de una tabla de gastos
+
+    // Obtener gastos reales de la tabla transactions con type='expense'
+    const { data: expenseTransactions, error: expensesError } = await supabase
+      .from("transactions")
+      .select("amount")
+      .eq("type", "expense")
+
+    if (expensesError) {
+      console.error("[v0] Error al obtener transacciones de gastos:", expensesError)
+    }
+
+    const totalExpenses = expenseTransactions?.reduce((sum, expense) => sum + (expense.amount || 0), 0) || 0
     const netBalance = totalIncome - totalExpenses
 
     const loansByType =

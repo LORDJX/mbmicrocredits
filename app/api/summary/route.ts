@@ -47,8 +47,21 @@ export async function GET(request: NextRequest) {
     const totalClients = clients?.length || 0
     const totalPartners = partners?.length || 0
     const monthlyIncome = monthlyReceipts?.reduce((sum, receipt) => sum + (receipt.total_amount || 0), 0) || 0
-    const monthlyExpenses = 4200.0 // Valor fijo por ahora, se puede obtener de una tabla de gastos
-    const profitMargin = monthlyIncome > 0 ? ((monthlyIncome - monthlyExpenses) / monthlyIncome) * 100 : 0
+
+    // Obtener gastos reales de la tabla transactions con type='expense'
+    const { data: monthlyExpenses, error: expensesError } = await supabase
+      .from("transactions")
+      .select("amount")
+      .eq("type", "expense")
+      .gte("created_at", firstDayOfMonth.toISOString())
+      .lte("created_at", lastDayOfMonth.toISOString())
+
+    if (expensesError) {
+      console.error("[v0] Error al obtener gastos mensuales:", expensesError)
+    }
+
+    const totalMonthlyExpenses = monthlyExpenses?.reduce((sum, expense) => sum + (expense.amount || 0), 0) || 0
+    const profitMargin = monthlyIncome > 0 ? ((monthlyIncome - totalMonthlyExpenses) / monthlyIncome) * 100 : 0
     const averageLoanAmount = totalActiveLoans > 0 ? totalActiveLoanAmount / totalActiveLoans : 0
 
     const summaryData = {
@@ -57,7 +70,7 @@ export async function GET(request: NextRequest) {
       totalClients,
       totalPartners,
       monthlyIncome,
-      monthlyExpenses,
+      monthlyExpenses: totalMonthlyExpenses,
       profitMargin,
       averageLoanAmount,
     }
