@@ -11,6 +11,20 @@ export async function GET(request: Request) {
     const supabase = createAdminClient()
     const { searchParams } = new URL(request.url)
     const search = (searchParams.get("search") || "").trim()
+    const dniCheck = searchParams.get("dni")
+
+    if (dniCheck) {
+      console.log("[v0] Verificando DNI duplicado en API:", dniCheck)
+      const { data, error } = await supabase.from("clients").select("id, dni").eq("dni", dniCheck.trim()).limit(1)
+
+      if (error) {
+        console.error("[v0] Error verificando DNI duplicado:", error)
+        return NextResponse.json([], { status: 200 })
+      }
+
+      console.log("[v0] Resultado verificación DNI:", data)
+      return NextResponse.json(data ?? [], { status: 200 })
+    }
 
     // Selección amplia para evitar errores por columnas inexistentes en distintas migraciones
     let query = supabase.from("clients").select("*").order("created_at", { ascending: false })
