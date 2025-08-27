@@ -57,9 +57,12 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
 
 export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
   try {
+    console.log("[v0] API PATCH /api/clients/[id] iniciada")
     const supabase = getAdminClient()
     const { id } = params
     const body = await request.json()
+
+    console.log("[v0] Datos recibidos para actualización:", JSON.stringify(body, null, 2))
 
     // Campos permitidos al actualizar
     const updateData: Record<string, any> = {}
@@ -73,13 +76,21 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
       "referred_by",
       "status",
       "observations",
-      "dni_photo_url", // legacy (opcional)
-      "dni_front_url",
-      "dni_back_url",
+      "dni_photo_url", // imagen frontal
+      "dni_back_url", // imagen trasera
     ]
+
     for (const key of allowed) {
-      if (key in body) updateData[key] = body[key]
+      if (key in body) {
+        updateData[key] = body[key]
+      }
     }
+
+    if (body.dni_front_url) {
+      updateData.dni_photo_url = body.dni_front_url
+    }
+
+    console.log("[v0] Datos a actualizar:", JSON.stringify(updateData, null, 2))
 
     const { data, error, status } = await supabase
       .from("clients")
@@ -89,12 +100,14 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
       .single()
 
     if (error) {
+      console.error("[v0] Error de Supabase en actualización:", error)
       return NextResponse.json(
         { detail: "Error al actualizar cliente", error: { message: error.message, code: error.code } },
         { status: status || 500 },
       )
     }
 
+    console.log("[v0] Cliente actualizado exitosamente:", data)
     return NextResponse.json(data, { status: 200 })
   } catch (err: any) {
     console.error("❌ Error en PATCH /api/clients/[id]:", err)

@@ -721,8 +721,18 @@ export default function ClientsPage() {
       })
 
       if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.detail || `Error ${response.status}: ${response.statusText}`)
+        let errorMessage = `Error ${response.status}: ${response.statusText}`
+        try {
+          const errorData = await response.json()
+          console.error("[v0] Error detallado de la API:", errorData)
+          errorMessage = errorData.detail || errorData.error?.message || errorMessage
+          if (errorData.error?.code) {
+            errorMessage += ` (Código: ${errorData.error.code})`
+          }
+        } catch (parseError) {
+          console.error("[v0] Error al parsear respuesta de error:", parseError)
+        }
+        throw new Error(errorMessage)
       }
 
       const updatedClient = await response.json()
@@ -743,9 +753,10 @@ export default function ClientsPage() {
       await fetchClients()
     } catch (err: any) {
       console.error("[v0] Error al actualizar cliente:", err)
+      const errorMessage = err.message || "Error desconocido al actualizar cliente"
       toast({
-        title: "❌ Error",
-        description: err.message || "Error desconocido al actualizar cliente",
+        title: "❌ Error al actualizar cliente",
+        description: errorMessage,
         variant: "destructive",
         duration: 5000,
       })
@@ -1584,7 +1595,7 @@ export default function ClientsPage() {
                 <Label htmlFor="referred_by">Referido por</Label>
                 <Select
                   value={newClient.referred_by || "__none__"}
-                  onValueChange={(value) => {
+                  onChange={(value) => {
                     const referredBy = value === "__none__" ? undefined : value
                     setNewClient((prev) => ({ ...prev, referred_by: referredBy }))
                   }}
