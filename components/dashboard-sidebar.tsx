@@ -16,6 +16,7 @@ import {
   FileText,
   Receipt,
   Calendar,
+  Calculator,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -42,11 +43,12 @@ const navItems = [
   { title: "Clientes", href: "/dashboard/clients", icon: User2, route: "clients" },
   { title: "Préstamos", href: "/dashboard/loans", icon: CreditCard, route: "loans" },
   { title: "Recibo", href: "/dashboard/receipts", icon: Receipt, route: "receipts" },
-  { title: "Cronograma", href: "/dashboard/cronograma", icon: Calendar, route: "cronograma" }, // agregando ruta cronograma
+  { title: "Cronograma", href: "/dashboard/cronograma", icon: Calendar, route: "cronograma" },
   { title: "Transacciones", href: "/dashboard/transactions", icon: DollarSign, route: "transactions" },
   { title: "Seguimientos", href: "/dashboard/followups", icon: CalendarCheck, route: "followups" },
   { title: "Resumen para Socios", href: "/dashboard/resumen", icon: FileText, route: "reports" },
   { title: "Informe de situación Financiera", href: "/dashboard/reports", icon: BarChart2, route: "reports" },
+  { title: "Fórmulas", href: "/formulas", icon: Calculator, route: "formulas" }, // Agregando nueva ruta de fórmulas al menú
 ]
 
 export function DashboardSidebar() {
@@ -68,12 +70,12 @@ export function DashboardSidebar() {
           if (data.permissions && Array.isArray(data.permissions)) {
             setUserPermissions(data.permissions)
           } else {
-            setUserPermissions(["dashboard", "clients", "loans", "receipts", "cronograma", "transactions"])
+            setUserPermissions(["dashboard", "clients", "loans", "receipts", "cronograma", "transactions", "formulas"])
           }
         }
       } catch (error) {
         console.error("Error loading permissions:", error)
-        setUserPermissions(["dashboard", "clients", "loans", "cronograma"])
+        setUserPermissions(["dashboard", "clients", "loans", "cronograma", "formulas"])
       } finally {
         setPermissionsLoaded(true)
       }
