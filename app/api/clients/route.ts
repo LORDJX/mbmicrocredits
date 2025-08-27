@@ -72,10 +72,8 @@ export async function POST(request: Request) {
       referred_by: body.referred_by ?? null,
       status: body.status ?? "activo",
       observations: body.observations ?? null,
-      // Campos opcionales; se insertarán solo si existen en tu esquema:
       dni_photo_url: body.dni_photo_url ?? null,
-      dni_front_url: body.dni_front_url ?? null,
-      dni_back_url: body.dni_back_url ?? null,
+      // Campos opcionales; se insertarán solo si existen en tu esquema:
     }
 
     console.log("[v0] Datos a insertar:", insertData)
