@@ -19,6 +19,7 @@ import { Label } from "@/components/ui/label"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { MoreHorizontal, PlusCircle } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 interface FollowUp {
   id: string
@@ -37,6 +38,14 @@ interface FollowUp {
     nombre?: string | null
     apellido?: string | null
   } | null
+}
+
+interface Client {
+  id: string
+  first_name: string
+  last_name: string
+  dni: string
+  client_code: string
 }
 
 const initialNewFollowUpState = {
@@ -74,6 +83,7 @@ function getClientFullName(client?: FollowUp["client"]) {
 
 export default function FollowUpsPage() {
   const [followUps, setFollowUps] = useState<FollowUp[]>([])
+  const [clients, setClients] = useState<Client[]>([]) // Agregar estado para clientes
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
@@ -85,8 +95,23 @@ export default function FollowUpsPage() {
 
   useEffect(() => {
     fetchFollowUps()
+    fetchClients() // Cargar clientes al inicializar
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  const fetchClients = async () => {
+    try {
+      const response = await fetch("/api/clients")
+      if (response.ok) {
+        const data = await response.json()
+        if (data.success && Array.isArray(data.clients)) {
+          setClients(data.clients)
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching clients:", error)
+    }
+  }
 
   const fetchFollowUps = async () => {
     setLoading(true)
@@ -340,15 +365,23 @@ export default function FollowUpsPage() {
             <form onSubmit={handleSaveFollowUp} className="grid gap-4 py-4">
               <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="client_id" className="text-right text-gray-300">
-                  ID Cliente
+                  Cliente
                 </Label>
-                <Input
-                  id="client_id"
+                <Select
                   value={currentFollowUp.client_id}
-                  onChange={(e) => setCurrentFollowUp({ ...currentFollowUp, client_id: e.target.value })}
-                  className="col-span-3 bg-gray-700 border-gray-600 text-gray-100 placeholder:text-gray-400"
-                  disabled
-                />
+                  onValueChange={(value) => setCurrentFollowUp({ ...currentFollowUp, client_id: value })}
+                >
+                  <SelectTrigger className="col-span-3 bg-gray-700 border-gray-600 text-gray-100">
+                    <SelectValue placeholder="Seleccionar cliente" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-gray-700 border-gray-600 text-gray-100">
+                    {clients.map((client) => (
+                      <SelectItem key={client.id} value={client.id} className="hover:bg-gray-600">
+                        {client.first_name} {client.last_name} ({client.dni})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="date" className="text-right text-gray-300">
@@ -420,15 +453,23 @@ export default function FollowUpsPage() {
           <form onSubmit={handleCreateFollowUp} className="grid gap-4 py-4">
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="new_client_id" className="text-right text-gray-300">
-                ID Cliente
+                Cliente
               </Label>
-              <Input
-                id="new_client_id"
+              <Select
                 value={newFollowUp.client_id}
-                onChange={(e) => setNewFollowUp({ ...newFollowUp, client_id: e.target.value })}
-                className="col-span-3 bg-gray-700 border-gray-600 text-gray-100 placeholder:text-gray-400"
-                required
-              />
+                onValueChange={(value) => setNewFollowUp({ ...newFollowUp, client_id: value })}
+              >
+                <SelectTrigger className="col-span-3 bg-gray-700 border-gray-600 text-gray-100">
+                  <SelectValue placeholder="Seleccionar cliente" />
+                </SelectTrigger>
+                <SelectContent className="bg-gray-700 border-gray-600 text-gray-100">
+                  {clients.map((client) => (
+                    <SelectItem key={client.id} value={client.id} className="hover:bg-gray-600">
+                      {client.first_name} {client.last_name} ({client.dni})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="new_date" className="text-right text-gray-300">

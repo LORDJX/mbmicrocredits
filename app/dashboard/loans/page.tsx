@@ -260,7 +260,13 @@ export default function LoansPage() {
     const clientName = loan.clients ? `${loan.clients.first_name} ${loan.clients.last_name}` : "Cliente no encontrado"
 
     const printWindow = window.open("", "_blank")
-    if (!printWindow) return
+    if (!printWindow) {
+      toast.error("No se pudo abrir la ventana de impresión. Verifique que los pop-ups estén habilitados.")
+      return
+    }
+
+    // Mostrar indicador de carga
+    toast.info("Preparando documento para impresión...")
 
     printWindow.document.write(`
       <!DOCTYPE html>
@@ -269,8 +275,8 @@ export default function LoansPage() {
           <title>Cronograma de Préstamo - ${loan.loan_code}</title>
           <style>
             @page { 
-              size: 80mm 200mm; 
-              margin: 3mm; 
+              size: A4; 
+              margin: 15mm; 
             }
             * { 
               box-sizing: border-box; 
@@ -278,150 +284,102 @@ export default function LoansPage() {
               padding: 0; 
             }
             body { 
-              font-family: 'Courier New', monospace; 
-              font-size: 10px; 
-              line-height: 1.2; 
+              font-family: 'Arial', sans-serif; 
+              font-size: 12px; 
+              line-height: 1.4; 
               color: #000; 
               background: #fff; 
-              width: 100%; 
-              height: 100%; 
-              padding: 2mm;
             }
             .header { 
               text-align: center; 
-              margin-bottom: 4mm; 
-              border-bottom: 2px solid #000; 
-              padding-bottom: 2mm; 
-            }
-            .logo { 
-              width: 20mm; 
-              height: 20mm; 
-              margin: 0 auto 2mm; 
-              border-radius: 50%; 
-              border: 1px solid #000;
+              margin-bottom: 20px; 
+              border-bottom: 2px solid #333; 
+              padding-bottom: 15px; 
             }
             .company-name { 
-              font-size: 14px; 
+              font-size: 20px; 
               font-weight: bold; 
-              margin-bottom: 1mm; 
-              letter-spacing: 1px;
+              margin-bottom: 5px; 
+              color: #d4a574;
             }
             .document-title { 
-              font-size: 11px; 
+              font-size: 16px; 
               font-weight: bold; 
-              text-decoration: underline;
+              color: #333;
             }
             .info-section { 
-              margin-bottom: 3mm; 
-              padding: 2mm; 
-              border: 1px solid #000; 
-              background: #f8f8f8;
-            }
-            .info-title { 
-              font-weight: bold; 
-              font-size: 11px; 
-              margin-bottom: 2mm; 
-              text-align: center; 
-              text-decoration: underline;
+              margin-bottom: 15px; 
+              padding: 10px; 
+              border: 1px solid #ddd; 
+              background: #f9f9f9;
+              border-radius: 5px;
             }
             .info-grid { 
               display: grid; 
               grid-template-columns: 1fr 1fr; 
-              gap: 1mm; 
-              font-size: 9px;
+              gap: 10px; 
             }
             .info-item { 
-              margin-bottom: 1mm; 
+              margin-bottom: 8px; 
             }
             .label { 
               font-weight: bold; 
+              color: #555;
             }
             .value { 
-              margin-left: 2mm; 
-            }
-            .schedule-section {
-              margin-top: 3mm;
-            }
-            .section-header {
-              font-weight: bold;
-              font-size: 11px;
-              text-align: center;
-              margin-bottom: 2mm;
-              padding: 1mm;
-              background: #000;
-              color: #fff;
+              margin-left: 10px; 
+              color: #333;
             }
             .schedule-table { 
               width: 100%; 
               border-collapse: collapse; 
-              font-size: 9px;
+              margin-top: 15px;
             }
             .schedule-table th, .schedule-table td { 
-              border: 1px solid #000; 
-              padding: 1mm; 
+              border: 1px solid #333; 
+              padding: 8px; 
               text-align: center; 
             }
             .schedule-table th { 
-              background-color: #ddd; 
+              background-color: #f0f0f0; 
               font-weight: bold; 
-              font-size: 8px;
             }
             .schedule-table tr:nth-child(even) { 
-              background-color: #f5f5f5; 
+              background-color: #f9f9f9; 
             }
             .footer {
-              margin-top: 4mm;
+              margin-top: 20px;
               text-align: center;
-              font-size: 8px;
-              border-top: 1px solid #000;
-              padding-top: 2mm;
-            }
-            .separator {
-              border-top: 1px dashed #000;
-              margin: 2mm 0;
+              font-size: 10px;
+              color: #666;
+              border-top: 1px solid #ddd;
+              padding-top: 10px;
             }
             @media print {
-              body { 
-                margin: 0; 
-                padding: 2mm;
-              }
-              .no-print { 
-                display: none; 
-              }
+              body { margin: 0; }
+              .no-print { display: none; }
             }
           </style>
         </head>
         <body>
           <div class="header">
-            <div class="logo">
-              <img src="/images/logo-bm-circular.jpg" alt="BM" style="width: 20mm; height: 20mm; border-radius: 50%;" />
-            </div>
             <div class="company-name">BM MICROCRÉDITOS</div>
             <div class="document-title">CRONOGRAMA DE PAGOS</div>
           </div>
           
           <div class="info-section">
-            <div class="info-title">INFORMACIÓN DEL PRÉSTAMO</div>
-            <div class="info-item">
-              <span class="label">CÓDIGO:</span>
-              <span class="value">${loan.loan_code}</span>
-            </div>
-            <div class="info-item">
-              <span class="label">CLIENTE:</span>
-              <span class="value">${clientName}</span>
-            </div>
-            <div class="info-item">
-              <span class="label">MONTO PRESTADO:</span>
-              <span class="value">$${loan.amount.toFixed(2)}</span>
-            </div>
-          </div>
-
-          <div class="info-section">
-            <div class="info-title">DETALLES DEL PAGO</div>
             <div class="info-grid">
               <div class="info-item">
-                <span class="label">TIPO:</span>
-                <span class="value">${loan.loan_type || "Mensual"}</span>
+                <span class="label">CÓDIGO:</span>
+                <span class="value">${loan.loan_code}</span>
+              </div>
+              <div class="info-item">
+                <span class="label">CLIENTE:</span>
+                <span class="value">${clientName}</span>
+              </div>
+              <div class="info-item">
+                <span class="label">MONTO PRESTADO:</span>
+                <span class="value">$${loan.amount.toFixed(2)}</span>
               </div>
               <div class="info-item">
                 <span class="label">CUOTAS:</span>
@@ -438,45 +396,42 @@ export default function LoansPage() {
             </div>
           </div>
 
-          <div class="separator"></div>
-
-          <div class="schedule-section">
-            <div class="section-header">CRONOGRAMA DE CUOTAS</div>
-            <table class="schedule-table">
-              <thead>
+          <table class="schedule-table">
+            <thead>
+              <tr>
+                <th>Cuota N°</th>
+                <th>Fecha de Pago</th>
+                <th>Monto</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${schedule
+                .map(
+                  (payment, index) => `
                 <tr>
-                  <th>Cuota N°</th>
-                  <th>Fecha de Pago</th>
-                  <th>Monto</th>
+                  <td>${index + 1}</td>
+                  <td>${payment.date.toLocaleDateString("es-AR")}</td>
+                  <td>$${payment.amount.toFixed(2)}</td>
                 </tr>
-              </thead>
-              <tbody>
-                ${schedule
-                  .map(
-                    (payment, index) => `
-                  <tr>
-                    <td>${index + 1}</td>
-                    <td>${payment.date.toLocaleDateString("es-AR")}</td>
-                    <td>$${payment.amount.toFixed(2)}</td>
-                  </tr>
-                `,
-                  )
-                  .join("")}
-              </tbody>
-            </table>
-          </div>
+              `,
+                )
+                .join("")}
+            </tbody>
+          </table>
 
           <div class="footer">
             <div>Generado el ${new Date().toLocaleDateString("es-AR")} a las ${new Date().toLocaleTimeString("es-AR")}</div>
-            <div style="margin-top: 1mm;">BM Microcréditos - Soluciones Financieras</div>
+            <div>BM Microcréditos - Soluciones Financieras</div>
           </div>
           
           <script>
             window.onload = function() {
-              window.print();
-              window.onafterprint = function() {
-                window.close();
-              }
+              setTimeout(function() {
+                window.print();
+                window.onafterprint = function() {
+                  window.close();
+                }
+              }, 500);
             }
           </script>
         </body>
@@ -484,6 +439,7 @@ export default function LoansPage() {
     `)
 
     printWindow.document.close()
+    toast.success("Documento preparado para impresión")
   }
 
   const printLoanDetail = (loan: Loan) => {
@@ -491,7 +447,12 @@ export default function LoansPage() {
     const clientCode = loan.clients?.client_code || "N/A"
 
     const printWindow = window.open("", "_blank")
-    if (!printWindow) return
+    if (!printWindow) {
+      toast.error("No se pudo abrir la ventana de impresión. Verifique que los pop-ups estén habilitados.")
+      return
+    }
+
+    toast.info("Preparando detalle para impresión...")
 
     printWindow.document.write(`
       <!DOCTYPE html>
@@ -499,31 +460,25 @@ export default function LoansPage() {
         <head>
           <title>Detalle de Préstamo - ${loan.loan_code}</title>
           <style>
-            body { font-family: Arial, sans-serif; margin: 20px; color: #333; line-height: 1.6; }
-            .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #333; padding-bottom: 20px; }
-            .logo { width: 80px; height: 80px; margin: 0 auto 10px; border-radius: 50%; }
-            .company-name { font-size: 24px; font-weight: bold; color: #d4a574; margin-bottom: 5px; }
-            .document-title { font-size: 18px; color: #666; }
-            .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 30px; }
-            .detail-section { background: #f8f9fa; padding: 20px; border-radius: 8px; border-left: 4px solid #d4a574; }
-            .section-title { font-size: 16px; font-weight: bold; color: #333; margin-bottom: 15px; border-bottom: 1px solid #ddd; padding-bottom: 5px; }
-            .detail-item { margin-bottom: 12px; display: flex; justify-content: space-between; }
+            @page { size: A4; margin: 15mm; }
+            body { font-family: Arial, sans-serif; margin: 0; color: #333; line-height: 1.5; }
+            .header { text-align: center; margin-bottom: 25px; border-bottom: 2px solid #333; padding-bottom: 15px; }
+            .company-name { font-size: 22px; font-weight: bold; color: #d4a574; margin-bottom: 5px; }
+            .document-title { font-size: 16px; color: #666; }
+            .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px; }
+            .detail-section { background: #f8f9fa; padding: 15px; border-radius: 8px; border-left: 4px solid #d4a574; }
+            .section-title { font-size: 14px; font-weight: bold; color: #333; margin-bottom: 10px; border-bottom: 1px solid #ddd; padding-bottom: 5px; }
+            .detail-item { margin-bottom: 8px; display: flex; justify-content: space-between; }
             .label { font-weight: bold; color: #666; }
             .value { color: #333; }
-            .status-badge { padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: bold; }
+            .status-badge { padding: 3px 8px; border-radius: 15px; font-size: 11px; font-weight: bold; }
             .status-active { background: #d4edda; color: #155724; }
             .status-inactive { background: #f8d7da; color: #721c24; }
-            @media print {
-              body { margin: 0; }
-              .no-print { display: none; }
-            }
+            @media print { body { margin: 0; } .no-print { display: none; } }
           </style>
         </head>
         <body>
           <div class="header">
-            <div class="logo">
-              <img src="/images/logo-bm-circular.jpg" alt="BM Microcréditos" style="width: 80px; height: 80px; border-radius: 50%;" />
-            </div>
             <div class="company-name">BM MICROCRÉDITOS</div>
             <div class="document-title">Detalle de Préstamo</div>
           </div>
@@ -543,10 +498,6 @@ export default function LoansPage() {
                 <span class="label">Fecha de Creación:</span>
                 <span class="value">${new Date(loan.created_at).toLocaleDateString()}</span>
               </div>
-              <div class="detail-item">
-                <span class="label">Última Actualización:</span>
-                <span class="value">${new Date(loan.updated_at).toLocaleDateString()}</span>
-              </div>
             </div>
             
             <div class="detail-section">
@@ -558,10 +509,6 @@ export default function LoansPage() {
               <div class="detail-item">
                 <span class="label">Código de Cliente:</span>
                 <span class="value">${clientCode}</span>
-              </div>
-              <div class="detail-item">
-                <span class="label">ID Cliente:</span>
-                <span class="value">${loan.client_id}</span>
               </div>
             </div>
             
@@ -580,10 +527,6 @@ export default function LoansPage() {
                 <span class="value">${loan.installments}</span>
               </div>
               <div class="detail-item">
-                <span class="label">Tasa de Interés:</span>
-                <span class="value">${calculateInterestRate(loan)}%</span>
-              </div>
-              <div class="detail-item">
                 <span class="label">Total a Cobrar:</span>
                 <span class="value">$${((loan.installment_amount || 0) * loan.installments).toFixed(2)}</span>
               </div>
@@ -594,10 +537,6 @@ export default function LoansPage() {
               <div class="detail-item">
                 <span class="label">Tipo de Préstamo:</span>
                 <span class="value">${loan.loan_type || "N/A"}</span>
-              </div>
-              <div class="detail-item">
-                <span class="label">Modo de Entrega:</span>
-                <span class="value">${loan.delivery_mode || "N/A"}</span>
               </div>
               <div class="detail-item">
                 <span class="label">Fecha de Inicio:</span>
@@ -612,10 +551,12 @@ export default function LoansPage() {
           
           <script>
             window.onload = function() {
-              window.print();
-              window.onafterprint = function() {
-                window.close();
-              }
+              setTimeout(function() {
+                window.print();
+                window.onafterprint = function() {
+                  window.close();
+                }
+              }, 500);
             }
           </script>
         </body>
@@ -623,6 +564,7 @@ export default function LoansPage() {
     `)
 
     printWindow.document.close()
+    toast.success("Detalle preparado para impresión")
   }
 
   if (loading && loans.length === 0) {
