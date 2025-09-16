@@ -126,29 +126,26 @@ export default function LoansPage() {
     if (!currentLoan) return
 
     setLoading(true)
-    setError(null)
 
     try {
       console.log("[v0] Datos del préstamo antes de guardar:", currentLoan)
       console.log("[v0] start_date original:", currentLoan.start_date)
-      console.log("[v0] end_date original:", currentLoan.end_date)
 
       const formatDateForDatabase = (dateString: string) => {
         if (!dateString) return null
-        // Si la fecha ya tiene formato ISO completo, la usamos tal como está
+        // Si la fecha ya tiene formato ISO completo, extraemos solo la fecha
         if (dateString.includes("T")) {
-          return dateString
+          dateString = dateString.split("T")[0]
         }
-        // Si es solo fecha (YYYY-MM-DD), agregamos la hora local para evitar cambios de zona horaria
-        const localDate = new Date(dateString + "T00:00:00")
+        // Crear fecha local sin conversión de zona horaria
+        const [year, month, day] = dateString.split("-")
+        const localDate = new Date(Number.parseInt(year), Number.parseInt(month) - 1, Number.parseInt(day))
         return localDate.toISOString().split("T")[0] + "T00:00:00.000Z"
       }
 
       const formattedStartDate = formatDateForDatabase(currentLoan.start_date)
-      const formattedEndDate = formatDateForDatabase(currentLoan.end_date)
 
       console.log("[v0] start_date formateada:", formattedStartDate)
-      console.log("[v0] end_date formateada:", formattedEndDate)
 
       const response = await fetch(`/api/loans/${currentLoan.id}`, {
         method: "PATCH",
@@ -161,7 +158,6 @@ export default function LoansPage() {
           loan_type: currentLoan.loan_type,
           interest_rate: currentLoan.interest_rate,
           start_date: formattedStartDate,
-          end_date: formattedEndDate,
           status: currentLoan.status,
           installment_amount: currentLoan.installment_amount,
           delivery_mode: currentLoan.delivery_mode,
@@ -871,16 +867,20 @@ export default function LoansPage() {
             </DialogHeader>
             <form onSubmit={handleSaveLoan} className="grid gap-4 py-4">
               <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="client_id" className="text-right text-gray-300">
-                  ID Cliente
+                <Label htmlFor="client_name" className="text-right text-gray-300">
+                  Cliente
                 </Label>
-                <Input
-                  id="client_id"
-                  value={currentLoan.client_id}
-                  onChange={(e) => setCurrentLoan({ ...currentLoan, client_id: e.target.value })}
-                  className="col-span-3 bg-gray-700 border-gray-600 text-gray-100 placeholder:text-gray-400"
-                  disabled
-                />
+                <div className="col-span-3">
+                  <Input
+                    id="client_name"
+                    value={`${currentLoan.clients?.first_name || ""} ${currentLoan.clients?.last_name || ""}`}
+                    className="col-span-3 bg-gray-700 border-gray-600 text-gray-100 placeholder:text-gray-400"
+                    disabled
+                  />
+                  <p className="text-xs text-gray-400 mt-1">
+                    Código: {currentLoan.clients?.client_code || currentLoan.client_id}
+                  </p>
+                </div>
               </div>
               <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="amount" className="text-right text-gray-300">
@@ -969,21 +969,6 @@ export default function LoansPage() {
                   onChange={(e) => {
                     console.log("[v0] Cambiando start_date de:", currentLoan.start_date, "a:", e.target.value)
                     setCurrentLoan({ ...currentLoan, start_date: e.target.value })
-                  }}
-                  className="col-span-3 bg-gray-700 border-gray-600 text-gray-100 placeholder:text-gray-400"
-                />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="end_date" className="text-right text-gray-300">
-                  Fecha Fin
-                </Label>
-                <Input
-                  id="end_date"
-                  type="date"
-                  value={currentLoan.end_date ? currentLoan.end_date.split("T")[0] : ""}
-                  onChange={(e) => {
-                    console.log("[v0] Cambiando end_date de:", currentLoan.end_date, "a:", e.target.value)
-                    setCurrentLoan({ ...currentLoan, end_date: e.target.value })
                   }}
                   className="col-span-3 bg-gray-700 border-gray-600 text-gray-100 placeholder:text-gray-400"
                 />

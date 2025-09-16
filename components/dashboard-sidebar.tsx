@@ -48,7 +48,7 @@ const navItems = [
   { title: "Seguimientos", href: "/dashboard/followups", icon: CalendarCheck, route: "followups" },
   { title: "Resumen para Socios", href: "/dashboard/resumen", icon: FileText, route: "reports" },
   { title: "Informe de situación Financiera", href: "/dashboard/reports", icon: BarChart2, route: "reports" },
-  { title: "Fórmulas", href: "/formulas", icon: Calculator, route: "formulas" }, // Agregando nueva ruta de fórmulas al menú
+  { title: "Fórmulas", href: "/formulas", icon: Calculator, route: "formulas" },
 ]
 
 export function DashboardSidebar() {
@@ -111,7 +111,9 @@ export function DashboardSidebar() {
       </SidebarHeader>
       <SidebarContent className="flex-1 overflow-auto py-4">
         <SidebarGroup>
-          <SidebarGroupLabel className="text-muted-foreground">Navegación</SidebarGroupLabel>
+          <SidebarGroupLabel className="text-muted-foreground font-semibold text-sm uppercase tracking-wide">
+            Navegación
+          </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {filteredNavItems.map((item) => (
@@ -120,8 +122,8 @@ export function DashboardSidebar() {
                     <SidebarMenuButton
                       isActive={pathname === item.href}
                       className={cn(
-                        "hover:bg-primary/10 hover:text-primary",
-                        pathname === item.href && "bg-primary/10 text-primary font-semibold",
+                        "hover:bg-primary/10 hover:text-primary transition-colors duration-200",
+                        pathname === item.href && "bg-primary/15 text-primary font-semibold border-r-2 border-primary",
                       )}
                     >
                       <item.icon className="size-5" />
@@ -134,10 +136,10 @@ export function DashboardSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
-      <SidebarFooter className="p-4 border-t border-border">
+      <SidebarFooter className="p-4 border-t border-border bg-muted/30">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="w-full justify-start text-left">
+            <Button variant="ghost" className="w-full justify-start text-left hover:bg-primary/10">
               <User2 className="mr-2 size-5" />
               <span className="flex-grow">Mi Cuenta</span>
               <ChevronDown className="size-4" />

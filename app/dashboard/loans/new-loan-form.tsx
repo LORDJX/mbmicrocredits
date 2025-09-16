@@ -206,8 +206,9 @@ export function NewLoanForm({ onSuccess, onCancel }: NewLoanFormProps) {
 
       const formatDateForDatabase = (dateString: string) => {
         if (!dateString) return null
-        // Crear fecha local sin conversión de zona horaria
-        const localDate = new Date(dateString + "T00:00:00")
+        // Crear fecha local sin conversión de zona horaria usando los componentes de fecha directamente
+        const [year, month, day] = dateString.split("-")
+        const localDate = new Date(Number.parseInt(year), Number.parseInt(month) - 1, Number.parseInt(day))
         return localDate.toISOString().split("T")[0] + "T00:00:00.000Z"
       }
 
