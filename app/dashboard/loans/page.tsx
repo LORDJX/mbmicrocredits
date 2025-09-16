@@ -421,7 +421,7 @@ export default function LoansPage() {
               </div>
               <div class="info-item">
                 <span class="label">INICIO:</span>
-                <span class="value">${loan.start_date ? new Date(loan.start_date).toLocaleDateString("es-AR") : "N/A"}</span>
+                <span class="value">${loan.start_date ? formatDateSafe(loan.start_date) : "N/A"}</span>
               </div>
             </div>
           </div>
@@ -621,11 +621,11 @@ export default function LoansPage() {
               </div>
               <div class="detail-item">
                 <span class="label">Fecha de Inicio:</span>
-                <span class="value">${loan.start_date ? new Date(loan.start_date).toLocaleDateString("es-AR") : "N/A"}</span>
+                <span class="value">${loan.start_date ? formatDateSafe(loan.start_date) : "N/A"}</span>
               </div>
               <div class="detail-item">
-                <span class="label">Fecha de Fin:</span>
-                <span class="value">${loan.end_date ? new Date(loan.end_date).toLocaleDateString("es-AR") : "N/A"}</span>
+                <span class="label">Fecha de Finalización:</span>
+                <span class="value">${calculateEndDate(loan.start_date, loan.installments)}</span>
               </div>
             </div>
           </div>
@@ -687,6 +687,44 @@ export default function LoansPage() {
       })
       printWindow.close()
     }
+  }
+
+  const formatDateSafe = (dateString: string | null) => {
+    if (!dateString) return "N/A"
+
+    // Extraer solo la parte de fecha si viene con tiempo
+    const dateOnly = dateString.includes("T") ? dateString.split("T")[0] : dateString
+    const [year, month, day] = dateOnly.split("-")
+
+    // Crear fecha local sin conversión de zona horaria
+    const localDate = new Date(Number.parseInt(year), Number.parseInt(month) - 1, Number.parseInt(day))
+
+    return localDate.toLocaleDateString("es-AR", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    })
+  }
+
+  const calculateEndDate = (startDate: string | null, installments: number) => {
+    if (!startDate) return null
+
+    // Extraer solo la parte de fecha
+    const dateOnly = startDate.includes("T") ? startDate.split("T")[0] : startDate
+    const [year, month, day] = dateOnly.split("-")
+
+    // Crear fecha de inicio local
+    const startDateLocal = new Date(Number.parseInt(year), Number.parseInt(month) - 1, Number.parseInt(day))
+
+    // Agregar los meses correspondientes a las cuotas
+    const endDate = new Date(startDateLocal)
+    endDate.setMonth(endDate.getMonth() + installments)
+
+    return endDate.toLocaleDateString("es-AR", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    })
   }
 
   if (loading && loans.length === 0) {
@@ -769,9 +807,7 @@ export default function LoansPage() {
                     <TableCell className="text-gray-300">{loan.loan_type || "N/A"}</TableCell>
                     <TableCell className="text-gray-300">{calculateInterestRate(loan)}%</TableCell>
                     <TableCell className="text-gray-300">{loan.delivery_mode || "N/A"}</TableCell>
-                    <TableCell className="text-gray-300">
-                      {loan.start_date ? new Date(loan.start_date).toLocaleDateString() : "N/A"}
-                    </TableCell>
+                    <TableCell className="text-gray-300">{formatDateSafe(loan.start_date)}</TableCell>
                     <TableCell>
                       <span
                         className={`px-2 py-1 rounded-full text-xs font-semibold ${
@@ -1132,14 +1168,12 @@ export default function LoansPage() {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-400">Fecha de Inicio:</span>
-                    <span className="text-gray-200">
-                      {currentLoan.start_date ? new Date(currentLoan.start_date).toLocaleDateString("es-AR") : "N/A"}
-                    </span>
+                    <span className="text-gray-200">{formatDateSafe(currentLoan.start_date)}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-gray-400">Fecha de Fin:</span>
+                    <span className="text-gray-400">Fecha de Finalización:</span>
                     <span className="text-gray-200">
-                      {currentLoan.end_date ? new Date(currentLoan.end_date).toLocaleDateString("es-AR") : "N/A"}
+                      {calculateEndDate(currentLoan.start_date, currentLoan.installments)}
                     </span>
                   </div>
                 </div>
