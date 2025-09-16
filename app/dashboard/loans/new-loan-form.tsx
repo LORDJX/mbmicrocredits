@@ -204,6 +204,13 @@ export function NewLoanForm({ onSuccess, onCancel }: NewLoanFormProps) {
       const totalAmount = formData.installment_amount * formData.installments
       const interestRate = formData.amount > 0 ? (totalAmount / formData.amount - 1) * 100 : 0
 
+      const formatDateForDatabase = (dateString: string) => {
+        if (!dateString) return null
+        // Crear fecha local sin conversión de zona horaria
+        const localDate = new Date(dateString + "T00:00:00")
+        return localDate.toISOString().split("T")[0] + "T00:00:00.000Z"
+      }
+
       const submitData = {
         client_id: formData.client_id,
         amount: formData.amount,
@@ -211,14 +218,16 @@ export function NewLoanForm({ onSuccess, onCancel }: NewLoanFormProps) {
         installment_amount: formData.installment_amount,
         loan_type: formData.loan_type,
         delivery_mode: formData.delivery_mode,
-        start_date: formData.start_date,
+        start_date: formatDateForDatabase(formData.start_date),
         observations: formData.observations,
         interest_rate: interestRate,
         amount_to_repay: totalAmount,
         status: "activo",
       }
 
-      console.log("Enviando datos:", submitData)
+      console.log("[v0] Enviando datos del nuevo préstamo:", submitData)
+      console.log("[v0] Fecha original del formulario:", formData.start_date)
+      console.log("[v0] Fecha formateada para base de datos:", submitData.start_date)
 
       const response = await fetch("/api/loans", {
         method: "POST",
@@ -229,7 +238,7 @@ export function NewLoanForm({ onSuccess, onCancel }: NewLoanFormProps) {
       })
 
       const responseData = await response.json()
-      console.log("Respuesta del servidor:", responseData)
+      console.log("[v0] Respuesta del servidor:", responseData)
 
       if (!response.ok) {
         throw new Error(responseData.detail || "Error al crear el préstamo")

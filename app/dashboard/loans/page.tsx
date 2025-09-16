@@ -129,6 +129,27 @@ export default function LoansPage() {
     setError(null)
 
     try {
+      console.log("[v0] Datos del préstamo antes de guardar:", currentLoan)
+      console.log("[v0] start_date original:", currentLoan.start_date)
+      console.log("[v0] end_date original:", currentLoan.end_date)
+
+      const formatDateForDatabase = (dateString: string) => {
+        if (!dateString) return null
+        // Si la fecha ya tiene formato ISO completo, la usamos tal como está
+        if (dateString.includes("T")) {
+          return dateString
+        }
+        // Si es solo fecha (YYYY-MM-DD), agregamos la hora local para evitar cambios de zona horaria
+        const localDate = new Date(dateString + "T00:00:00")
+        return localDate.toISOString().split("T")[0] + "T00:00:00.000Z"
+      }
+
+      const formattedStartDate = formatDateForDatabase(currentLoan.start_date)
+      const formattedEndDate = formatDateForDatabase(currentLoan.end_date)
+
+      console.log("[v0] start_date formateada:", formattedStartDate)
+      console.log("[v0] end_date formateada:", formattedEndDate)
+
       const response = await fetch(`/api/loans/${currentLoan.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -139,8 +160,8 @@ export default function LoansPage() {
           installments: currentLoan.installments,
           loan_type: currentLoan.loan_type,
           interest_rate: currentLoan.interest_rate,
-          start_date: currentLoan.start_date,
-          end_date: currentLoan.end_date,
+          start_date: formattedStartDate,
+          end_date: formattedEndDate,
           status: currentLoan.status,
           installment_amount: currentLoan.installment_amount,
           delivery_mode: currentLoan.delivery_mode,
@@ -159,6 +180,9 @@ export default function LoansPage() {
         }
         throw new Error(errorMessage)
       }
+
+      const updatedLoan = await response.json()
+      console.log("[v0] Préstamo actualizado exitosamente:", updatedLoan)
 
       toast({
         title: "Éxito",
@@ -942,7 +966,10 @@ export default function LoansPage() {
                   id="start_date"
                   type="date"
                   value={currentLoan.start_date ? currentLoan.start_date.split("T")[0] : ""}
-                  onChange={(e) => setCurrentLoan({ ...currentLoan, start_date: e.target.value })}
+                  onChange={(e) => {
+                    console.log("[v0] Cambiando start_date de:", currentLoan.start_date, "a:", e.target.value)
+                    setCurrentLoan({ ...currentLoan, start_date: e.target.value })
+                  }}
                   className="col-span-3 bg-gray-700 border-gray-600 text-gray-100 placeholder:text-gray-400"
                 />
               </div>
@@ -954,7 +981,10 @@ export default function LoansPage() {
                   id="end_date"
                   type="date"
                   value={currentLoan.end_date ? currentLoan.end_date.split("T")[0] : ""}
-                  onChange={(e) => setCurrentLoan({ ...currentLoan, end_date: e.target.value })}
+                  onChange={(e) => {
+                    console.log("[v0] Cambiando end_date de:", currentLoan.end_date, "a:", e.target.value)
+                    setCurrentLoan({ ...currentLoan, end_date: e.target.value })
+                  }}
                   className="col-span-3 bg-gray-700 border-gray-600 text-gray-100 placeholder:text-gray-400"
                 />
               </div>
