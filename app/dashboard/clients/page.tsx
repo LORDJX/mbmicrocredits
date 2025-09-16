@@ -661,8 +661,14 @@ export default function ClientsPage() {
       return
     }
     try {
+      console.log("[v0] Editando cliente - Estado actual del campo referred_by:", currentClient.referred_by)
+
       // Subir imágenes si fueron seleccionadas
       const payload: Record<string, any> = { ...currentClient }
+
+      console.log("[v0] Payload para edición de cliente:", payload)
+      console.log("[v0] Campo referred_by en payload:", payload.referred_by)
+
       if (editFrontFile) {
         payload.dni_front_url = await uploadImage(editFrontFile, "dni-front", currentClient.id)
         // opcional: mantener legacy
@@ -677,11 +683,20 @@ export default function ClientsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       })
+
+      console.log("[v0] Respuesta de edición de cliente:", response.status, response.statusText)
+
       if (!response.ok) throw new Error(await getErrorMessage(response, "Error al actualizar cliente"))
+
+      const updatedClient = await response.json()
+      console.log("[v0] Cliente actualizado exitosamente:", updatedClient)
+      console.log("[v0] Campo referred_by después de actualizar:", updatedClient.referred_by)
+
       toast({ title: "Éxito", description: "Cliente actualizado correctamente." })
       setIsEditDialogOpen(false)
       fetchClients()
     } catch (err: any) {
+      console.error("[v0] Error al actualizar cliente:", err)
       toast({ title: "Error", description: err.message, variant: "destructive" })
     }
   }
@@ -765,48 +780,30 @@ export default function ClientsPage() {
     }
   }
 
-  const handleCreateClient = async (e: React.FormEvent) => {
-    e.preventDefault()
-    console.log("[v0] Iniciando creación de cliente:", newClient)
-
+  const handleCreateClient = async () => {
     if (!validateForm(newClient)) {
-      console.log("[v0] Validación fallida:", formErrors)
-      toast({
-        title: "Error de validación",
-        description: "Por favor, corrige los errores en el formulario.",
-        variant: "destructive",
-      })
       return
     }
 
+    setIsLoading(true)
     try {
-      console.log("[v0] Verificando DNI duplicado:", newClient.dni)
-      const dniCheckResponse = await fetch(`/api/clients?dni=${newClient.dni}`)
-      if (dniCheckResponse.ok) {
-        const existingClients = await dniCheckResponse.json()
-        if (existingClients.length > 0) {
-          console.log("[v0] DNI duplicado encontrado")
-          toast({
-            title: "DNI duplicado",
-            description: "Ya existe un cliente con este DNI.",
-            variant: "destructive",
-          })
-          return
-        }
-      }
-    } catch (error) {
-      console.error("[v0] Error verificando DNI:", error)
-    }
+      console.log("[v0] Iniciando creación de cliente")
 
-    try {
+      console.log("[v0] Estado actual del campo referred_by:", newClient.referred_by)
+
+      // Subir imágenes si fueron seleccionadas
       const payload: Record<string, any> = { ...newClient }
 
-      // Subir imágenes si se eligieron
+      console.log("[v0] Payload para creación de cliente:", payload)
+      console.log("[v0] Campo referred_by en payload:", payload.referred_by)
+
       if (newFrontFile) {
         console.log("[v0] Subiendo imagen frontal del DNI")
         payload.dni_front_url = await uploadImage(newFrontFile, "dni-front")
-        payload.dni_photo_url = payload.dni_front_url // legacy opcional
+        // opcional: mantener legacy
+        payload.dni_photo_url = payload.dni_front_url
       }
+
       if (newBackFile) {
         console.log("[v0] Subiendo imagen trasera del DNI")
         payload.dni_back_url = await uploadImage(newBackFile, "dni-back")
@@ -831,6 +828,8 @@ export default function ClientsPage() {
       const createdClient = await response.json()
       console.log("[v0] Cliente creado exitosamente:", createdClient)
 
+      console.log("[v0] Campo referred_by después de crear:", createdClient.referred_by)
+
       toast({ title: "Éxito", description: "Cliente creado correctamente." })
       setIsCreateDialogOpen(false)
       setNewClient(initialNewClientState)
@@ -842,6 +841,7 @@ export default function ClientsPage() {
       console.error("[v0] Error final en creación de cliente:", err)
       toast({ title: "Error", description: err.message, variant: "destructive" })
     }
+    setIsLoading(false)
   }
 
   const handleInputChange = (
@@ -1314,6 +1314,12 @@ export default function ClientsPage() {
                     value={currentClient.referred_by || "__none__"}
                     onValueChange={(value) => {
                       const referredBy = value === "__none__" ? undefined : value
+                      console.log(
+                        "[v0] Cambiando referred_by en edición de:",
+                        currentClient.referred_by,
+                        "a:",
+                        referredBy,
+                      )
                       setCurrentClient((prev) => ({ ...prev, referred_by: referredBy }))
                     }}
                   >
@@ -1597,6 +1603,7 @@ export default function ClientsPage() {
                   value={newClient.referred_by || "__none__"}
                   onChange={(value) => {
                     const referredBy = value === "__none__" ? undefined : value
+                    console.log("[v0] Cambiando referred_by en creación de:", newClient.referred_by, "a:", referredBy)
                     setNewClient((prev) => ({ ...prev, referred_by: referredBy }))
                   }}
                 >
