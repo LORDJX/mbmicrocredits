@@ -1,9 +1,5 @@
-import { NextResponse } from "next/server"
-import { createClient } from "@supabase/supabase-js"
-
-const supabaseUrl = "https://your-supabase-url.supabase.co"
-const supabaseKey = "your-supabase-key"
-const supabase = createClient(supabaseUrl, supabaseKey)
+import { type NextRequest, NextResponse } from "next/server"
+import { createAdminClient } from "@/lib/supabase/server"
 
 async function processLoans(
   loans: any[],
@@ -12,6 +8,7 @@ async function processLoans(
   startOfMonth: Date,
   endOfMonth: Date,
   todayStr: string,
+  yesterdayStr: string,
 ) {
   // Generar cronograma de cuotas
   const allInstallments: any[] = []
@@ -170,6 +167,9 @@ async function processLoans(
   const todayReceipts = allReceipts?.filter((receipt) => receipt.receipt_date === todayStr) || []
   const totalReceivedToday = todayReceipts.reduce((sum, r) => sum + (r.total_amount || 0), 0)
 
+  const yesterdayReceipts = allReceipts?.filter((receipt) => receipt.receipt_date === yesterdayStr) || []
+  const totalReceivedYesterday = yesterdayReceipts.reduce((sum, r) => sum + (r.total_amount || 0), 0)
+
   const monthReceipts =
     allReceipts?.filter((r) => {
       const receiptDate = new Date(r.receipt_date)
@@ -179,6 +179,7 @@ async function processLoans(
   const totalReceivedMonth = monthReceipts.reduce((sum, r) => sum + (r.total_amount || 0), 0)
 
   console.log("[v0] Today receipts found:", todayReceipts.length, "Total amount:", totalReceivedToday)
+  console.log("[v0] Yesterday receipts found:", yesterdayReceipts.length, "Total amount:", totalReceivedYesterday)
   console.log("[v0] Month receipts found:", monthReceipts.length, "Total amount:", totalReceivedMonth)
 
   // Calcular resumen
@@ -188,6 +189,7 @@ async function processLoans(
     total_overdue: overdueInstallments.reduce((sum, inst) => sum + inst.amount, 0),
     total_received_month: totalReceivedMonth,
     total_due_month: monthInstallments.reduce((sum, inst) => sum + inst.amount, 0),
+    total_received_yesterday: totalReceivedYesterday,
   }
 
   console.log("[v0] Summary calculated:", summary)
@@ -202,57 +204,50 @@ async function processLoans(
   })
 }
 
-export async function GET(request) {
-  const today = new Date()
-  const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1)
-  const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0)
-  const todayStr = today.toISOString().split("T")[0]
+export async function GET(request: NextRequest) {
+  try {
+    const supabase = createAdminClient()
 
-  console.log("[v0] Cronograma API - Today:", todayStr)
-  console.log("[v0] Cronograma API - Start of month:", startOfMonth.toISOString().split("T")[0])
-  console.log("[v0] Cronograma API - End of month:", endOfMonth.toISOString().split("T")[0])
+    const today = new Date()
+    const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1)
+    const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0)
+    const yesterday = new Date(today)
+    yesterday.setDate(yesterday.getDate() - 1)
+    const todayStr = today.toISOString().split("T")[0]
+    const yesterdayStr = yesterday.toISOString().split("T")[0]
 
-  // Primero verificar la tabla loans
-  const { data: loansCheck, error: loansCheckError } = await supabase.from("loans").select("id, status").limit(5)
+    console.log("[v0] Cronograma API - Today:", todayStr)
+    console.log("[v0] Cronograma API - Start of month:", startOfMonth.toISOString().split("T")[0])
+    console.log("[v0] Cronograma API - End of month:", endOfMonth.toISOString().split("T")[0])
 
-  console.log("[v0] Loans table check - Count:", loansCheck?.length || 0)
-  console.log("[v0] Loans table check - Sample statuses:", loansCheck?.map((l) => l.status) || [])
-
-  // También verificar la tabla active_loans
-  const { data: activeLoansCheck, error: activeLoansCheckError } = await supabase
-    .from("active_loans")
-    .select("id, status")
-    .limit(5)
-
-  console.log("[v0] Active_loans table check - Count:", activeLoansCheck?.length || 0)
-  console.log("[v0] Active_loans table check - Sample statuses:", activeLoansCheck?.map((l) => l.status) || [])
-
-  // Obtener préstamos activos con información del cliente
-  const { data: loans, error: loansError } = await supabase
-    .from("loans")
-    .select(`
-      id,
-      loan_code,
-      client_id,
-      amount,
-      installments,
-      installment_amount,
-      loan_type,
-      start_date,
-      status,
-      clients!inner(
+    // Primero intentar con la tabla loans
+    const { data: loansFromLoans, error: loansError } = await supabase
+      .from("loans")
+      .select(`
         id,
-        first_name,
-        last_name
-      )
-    `)
-    .in("status", ["Activo", "En Mora"])
+        loan_code,
+        client_id,
+        amount,
+        installments,
+        installment_amount,
+        loan_type,
+        start_date,
+        status,
+        clients!inner(
+          id,
+          first_name,
+          last_name
+        )
+      `)
+      .in("status", ["Activo", "En Mora", "activo", "en mora"])
 
-  if (loansError) {
-    console.error("Error fetching loans:", loansError)
-    console.log("[v0] Trying active_loans table...")
+    console.log("[v0] Loans from 'loans' table:", loansFromLoans?.length || 0)
+    if (loansError) {
+      console.log("[v0] Error from 'loans' table:", loansError)
+    }
 
-    const { data: activeLoans, error: activeLoansError } = await supabase
+    // Luego intentar con la tabla active_loans
+    const { data: loansFromActiveLoans, error: activeLoansError } = await supabase
       .from("active_loans")
       .select(`
         id,
@@ -263,45 +258,73 @@ export async function GET(request) {
         loan_type,
         start_date,
         status,
-        clients!inner(
+        active_clients!inner(
           id,
           first_name,
           last_name
         )
       `)
-      .in("status", ["Activo", "En Mora"])
+      .in("status", ["Activo", "En Mora", "activo", "en mora"])
 
+    console.log("[v0] Loans from 'active_loans' table:", loansFromActiveLoans?.length || 0)
     if (activeLoansError) {
-      console.error("Error fetching active loans:", activeLoansError)
-      return NextResponse.json({ error: "Error fetching loans" }, { status: 500 })
+      console.log("[v0] Error from 'active_loans' table:", activeLoansError)
     }
 
-    // Usar active_loans si loans no funcionó
-    console.log("[v0] Using active_loans table - Found:", activeLoans?.length || 0)
-    // Calcular installment_amount si no existe
-    const loansWithInstallmentAmount =
-      activeLoans?.map((loan) => ({
+    let allLoans: any[] = []
+
+    // Agregar préstamos de la tabla loans
+    if (loansFromLoans && loansFromLoans.length > 0) {
+      const normalizedLoans = loansFromLoans.map((loan) => ({
         ...loan,
-        installment_amount: loan.amount / loan.installments,
-      })) || []
+        clients: loan.clients,
+        installment_amount: loan.installment_amount || loan.amount / loan.installments,
+      }))
+      allLoans = [...allLoans, ...normalizedLoans]
+    }
 
-    return processLoans(loansWithInstallmentAmount, supabase, today, startOfMonth, endOfMonth, todayStr)
+    // Agregar préstamos de la tabla active_loans
+    if (loansFromActiveLoans && loansFromActiveLoans.length > 0) {
+      const normalizedActiveLoans = loansFromActiveLoans.map((loan) => ({
+        ...loan,
+        clients: loan.active_clients, // Mapear active_clients a clients
+        installment_amount: loan.amount / loan.installments, // Calcular installment_amount
+      }))
+      allLoans = [...allLoans, ...normalizedActiveLoans]
+    }
+
+    console.log("[v0] Total loans found:", allLoans.length)
+
+    // Si no hay préstamos, intentar consultar sin filtros de estado para debug
+    if (allLoans.length === 0) {
+      console.log("[v0] No loans found with status filters, checking all loans...")
+
+      const { data: allLoansDebug } = await supabase.from("loans").select("id, loan_code, status").limit(5)
+
+      const { data: allActiveLoansDebug } = await supabase.from("active_loans").select("id, loan_code, status").limit(5)
+
+      console.log("[v0] Sample loans from 'loans' table:", allLoansDebug)
+      console.log("[v0] Sample loans from 'active_loans' table:", allActiveLoansDebug)
+
+      return NextResponse.json({
+        success: true,
+        today: [],
+        overdue: [],
+        month: [],
+        todayReceipts: [],
+        summary: {
+          total_due_today: 0,
+          total_received_today: 0,
+          total_overdue: 0,
+          total_received_month: 0,
+          total_due_month: 0,
+        },
+      })
+    }
+
+    return processLoans(allLoans, supabase, today, startOfMonth, endOfMonth, todayStr, yesterdayStr)
+  } catch (error) {
+    console.error("Error in cronograma API:", error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
-
-  console.log("[v0] Cronograma API - Found loans:", loans?.length || 0)
-
-  if (loans && loans.length > 0) {
-    console.log(
-      "[v0] Loan statuses found:",
-      loans.map((l) => l.status),
-    )
-  }
-
-  // Process loans if found
-  if (loans) {
-    return processLoans(loans, supabase, today, startOfMonth, endOfMonth, todayStr)
-  }
-
-  // Return an empty response if no loans are found
-  return NextResponse.json({ message: "No loans found" }, { status: 200 })
 }
