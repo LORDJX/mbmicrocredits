@@ -2,33 +2,35 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
+import { createClient } from "@/lib/supabase/client"
 
 export default function DashboardPage() {
   const [user, setUser] = useState<{ email: string } | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const router = useRouter()
+  const supabase = createClient()
 
   useEffect(() => {
-    const checkAuth = () => {
-      const token = localStorage.getItem("auth_token")
-      const email = localStorage.getItem("user_email")
+    const checkAuth = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
 
-      if (!token || !email) {
-        router.push("/login")
+      if (!user) {
+        router.push("/auth/login")
         return
       }
 
-      setUser({ email })
+      setUser({ email: user.email || "" })
       setIsLoading(false)
     }
 
     checkAuth()
-  }, [router])
+  }, [router, supabase])
 
-  const handleLogout = () => {
-    localStorage.removeItem("auth_token")
-    localStorage.removeItem("user_email")
-    router.push("/login")
+  const handleLogout = async () => {
+    await supabase.auth.signOut()
+    router.push("/auth/login")
   }
 
   if (isLoading) {
@@ -41,26 +43,62 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <header className="bg-white shadow">
+      <nav className="bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-6">
-            <h1 className="text-3xl font-bold text-gray-900">MB Microcréditos</h1>
+          <div className="flex justify-between h-16">
+            <div className="flex items-center">
+              <h1 className="text-2xl font-bold text-blue-600">MB Microcréditos</h1>
+            </div>
             <div className="flex items-center space-x-4">
-              <span className="text-gray-700">Bienvenido, {user?.email}</span>
-              <button
-                onClick={handleLogout}
-                className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm font-medium"
-              >
-                Cerrar Sesión
-              </button>
+              <div className="hidden md:flex items-center space-x-6">
+                <a
+                  href="/dashboard"
+                  className="text-gray-700 hover:text-blue-600 px-3 py-2 rounded-md text-sm font-medium"
+                >
+                  Dashboard
+                </a>
+                <a
+                  href="/prestamos"
+                  className="text-gray-700 hover:text-blue-600 px-3 py-2 rounded-md text-sm font-medium"
+                >
+                  Préstamos
+                </a>
+                <a
+                  href="/clientes"
+                  className="text-gray-700 hover:text-blue-600 px-3 py-2 rounded-md text-sm font-medium"
+                >
+                  Clientes
+                </a>
+                <a
+                  href="/cronograma"
+                  className="text-gray-700 hover:text-blue-600 px-3 py-2 rounded-md text-sm font-medium"
+                >
+                  Cronograma
+                </a>
+                <a
+                  href="/reportes"
+                  className="text-gray-700 hover:text-blue-600 px-3 py-2 rounded-md text-sm font-medium"
+                >
+                  Reportes
+                </a>
+              </div>
+              <div className="flex items-center space-x-3">
+                <span className="text-sm text-gray-700">Bienvenido, {user?.email}</span>
+                <button
+                  onClick={handleLogout}
+                  className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors"
+                >
+                  Cerrar Sesión
+                </button>
+              </div>
             </div>
           </div>
         </div>
-      </header>
+      </nav>
 
       <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         <div className="px-4 py-6 sm:px-0">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             <div className="bg-white overflow-hidden shadow rounded-lg">
               <div className="p-5">
                 <div className="flex items-center">
@@ -114,6 +152,24 @@ export default function DashboardPage() {
                 </div>
               </div>
             </div>
+
+            <div className="bg-white overflow-hidden shadow rounded-lg">
+              <div className="p-5">
+                <div className="flex items-center">
+                  <div className="flex-shrink-0">
+                    <div className="w-8 h-8 bg-purple-500 rounded-full flex items-center justify-center">
+                      <span className="text-white font-bold">%</span>
+                    </div>
+                  </div>
+                  <div className="ml-5 w-0 flex-1">
+                    <dl>
+                      <dt className="text-sm font-medium text-gray-500 truncate">Tasa Morosidad</dt>
+                      <dd className="text-lg font-medium text-gray-900">3.2%</dd>
+                    </dl>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
 
           <div className="mt-8 bg-white shadow rounded-lg">
@@ -135,6 +191,9 @@ export default function DashboardPage() {
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Estado
                       </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Acciones
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
@@ -147,6 +206,9 @@ export default function DashboardPage() {
                           Pagado
                         </span>
                       </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        <button className="text-blue-600 hover:text-blue-900">Ver detalles</button>
+                      </td>
                     </tr>
                     <tr>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
@@ -158,6 +220,10 @@ export default function DashboardPage() {
                         <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">
                           Pendiente
                         </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        <button className="text-blue-600 hover:text-blue-900 mr-3">Registrar pago</button>
+                        <button className="text-gray-600 hover:text-gray-900">Ver detalles</button>
                       </td>
                     </tr>
                   </tbody>
