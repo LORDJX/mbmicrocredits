@@ -122,9 +122,9 @@ export function DashboardSidebar() {
                     <SidebarMenuButton
                       isActive={pathname === item.href}
                       className={cn(
-                        "text-gray-300 hover:bg-blue-600/20 hover:text-blue-400 transition-colors duration-200",
+                        "text-gray-300 hover:bg-gray-800 hover:text-blue-400 transition-colors duration-200",
                         pathname === item.href &&
-                          "bg-blue-600/30 text-blue-400 font-semibold border-r-2 border-blue-400",
+                          "bg-blue-600/20 text-blue-400 font-semibold border-r-2 border-blue-400",
                       )}
                     >
                       <item.icon className="size-5" />
@@ -142,7 +142,7 @@ export function DashboardSidebar() {
           <DropdownMenuTrigger asChild>
             <Button
               variant="ghost"
-              className="w-full justify-start text-left text-gray-300 hover:bg-blue-600/20 hover:text-blue-400"
+              className="w-full justify-start text-left text-gray-300 hover:bg-gray-700 hover:text-gray-100"
             >
               <User2 className="mr-2 size-5" />
               <span className="flex-grow">Mi Cuenta</span>
@@ -154,7 +154,7 @@ export function DashboardSidebar() {
             align="start"
             className="w-(--radix-popper-anchor-width) bg-gray-800 text-gray-100 border-gray-700"
           >
-            <DropdownMenuItem className="cursor-pointer hover:!bg-blue-600/20 hover:!text-blue-400">
+            <DropdownMenuItem className="cursor-pointer hover:!bg-gray-700 text-gray-300 hover:!text-gray-100">
               <span>Perfil</span>
             </DropdownMenuItem>
             <DropdownMenuItem
