@@ -1,8 +1,21 @@
-import type { NextRequest } from "next/server"
-import { NextResponse } from "next/server"
+import { NextResponse, type NextRequest } from "next/server"
 
 export async function middleware(request: NextRequest) {
-  console.log("[v0] Middleware bypassed - allowing all requests")
+  const { pathname } = request.nextUrl
+
+  // Allow access to auth pages and API routes
+  if (
+    pathname.startsWith("/login") ||
+    pathname.startsWith("/register") ||
+    pathname.startsWith("/forgot-password") ||
+    pathname.startsWith("/auth/callback") ||
+    pathname.startsWith("/api/") ||
+    pathname === "/"
+  ) {
+    return NextResponse.next()
+  }
+
+  // For now, allow all other routes - authentication will be handled client-side
   return NextResponse.next()
 }
 
