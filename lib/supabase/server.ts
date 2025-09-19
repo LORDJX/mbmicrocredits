@@ -43,5 +43,5 @@ export function createSupabaseClient() {
   }
 }
 
-// Export createClient as alias for createSupabaseClient
+// Export createClient as named export (alias for createSupabaseClient)
 export const createClient = createSupabaseClient
