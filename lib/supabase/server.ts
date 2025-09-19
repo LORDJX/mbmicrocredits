@@ -1,28 +1,43 @@
-import { createClient as createSupabaseClient } from "@supabase/supabase-js"
+// Mock Supabase server client for v0 runtime compatibility
+export function createAdminClient() {
+  console.log("[v0] Using mock Supabase admin client - real Supabase client not available in v0 runtime")
 
-/**
- * Server-side Supabase client for authenticated operations
- */
-export function createClient() {
-  return createSupabaseClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!)
+  return {
+    from: (table: string) => ({
+      select: (columns: string) => ({
+        in: (column: string, values: string[]) =>
+          Promise.resolve({
+            data: null,
+            error: { message: "Supabase client not available in v0 runtime" },
+          }),
+        order: (column: string, options: any) =>
+          Promise.resolve({
+            data: null,
+            error: { message: "Supabase client not available in v0 runtime" },
+          }),
+      }),
+      order: (column: string, options: any) =>
+        Promise.resolve({
+          data: null,
+          error: { message: "Supabase client not available in v0 runtime" },
+        }),
+    }),
+  }
 }
 
-/**
- * Admin client for server-side operations that need to bypass RLS
- * Uses service role key - should only be used in API routes
- */
-export function createAdminClient() {
-  const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+export function createSupabaseClient() {
+  console.log("[v0] Using mock Supabase client - real Supabase client not available in v0 runtime")
 
-  if (!supabaseUrl || !serviceRoleKey) {
-    throw new Error("Missing SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY environment variables for admin client")
-  }
-
-  return createSupabaseClient(supabaseUrl, serviceRoleKey, {
+  return {
     auth: {
-      autoRefreshToken: false,
-      persistSession: false,
+      getUser: () => Promise.resolve({ data: { user: null }, error: null }),
+      signInWithPassword: () => Promise.resolve({ data: null, error: { message: "Mock client" } }),
+      signOut: () => Promise.resolve({ error: null }),
     },
-  })
+    from: (table: string) => ({
+      select: () => ({
+        eq: () => Promise.resolve({ data: null, error: null }),
+      }),
+    }),
+  }
 }

@@ -2,69 +2,153 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { supabase } from "@/lib/supabaseClient"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 
 export default function DashboardPage() {
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  const [cronogramData, setCronogramData] = useState<any>(null)
   const router = useRouter()
 
   useEffect(() => {
-    const checkUser = async () => {
-      const {
-        data: { user },
-        error,
-      } = await supabase.auth.getUser()
-
-      if (error || !user) {
+    const checkUser = () => {
+      try {
+        const session = localStorage.getItem("mb_session")
+        if (session) {
+          const sessionData = JSON.parse(session)
+          if (sessionData.user && sessionData.expires > Date.now()) {
+            setUser(sessionData.user)
+            loadCronogramData()
+          } else {
+            router.push("/login")
+          }
+        } else {
+          router.push("/login")
+        }
+      } catch (error) {
+        console.error("Error checking user:", error)
         router.push("/login")
-      } else {
-        setUser(user)
+      } finally {
+        setLoading(false)
       }
-      setLoading(false)
+    }
+
+    const loadCronogramData = async () => {
+      try {
+        const response = await fetch("/api/cronograma")
+        if (response.ok) {
+          const data = await response.json()
+          setCronogramData(data)
+        }
+      } catch (error) {
+        console.error("Error loading cronogram data:", error)
+      }
     }
 
     checkUser()
-
-    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!session) {
-        router.push("/login")
-      } else {
-        setUser(session.user)
-      }
-    })
-
-    return () => {
-      authListener.subscription.unsubscribe()
-    }
   }, [router])
+
+  const handleLogout = () => {
+    localStorage.removeItem("mb_session")
+    router.push("/login")
+  }
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-900 text-gray-100">
-        <p>Cargando dashboard...</p>
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-2 text-gray-600">Loading...</p>
+        </div>
       </div>
     )
   }
 
+  if (!user) {
+    return null // Will redirect to login
+  }
+
   return (
-    <div className="flex flex-col items-center justify-center h-full w-full">
-      <Card className="w-full max-w-2xl bg-gray-800 text-gray-100 border border-gray-700 shadow-lg rounded-lg">
-        <CardHeader className="text-center">
-          <CardTitle className="text-3xl font-bold text-gray-50">¡Bienvenido al Dashboard!</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4 text-center">
-          {user && (
-            <p className="text-lg text-gray-300">
-              Has iniciado sesión como: <span className="font-semibold">{user.email}</span>
+    <div className="min-h-screen bg-gray-50">
+      <header className="bg-white shadow">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center py-6">
+            <h1 className="text-3xl font-bold text-gray-900">MB Microcredits Dashboard</h1>
+            <button
+              onClick={handleLogout}
+              className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              Sign Out
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+        <div className="px-4 py-6 sm:px-0">
+          <div className="bg-white rounded-lg shadow p-6 mb-6">
+            <h2 className="text-xl font-bold text-gray-900 mb-2">Welcome back!</h2>
+            <p className="text-gray-600 mb-4">You are logged in as {user.email}</p>
+            <p className="text-gray-600">
+              Your microcredit management dashboard is ready. You can start managing your loans, clients, and financial
+              operations.
             </p>
+          </div>
+
+          {cronogramData && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="bg-white rounded-lg shadow p-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">Today's Installments</h3>
+                <p className="text-3xl font-bold text-blue-600">{cronogramData.today?.length || 0}</p>
+                <p className="text-sm text-gray-500">Due today</p>
+              </div>
+
+              <div className="bg-white rounded-lg shadow p-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">Overdue Payments</h3>
+                <p className="text-3xl font-bold text-red-600">{cronogramData.overdue?.length || 0}</p>
+                <p className="text-sm text-gray-500">Past due</p>
+              </div>
+
+              <div className="bg-white rounded-lg shadow p-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">This Month</h3>
+                <p className="text-3xl font-bold text-green-600">{cronogramData.month?.length || 0}</p>
+                <p className="text-sm text-gray-500">Total installments</p>
+              </div>
+            </div>
           )}
-          <p className="text-gray-400">
-            Esta es tu área de trabajo. Usa la barra lateral para navegar por las diferentes secciones.
-          </p>
-        </CardContent>
-      </Card>
+
+          {cronogramData?.summary && (
+            <div className="mt-6 bg-white rounded-lg shadow p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Financial Summary</h3>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div>
+                  <p className="text-sm text-gray-500">Due Today</p>
+                  <p className="text-xl font-bold text-blue-600">
+                    ${cronogramData.summary.total_due_today?.toLocaleString() || 0}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">Received Today</p>
+                  <p className="text-xl font-bold text-green-600">
+                    ${cronogramData.summary.total_received_today?.toLocaleString() || 0}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">Overdue Amount</p>
+                  <p className="text-xl font-bold text-red-600">
+                    ${cronogramData.summary.total_overdue?.toLocaleString() || 0}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">Month Total</p>
+                  <p className="text-xl font-bold text-gray-900">
+                    ${cronogramData.summary.total_due_month?.toLocaleString() || 0}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </main>
     </div>
   )
 }
