@@ -93,25 +93,25 @@ export function DashboardSidebar() {
 
   if (!permissionsLoaded) {
     return (
-      <Sidebar className="bg-card border-r border-border">
-        <SidebarHeader className="p-4 border-b border-border">
-          <h1 className="text-2xl font-bold text-foreground">Microcréditos</h1>
+      <Sidebar className="bg-gray-900 border-r border-gray-800">
+        <SidebarHeader className="p-4 border-b border-gray-800">
+          <h1 className="text-2xl font-bold text-gray-50">Microcréditos</h1>
         </SidebarHeader>
         <SidebarContent className="flex-1 overflow-auto py-4">
-          <div className="p-4 text-center text-muted-foreground">Cargando permisos...</div>
+          <div className="p-4 text-center text-gray-400">Cargando permisos...</div>
         </SidebarContent>
       </Sidebar>
     )
   }
 
   return (
-    <Sidebar className="bg-card border-r border-border">
-      <SidebarHeader className="p-4 border-b border-border">
-        <h1 className="text-2xl font-bold text-foreground">Microcréditos</h1>
+    <Sidebar className="bg-gray-900 border-r border-gray-800">
+      <SidebarHeader className="p-4 border-b border-gray-800">
+        <h1 className="text-2xl font-bold text-gray-50">Microcréditos</h1>
       </SidebarHeader>
       <SidebarContent className="flex-1 overflow-auto py-4">
         <SidebarGroup>
-          <SidebarGroupLabel className="text-muted-foreground font-semibold text-sm uppercase tracking-wide">
+          <SidebarGroupLabel className="text-gray-400 font-semibold text-sm uppercase tracking-wide">
             Navegación
           </SidebarGroupLabel>
           <SidebarGroupContent>
@@ -122,8 +122,9 @@ export function DashboardSidebar() {
                     <SidebarMenuButton
                       isActive={pathname === item.href}
                       className={cn(
-                        "hover:bg-primary/10 hover:text-primary transition-colors duration-200",
-                        pathname === item.href && "bg-primary/15 text-primary font-semibold border-r-2 border-primary",
+                        "text-gray-300 hover:bg-gray-800 hover:text-blue-400 transition-colors duration-200",
+                        pathname === item.href &&
+                          "bg-blue-600/20 text-blue-400 font-semibold border-r-2 border-blue-400",
                       )}
                     >
                       <item.icon className="size-5" />
@@ -136,10 +137,13 @@ export function DashboardSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
-      <SidebarFooter className="p-4 border-t border-border bg-muted/30">
+      <SidebarFooter className="p-4 border-t border-gray-800 bg-gray-800/50">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="w-full justify-start text-left hover:bg-primary/10">
+            <Button
+              variant="ghost"
+              className="w-full justify-start text-left text-gray-300 hover:bg-gray-700 hover:text-gray-100"
+            >
               <User2 className="mr-2 size-5" />
               <span className="flex-grow">Mi Cuenta</span>
               <ChevronDown className="size-4" />
@@ -148,9 +152,9 @@ export function DashboardSidebar() {
           <DropdownMenuContent
             side="top"
             align="start"
-            className="w-[--radix-popper-anchor-width] bg-popover text-popover-foreground border-border"
+            className="w-(--radix-popper-anchor-width) bg-gray-800 text-gray-100 border-gray-700"
           >
-            <DropdownMenuItem className="cursor-pointer hover:!bg-primary/10">
+            <DropdownMenuItem className="cursor-pointer hover:!bg-gray-700 text-gray-300 hover:!text-gray-100">
               <span>Perfil</span>
             </DropdownMenuItem>
             <DropdownMenuItem

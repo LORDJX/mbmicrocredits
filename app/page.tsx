@@ -4,48 +4,41 @@ import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 
 export default function HomePage() {
-  const [loading, setLoading] = useState(true)
+  const [isLoading, setIsLoading] = useState(true)
+  const [user, setUser] = useState(null)
   const router = useRouter()
 
   useEffect(() => {
-    const checkAuth = () => {
+    const checkAuth = async () => {
       try {
-        const session = localStorage.getItem("mb_session")
-        if (session) {
-          const sessionData = JSON.parse(session)
-          if (sessionData.user && sessionData.expires > Date.now()) {
-            router.push("/dashboard")
-            return
-          }
+        const token = localStorage.getItem("auth_token")
+        if (token) {
+          setUser({ email: "admin@mb.com" })
+          router.push("/dashboard")
+        } else {
+          router.push("/login")
         }
       } catch (error) {
         console.error("Error checking auth:", error)
+        router.push("/login")
+      } finally {
+        setIsLoading(false)
       }
-
-      router.push("/login")
-      setLoading(false)
     }
 
     checkAuth()
   }, [router])
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-2 text-gray-600">Loading...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Cargando MB Microcréditos...</p>
         </div>
       </div>
     )
   }
 
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="text-center">
-        <h1 className="text-2xl font-bold text-gray-900 mb-4">MB Microcredits</h1>
-        <p className="text-gray-600">Redirecting...</p>
-      </div>
-    </div>
-  )
+  return null
 }

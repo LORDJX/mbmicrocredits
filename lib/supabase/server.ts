@@ -1,42 +1,24 @@
-// Mock Supabase server client for v0 runtime compatibility
 export function createAdminClient() {
-  console.log("[v0] Using mock Supabase admin client - real Supabase client not available in v0 runtime")
-
+  // Mock implementation since Supabase client library isn't available in v0 runtime
   return {
     from: (table: string) => ({
       select: (columns: string) => ({
-        in: (column: string, values: string[]) =>
-          Promise.resolve({
-            data: null,
-            error: { message: "Supabase client not available in v0 runtime" },
-          }),
-        order: (column: string, options: any) =>
-          Promise.resolve({
-            data: null,
-            error: { message: "Supabase client not available in v0 runtime" },
-          }),
-      }),
-      order: (column: string, options: any) =>
-        Promise.resolve({
+        in: (column: string, values: string[]) => ({
           data: null,
-          error: { message: "Supabase client not available in v0 runtime" },
+          error: new Error("Supabase client not available in v0 runtime"),
         }),
+      }),
     }),
   }
 }
 
-export function createSupabaseClient() {
-  console.log("[v0] Using mock Supabase client - real Supabase client not available in v0 runtime")
-
+export function createClient() {
+  // Mock implementation for regular client
   return {
-    auth: {
-      getUser: () => Promise.resolve({ data: { user: null }, error: null }),
-      signInWithPassword: () => Promise.resolve({ data: null, error: { message: "Mock client" } }),
-      signOut: () => Promise.resolve({ error: null }),
-    },
     from: (table: string) => ({
-      select: () => ({
-        eq: () => Promise.resolve({ data: null, error: null }),
+      select: (columns: string) => ({
+        data: null,
+        error: new Error("Supabase client not available in v0 runtime"),
       }),
     }),
   }
