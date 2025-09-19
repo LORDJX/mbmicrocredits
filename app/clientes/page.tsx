@@ -1,229 +1,283 @@
-import { redirect } from "next/navigation"
-import { createClient } from "@/lib/supabase/server"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+"use client"
+
+import { useEffect, useState } from "react"
+import { PageLayout } from "@/components/page-layout"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Input } from "@/components/ui/input"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Users, Plus, Search, Phone, Mail, MapPin } from "lucide-react"
+import { Input } from "@/components/ui/input"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Label } from "@/components/ui/label"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { MoreHorizontal, PlusCircle, Search, Eye, Printer } from "lucide-react"
+import { useToast } from "@/hooks/use-toast"
 
-async function getClients() {
-  const supabase = await createClient()
-
-  const { data: clients, error } = await supabase
-    .from("active_clients")
-    .select("*")
-    .is("deleted_at", null)
-    .order("created_at", { ascending: false })
-
-  if (error) {
-    console.error("Error fetching clients:", error)
-    return []
-  }
-
-  return clients || []
+interface Client {
+  id: string
+  client_code: string
+  first_name: string
+  last_name: string
+  phone: string
+  address: string
+  dni: string
+  created_at: string
 }
 
-export default async function ClientesPage() {
-  const supabase = await createClient()
+export default function ClientesPage() {
+  const [clients, setClients] = useState<Client[]>([])
+  const [loading, setLoading] = useState(true)
+  const [searchTerm, setSearchTerm] = useState("")
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
+  const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false)
+  const [currentClient, setCurrentClient] = useState<Client | null>(null)
+  const { toast } = useToast()
 
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser()
+  useEffect(() => {
+    fetchClients()
+  }, [searchTerm])
 
-  if (error || !user) {
-    redirect("/auth/login")
-  }
-
-  const clients = await getClients()
-
-  const getStatusBadge = (status: string) => {
-    switch (status?.toLowerCase()) {
-      case "active":
-        return (
-          <Badge variant="default" className="bg-green-100 text-green-800">
-            Activo
-          </Badge>
-        )
-      case "inactive":
-        return <Badge variant="secondary">Inactivo</Badge>
-      case "pending":
-        return (
-          <Badge variant="outline" className="border-orange-200 text-orange-800">
-            Pendiente
-          </Badge>
-        )
-      default:
-        return <Badge variant="secondary">{status || "Sin estado"}</Badge>
+  const fetchClients = async () => {
+    setLoading(true)
+    try {
+      const url = searchTerm ? `/api/clients?search=${encodeURIComponent(searchTerm)}` : "/api/clients"
+      const response = await fetch(url)
+      if (!response.ok) throw new Error("Error al cargar clientes")
+      const data = await response.json()
+      setClients(data)
+    } catch (error) {
+      console.error("Error:", error)
+      toast({
+        title: "Error",
+        description: "No se pudieron cargar los clientes",
+        variant: "destructive",
+      })
+    } finally {
+      setLoading(false)
     }
   }
 
+  const handlePrintClient = (client: Client) => {
+    const printWindow = window.open("", "_blank")
+    if (!printWindow) return
+
+    const printContent = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Cliente - ${client.client_code}</title>
+          <style>
+            body { font-family: Arial, sans-serif; margin: 20px; color: #000; }
+            .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #333; padding-bottom: 10px; }
+            .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+            .info-item { margin-bottom: 10px; }
+            .label { font-weight: bold; color: #333; }
+            .value { margin-left: 10px; }
+            @media print { body { margin: 0; } }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>BM MICROCRÉDITOS</h1>
+            <h2>Información del Cliente</h2>
+            <p>Código: ${client.client_code}</p>
+          </div>
+          <div class="info-grid">
+            <div>
+              <div class="info-item">
+                <span class="label">Nombre Completo:</span>
+                <span class="value">${client.first_name} ${client.last_name}</span>
+              </div>
+              <div class="info-item">
+                <span class="label">DNI:</span>
+                <span class="value">${client.dni || "No registrado"}</span>
+              </div>
+              <div class="info-item">
+                <span class="label">Teléfono:</span>
+                <span class="value">${client.phone || "No registrado"}</span>
+              </div>
+            </div>
+            <div>
+              <div class="info-item">
+                <span class="label">Dirección:</span>
+                <span class="value">${client.address || "No registrada"}</span>
+              </div>
+              <div class="info-item">
+                <span class="label">Fecha de Registro:</span>
+                <span class="value">${new Date(client.created_at).toLocaleDateString()}</span>
+              </div>
+            </div>
+          </div>
+          <script>window.print(); window.close();</script>
+        </body>
+      </html>
+    `
+
+    printWindow.document.write(printContent)
+    printWindow.document.close()
+  }
+
+  const filteredClients = clients.filter(
+    (client) =>
+      client.first_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      client.last_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      client.client_code.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      client.dni?.toLowerCase().includes(searchTerm.toLowerCase()),
+  )
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-foreground font-work-sans">Clientes</h1>
-          <p className="text-muted-foreground mt-2">Gestiona tu cartera de clientes y su información</p>
-        </div>
-        <Button className="bg-primary hover:bg-primary/90 text-primary-foreground">
-          <Plus className="h-4 w-4 mr-2" />
-          Nuevo Cliente
-        </Button>
-      </div>
-
-      {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card className="border-border bg-card">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-card-foreground">Total Clientes</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-card-foreground">{clients.length}</div>
-            <p className="text-xs text-muted-foreground">Clientes registrados</p>
-          </CardContent>
-        </Card>
-        <Card className="border-border bg-card">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-card-foreground">Clientes Activos</CardTitle>
-            <Users className="h-4 w-4 text-green-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-card-foreground">
-              {clients.filter((c) => c.status === "active").length}
-            </div>
-            <p className="text-xs text-muted-foreground">Con préstamos activos</p>
-          </CardContent>
-        </Card>
-        <Card className="border-border bg-card">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-card-foreground">Nuevos Este Mes</CardTitle>
-            <Users className="h-4 w-4 text-blue-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-card-foreground">
-              {
-                clients.filter((c) => {
-                  const created = new Date(c.created_at)
-                  const now = new Date()
-                  return created.getMonth() === now.getMonth() && created.getFullYear() === now.getFullYear()
-                }).length
-              }
-            </div>
-            <p className="text-xs text-muted-foreground">Registrados este mes</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Search and Filters */}
-      <Card className="border-border bg-card">
-        <CardHeader>
-          <CardTitle className="text-card-foreground font-work-sans">Buscar Clientes</CardTitle>
-          <CardDescription>Encuentra clientes por nombre, DNI o código</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex gap-4">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input placeholder="Buscar por nombre, DNI o código..." className="pl-10 bg-input border-border" />
-            </div>
-            <Button variant="outline" className="border-border bg-transparent">
-              Filtros
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Clients Table */}
-      <Card className="border-border bg-card">
-        <CardHeader>
-          <CardTitle className="text-card-foreground font-work-sans">Lista de Clientes</CardTitle>
-          <CardDescription>Todos los clientes registrados en el sistema</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="rounded-md border border-border">
-            <Table>
-              <TableHeader>
-                <TableRow className="border-border">
-                  <TableHead className="text-card-foreground">Código</TableHead>
-                  <TableHead className="text-card-foreground">Nombre</TableHead>
-                  <TableHead className="text-card-foreground">DNI</TableHead>
-                  <TableHead className="text-card-foreground">Contacto</TableHead>
-                  <TableHead className="text-card-foreground">Estado</TableHead>
-                  <TableHead className="text-card-foreground">Fecha Registro</TableHead>
-                  <TableHead className="text-card-foreground">Acciones</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {clients.map((client) => (
-                  <TableRow key={client.id} className="border-border">
-                    <TableCell className="font-mono text-sm">{client.client_code || "N/A"}</TableCell>
-                    <TableCell>
-                      <div>
-                        <div className="font-medium text-card-foreground">
-                          {client.first_name} {client.last_name}
-                        </div>
-                        {client.referred_by && (
-                          <div className="text-xs text-muted-foreground">Referido por: {client.referred_by}</div>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell className="font-mono text-sm">{client.dni || "N/A"}</TableCell>
-                    <TableCell>
-                      <div className="space-y-1">
-                        {client.phone && (
-                          <div className="flex items-center text-xs text-muted-foreground">
-                            <Phone className="h-3 w-3 mr-1" />
-                            {client.phone}
-                          </div>
-                        )}
-                        {client.email && (
-                          <div className="flex items-center text-xs text-muted-foreground">
-                            <Mail className="h-3 w-3 mr-1" />
-                            {client.email}
-                          </div>
-                        )}
-                        {client.address && (
-                          <div className="flex items-center text-xs text-muted-foreground">
-                            <MapPin className="h-3 w-3 mr-1" />
-                            {client.address.substring(0, 30)}...
-                          </div>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell>{getStatusBadge(client.status)}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {new Date(client.created_at).toLocaleDateString("es-ES")}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex gap-2">
-                        <Button variant="outline" size="sm" className="border-border bg-transparent">
-                          Ver
-                        </Button>
-                        <Button variant="outline" size="sm" className="border-border bg-transparent">
-                          Editar
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-          {clients.length === 0 && (
-            <div className="text-center py-8">
-              <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-lg font-semibold text-card-foreground">No hay clientes</h3>
-              <p className="text-muted-foreground">Comienza agregando tu primer cliente</p>
-              <Button className="mt-4 bg-primary hover:bg-primary/90 text-primary-foreground">
-                <Plus className="h-4 w-4 mr-2" />
-                Agregar Cliente
+    <PageLayout title="Gestión de Clientes">
+      <div className="space-y-6">
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle>Clientes Registrados</CardTitle>
+                <CardDescription>Gestiona la información de todos los clientes del sistema</CardDescription>
+              </div>
+              <Button onClick={() => setIsCreateDialogOpen(true)} className="gap-2">
+                <PlusCircle className="h-4 w-4" />
+                Nuevo Cliente
               </Button>
             </div>
-          )}
-        </CardContent>
-      </Card>
-    </div>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center gap-4 mb-6">
+              <div className="relative flex-1 max-w-sm">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+                <Input
+                  placeholder="Buscar por nombre, código o DNI..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+              <div className="text-sm text-muted-foreground">
+                {filteredClients.length} cliente{filteredClients.length !== 1 ? "s" : ""} encontrado
+                {filteredClients.length !== 1 ? "s" : ""}
+              </div>
+            </div>
+
+            {loading ? (
+              <div className="text-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+                <p className="mt-2 text-muted-foreground">Cargando clientes...</p>
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Código</TableHead>
+                    <TableHead>Nombre Completo</TableHead>
+                    <TableHead>DNI</TableHead>
+                    <TableHead>Teléfono</TableHead>
+                    <TableHead>Fecha Registro</TableHead>
+                    <TableHead className="text-right">Acciones</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredClients.map((client) => (
+                    <TableRow key={client.id}>
+                      <TableCell className="font-medium">{client.client_code}</TableCell>
+                      <TableCell>
+                        {client.first_name} {client.last_name}
+                      </TableCell>
+                      <TableCell>{client.dni || "No registrado"}</TableCell>
+                      <TableCell>{client.phone || "No registrado"}</TableCell>
+                      <TableCell>{new Date(client.created_at).toLocaleDateString()}</TableCell>
+                      <TableCell className="text-right">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" className="h-8 w-8 p-0">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem
+                              onClick={() => {
+                                setCurrentClient(client)
+                                setIsDetailDialogOpen(true)
+                              }}
+                            >
+                              <Eye className="mr-2 h-4 w-4" />
+                              Ver Detalles
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handlePrintClient(client)}>
+                              <Printer className="mr-2 h-4 w-4" />
+                              Imprimir PDF
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Dialog de Detalles del Cliente */}
+        <Dialog open={isDetailDialogOpen} onOpenChange={setIsDetailDialogOpen}>
+          <DialogContent className="sm:max-w-[600px]">
+            <DialogHeader>
+              <DialogTitle>Detalles del Cliente</DialogTitle>
+              <DialogDescription>Información completa del cliente seleccionado</DialogDescription>
+            </DialogHeader>
+            {currentClient && (
+              <div className="grid gap-4 py-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label className="text-sm font-medium">Código</Label>
+                    <p className="text-sm text-muted-foreground">{currentClient.client_code}</p>
+                  </div>
+                  <div>
+                    <Label className="text-sm font-medium">Nombre Completo</Label>
+                    <p className="text-sm text-muted-foreground">
+                      {currentClient.first_name} {currentClient.last_name}
+                    </p>
+                  </div>
+                  <div>
+                    <Label className="text-sm font-medium">DNI</Label>
+                    <p className="text-sm text-muted-foreground">{currentClient.dni || "No registrado"}</p>
+                  </div>
+                  <div>
+                    <Label className="text-sm font-medium">Teléfono</Label>
+                    <p className="text-sm text-muted-foreground">{currentClient.phone || "No registrado"}</p>
+                  </div>
+                  <div className="col-span-2">
+                    <Label className="text-sm font-medium">Dirección</Label>
+                    <p className="text-sm text-muted-foreground">{currentClient.address || "No registrada"}</p>
+                  </div>
+                  <div>
+                    <Label className="text-sm font-medium">Fecha de Registro</Label>
+                    <p className="text-sm text-muted-foreground">
+                      {new Date(currentClient.created_at).toLocaleDateString()}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+            <DialogFooter className="gap-2">
+              <Button
+                variant="outline"
+                onClick={() => currentClient && handlePrintClient(currentClient)}
+                className="gap-2"
+              >
+                <Printer className="h-4 w-4" />
+                Imprimir PDF
+              </Button>
+              <Button onClick={() => setIsDetailDialogOpen(false)}>Cerrar</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
+    </PageLayout>
   )
 }

@@ -1,254 +1,228 @@
-import { redirect } from "next/navigation"
-import { createClient } from "@/lib/supabase/server"
+"use client"
+
+import { useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
+import { PageLayout } from "@/components/page-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Progress } from "@/components/ui/progress"
-import { Users, CreditCard, DollarSign, AlertTriangle, Calendar, CheckCircle, Clock } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Users, CreditCard, Calendar, Receipt, AlertCircle, DollarSign, Activity } from "lucide-react"
+import Link from "next/link"
 
-async function getDashboardData() {
-  const supabase = await createClient()
-
-  // Get total clients
-  const { data: clients, error: clientsError } = await supabase
-    .from("active_clients")
-    .select("id")
-    .is("deleted_at", null)
-
-  // Get total loans
-  const { data: loans, error: loansError } = await supabase
-    .from("active_loans")
-    .select("id, amount, status")
-    .is("deleted_at", null)
-
-  // Get payment schedules for today
-  const today = new Date().toISOString().split("T")[0]
-  const { data: todayPayments, error: todayError } = await supabase
-    .from("payment_schedules")
-    .select("total_amount, status")
-    .eq("due_date", today)
-
-  // Get overdue payments
-  const { data: overduePayments, error: overdueError } = await supabase
-    .from("payment_schedules")
-    .select("total_amount, status")
-    .lt("due_date", today)
-    .neq("status", "paid")
-
-  return {
-    totalClients: clients?.length || 0,
-    totalLoans: loans?.length || 0,
-    activeLoans: loans?.filter((loan) => loan.status === "active").length || 0,
-    totalLoanAmount: loans?.reduce((sum, loan) => sum + (Number.parseFloat(loan.amount) || 0), 0) || 0,
-    todayPayments: todayPayments?.length || 0,
-    todayAmount: todayPayments?.reduce((sum, payment) => sum + (Number.parseFloat(payment.total_amount) || 0), 0) || 0,
-    overduePayments: overduePayments?.length || 0,
-    overdueAmount:
-      overduePayments?.reduce((sum, payment) => sum + (Number.parseFloat(payment.total_amount) || 0), 0) || 0,
-  }
+interface DashboardStats {
+  totalClients: number
+  activeLoans: number
+  todayPayments: number
+  overduePayments: number
+  totalDueToday: number
+  totalReceivedToday: number
+  totalOverdue: number
+  monthlyTotal: number
 }
 
-export default async function DashboardPage() {
-  const supabase = await createClient()
+export default function DashboardPage() {
+  const [user, setUser] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
+  const [stats, setStats] = useState<DashboardStats | null>(null)
+  const router = useRouter()
 
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser()
+  useEffect(() => {
+    const checkUser = () => {
+      try {
+        const session = localStorage.getItem("mb_session")
+        if (session) {
+          const sessionData = JSON.parse(session)
+          if (sessionData.user && sessionData.expires > Date.now()) {
+            setUser(sessionData.user)
+            loadDashboardStats()
+          } else {
+            router.push("/login")
+          }
+        } else {
+          router.push("/login")
+        }
+      } catch (error) {
+        console.error("Error checking user:", error)
+        router.push("/login")
+      } finally {
+        setLoading(false)
+      }
+    }
 
-  if (error || !user) {
-    redirect("/auth/login")
+    const loadDashboardStats = async () => {
+      try {
+        const [clientsRes, loansRes, cronogramRes] = await Promise.all([
+          fetch("/api/clients"),
+          fetch("/api/loans"),
+          fetch("/api/cronograma"),
+        ])
+
+        const clients = clientsRes.ok ? await clientsRes.json() : []
+        const loans = loansRes.ok ? await loansRes.json() : []
+        const cronogram = cronogramRes.ok ? await cronogramRes.json() : {}
+
+        setStats({
+          totalClients: clients.length || 0,
+          activeLoans: loans.filter((l: any) => l.status === "activo").length || 0,
+          todayPayments: cronogram.today?.length || 0,
+          overduePayments: cronogram.overdue?.length || 0,
+          totalDueToday: cronogram.summary?.total_due_today || 0,
+          totalReceivedToday: cronogram.summary?.total_received_today || 0,
+          totalOverdue: cronogram.summary?.total_overdue || 0,
+          monthlyTotal: cronogram.summary?.total_due_month || 0,
+        })
+      } catch (error) {
+        console.error("Error loading dashboard stats:", error)
+      }
+    }
+
+    checkUser()
+  }, [router])
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+          <p className="mt-2 text-muted-foreground">Cargando...</p>
+        </div>
+      </div>
+    )
   }
 
-  const dashboardData = await getDashboardData()
-
-  const stats = [
-    {
-      title: "Total Clientes",
-      value: dashboardData.totalClients.toString(),
-      description: "Clientes activos",
-      icon: Users,
-      color: "text-blue-600",
-      bgColor: "bg-blue-50",
-    },
-    {
-      title: "Préstamos Activos",
-      value: dashboardData.activeLoans.toString(),
-      description: `de ${dashboardData.totalLoans} totales`,
-      icon: CreditCard,
-      color: "text-green-600",
-      bgColor: "bg-green-50",
-    },
-    {
-      title: "Monto Total",
-      value: `$${dashboardData.totalLoanAmount.toLocaleString()}`,
-      description: "En préstamos activos",
-      icon: DollarSign,
-      color: "text-purple-600",
-      bgColor: "bg-purple-50",
-    },
-    {
-      title: "Pagos Hoy",
-      value: dashboardData.todayPayments.toString(),
-      description: `$${dashboardData.todayAmount.toLocaleString()}`,
-      icon: Calendar,
-      color: "text-orange-600",
-      bgColor: "bg-orange-50",
-    },
-  ]
-
-  const alerts = [
-    {
-      title: "Pagos Vencidos",
-      count: dashboardData.overduePayments,
-      amount: dashboardData.overdueAmount,
-      type: "danger" as const,
-      icon: AlertTriangle,
-    },
-    {
-      title: "Pagos de Hoy",
-      count: dashboardData.todayPayments,
-      amount: dashboardData.todayAmount,
-      type: "warning" as const,
-      icon: Clock,
-    },
-  ]
+  if (!user) {
+    return null
+  }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-foreground font-work-sans">Dashboard</h1>
-        <p className="text-muted-foreground mt-2">
-          Bienvenido de vuelta, {user.email}. Aquí tienes un resumen de tu sistema de microcréditos.
-        </p>
-      </div>
+    <PageLayout title="Dashboard Principal">
+      <div className="space-y-6">
+        {/* Welcome Section */}
+        <div className="bg-gradient-to-r from-primary/10 to-primary/5 rounded-lg p-6 border">
+          <h1 className="text-2xl font-bold mb-2">¡Bienvenido de vuelta!</h1>
+          <p className="text-muted-foreground mb-4">Conectado como {user.email}</p>
+          <p className="text-sm text-muted-foreground">
+            Tu panel de gestión de microcréditos está listo. Puedes comenzar a administrar préstamos, clientes y
+            operaciones financieras.
+          </p>
+        </div>
 
-      {/* Stats Grid */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {stats.map((stat) => (
-          <Card key={stat.title} className="border-border bg-card">
+        {/* Quick Stats */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-card-foreground">{stat.title}</CardTitle>
-              <div className={`p-2 rounded-md ${stat.bgColor}`}>
-                <stat.icon className={`h-4 w-4 ${stat.color}`} />
-              </div>
+              <CardTitle className="text-sm font-medium">Total Clientes</CardTitle>
+              <Users className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-card-foreground">{stat.value}</div>
-              <p className="text-xs text-muted-foreground">{stat.description}</p>
+              <div className="text-2xl font-bold">{stats?.totalClients || 0}</div>
+              <p className="text-xs text-muted-foreground">Clientes registrados</p>
             </CardContent>
           </Card>
-        ))}
-      </div>
 
-      {/* Alerts Section */}
-      <div className="grid gap-4 md:grid-cols-2">
-        {alerts.map((alert) => (
-          <Card
-            key={alert.title}
-            className={`border-border bg-card ${
-              alert.type === "danger"
-                ? "border-l-4 border-l-destructive"
-                : alert.type === "warning"
-                  ? "border-l-4 border-l-orange-500"
-                  : ""
-            }`}
-          >
+          <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-card-foreground">{alert.title}</CardTitle>
-              <alert.icon
-                className={`h-4 w-4 ${
-                  alert.type === "danger"
-                    ? "text-destructive"
-                    : alert.type === "warning"
-                      ? "text-orange-500"
-                      : "text-muted-foreground"
-                }`}
-              />
+              <CardTitle className="text-sm font-medium">Préstamos Activos</CardTitle>
+              <CreditCard className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-2xl font-bold text-card-foreground">{alert.count}</div>
-                  <p className="text-xs text-muted-foreground">${alert.amount.toLocaleString()}</p>
-                </div>
-                <Badge variant={alert.type === "danger" ? "destructive" : "secondary"}>
-                  {alert.type === "danger" ? "Urgente" : "Pendiente"}
-                </Badge>
-              </div>
+              <div className="text-2xl font-bold">{stats?.activeLoans || 0}</div>
+              <p className="text-xs text-muted-foreground">En curso</p>
             </CardContent>
           </Card>
-        ))}
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Pagos Hoy</CardTitle>
+              <Calendar className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stats?.todayPayments || 0}</div>
+              <p className="text-xs text-muted-foreground">Vencen hoy</p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Pagos Vencidos</CardTitle>
+              <AlertCircle className="h-4 w-4 text-destructive" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-destructive">{stats?.overduePayments || 0}</div>
+              <p className="text-xs text-muted-foreground">Requieren atención</p>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Financial Summary */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <DollarSign className="h-5 w-5" />
+              Resumen Financiero
+            </CardTitle>
+            <CardDescription>Estado financiero actual del día y mes</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="text-center p-4 bg-blue-50 dark:bg-blue-950/20 rounded-lg">
+                <p className="text-sm text-muted-foreground">Por Cobrar Hoy</p>
+                <p className="text-xl font-bold text-blue-600">${(stats?.totalDueToday || 0).toLocaleString()}</p>
+              </div>
+              <div className="text-center p-4 bg-green-50 dark:bg-green-950/20 rounded-lg">
+                <p className="text-sm text-muted-foreground">Recibido Hoy</p>
+                <p className="text-xl font-bold text-green-600">${(stats?.totalReceivedToday || 0).toLocaleString()}</p>
+              </div>
+              <div className="text-center p-4 bg-red-50 dark:bg-red-950/20 rounded-lg">
+                <p className="text-sm text-muted-foreground">Monto Vencido</p>
+                <p className="text-xl font-bold text-red-600">${(stats?.totalOverdue || 0).toLocaleString()}</p>
+              </div>
+              <div className="text-center p-4 bg-gray-50 dark:bg-gray-950/20 rounded-lg">
+                <p className="text-sm text-muted-foreground">Total del Mes</p>
+                <p className="text-xl font-bold">${(stats?.monthlyTotal || 0).toLocaleString()}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Quick Actions */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Activity className="h-5 w-5" />
+              Acciones Rápidas
+            </CardTitle>
+            <CardDescription>Accede rápidamente a las funciones principales</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <Button asChild variant="outline" className="h-20 flex-col gap-2 bg-transparent">
+                <Link href="/clientes">
+                  <Users className="h-6 w-6" />
+                  <span>Gestionar Clientes</span>
+                </Link>
+              </Button>
+              <Button asChild variant="outline" className="h-20 flex-col gap-2 bg-transparent">
+                <Link href="/prestamos">
+                  <CreditCard className="h-6 w-6" />
+                  <span>Nuevo Préstamo</span>
+                </Link>
+              </Button>
+              <Button asChild variant="outline" className="h-20 flex-col gap-2 bg-transparent">
+                <Link href="/cronogramas">
+                  <Calendar className="h-6 w-6" />
+                  <span>Ver Cronogramas</span>
+                </Link>
+              </Button>
+              <Button asChild variant="outline" className="h-20 flex-col gap-2 bg-transparent">
+                <Link href="/dashboard/receipts">
+                  <Receipt className="h-6 w-6" />
+                  <span>Generar Recibos</span>
+                </Link>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       </div>
-
-      {/* Quick Actions */}
-      <Card className="border-border bg-card">
-        <CardHeader>
-          <CardTitle className="text-card-foreground font-work-sans">Acciones Rápidas</CardTitle>
-          <CardDescription>Accede rápidamente a las funciones más utilizadas</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-4 md:grid-cols-3">
-            <Card className="p-4 hover:bg-muted/50 transition-colors cursor-pointer border-border">
-              <div className="flex items-center space-x-3">
-                <Users className="h-8 w-8 text-primary" />
-                <div>
-                  <h3 className="font-semibold text-card-foreground">Nuevo Cliente</h3>
-                  <p className="text-sm text-muted-foreground">Registrar cliente</p>
-                </div>
-              </div>
-            </Card>
-            <Card className="p-4 hover:bg-muted/50 transition-colors cursor-pointer border-border">
-              <div className="flex items-center space-x-3">
-                <CreditCard className="h-8 w-8 text-primary" />
-                <div>
-                  <h3 className="font-semibold text-card-foreground">Nuevo Préstamo</h3>
-                  <p className="text-sm text-muted-foreground">Otorgar préstamo</p>
-                </div>
-              </div>
-            </Card>
-            <Card className="p-4 hover:bg-muted/50 transition-colors cursor-pointer border-border">
-              <div className="flex items-center space-x-3">
-                <CheckCircle className="h-8 w-8 text-primary" />
-                <div>
-                  <h3 className="font-semibold text-card-foreground">Registrar Pago</h3>
-                  <p className="text-sm text-muted-foreground">Procesar pago</p>
-                </div>
-              </div>
-            </Card>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Performance Overview */}
-      <Card className="border-border bg-card">
-        <CardHeader>
-          <CardTitle className="text-card-foreground font-work-sans">Rendimiento del Mes</CardTitle>
-          <CardDescription>Progreso hacia los objetivos mensuales</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-medium text-card-foreground">Nuevos Clientes</span>
-              <span className="text-sm text-muted-foreground">75%</span>
-            </div>
-            <Progress value={75} className="h-2" />
-          </div>
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-medium text-card-foreground">Préstamos Otorgados</span>
-              <span className="text-sm text-muted-foreground">60%</span>
-            </div>
-            <Progress value={60} className="h-2" />
-          </div>
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-medium text-card-foreground">Tasa de Recuperación</span>
-              <span className="text-sm text-muted-foreground">92%</span>
-            </div>
-            <Progress value={92} className="h-2" />
-          </div>
-        </CardContent>
-      </Card>
-    </div>
+    </PageLayout>
   )
 }
