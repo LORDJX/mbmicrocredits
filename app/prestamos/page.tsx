@@ -1,22 +1,14 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { PageLayout } from "@/components/page-layout"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Input } from "@/components/ui/input"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { MoreHorizontal, PlusCircle, Search, Eye, Printer } from "lucide-react"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Badge } from "@/components/ui/badge"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Search, Plus, Eye, Edit, Trash2 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { NewLoanForm } from "@/app/dashboard/loans/new-loan-form"
-
-interface ClientInfo {
-  client_code: string
-  first_name: string
-  last_name: string
-}
 
 interface Loan {
   id: string
@@ -24,50 +16,46 @@ interface Loan {
   client_id: string
   amount: number
   installments: number
-  loan_type: string | null
-  interest_rate: number | null
-  installment_amount?: number
-  delivery_mode?: string
-  amount_to_repay?: number
-  start_date: string | null
+  installment_amount: number
+  delivery_mode: string
+  amount_to_repay: number
+  loan_type: string
+  interest_rate: number
+  start_date: string
   end_date: string | null
-  status: string | null
+  status: string
   created_at: string
-  clients: ClientInfo | null
+  clients: {
+    client_code: string
+    first_name: string
+    last_name: string
+  }
 }
 
 export default function PrestamosPage() {
   const [loans, setLoans] = useState<Loan[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
-  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
-  const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false)
-  const [currentLoan, setCurrentLoan] = useState<Loan | null>(null)
+  const [showNewLoanDialog, setShowNewLoanDialog] = useState(false)
   const { toast } = useToast()
 
-  useEffect(() => {
-    fetchLoans()
-  }, [searchTerm])
-
   const fetchLoans = async () => {
-    setLoading(true)
     try {
-      const url = searchTerm ? `/api/loans?search=${encodeURIComponent(searchTerm)}` : "/api/loans"
-      const response = await fetch(url)
-      if (!response.ok) throw new Error("Error al cargar préstamos")
+      setLoading(true)
+      const url = new URL("/api/loans", window.location.origin)
+      if (searchTerm.trim()) {
+        url.searchParams.set("search", searchTerm.trim())
+      }
+
+      const response = await fetch(url.toString())
+      if (!response.ok) {
+        throw new Error("Error al cargar préstamos")
+      }
+
       const data = await response.json()
-
-      const sortedLoans = data.sort((a: Loan, b: Loan) => {
-        const getNumber = (code: string) => {
-          const match = code.match(/\d+/)
-          return match ? Number.parseInt(match[0]) : 0
-        }
-        return getNumber(b.loan_code) - getNumber(a.loan_code)
-      })
-
-      setLoans(sortedLoans)
-    } catch (error) {
-      console.error("Error:", error)
+      setLoans(data)
+    } catch (error: any) {
+      console.error("Error cargando préstamos:", error)
       toast({
         title: "Error",
         description: "No se pudieron cargar los préstamos",
@@ -78,232 +66,173 @@ export default function PrestamosPage() {
     }
   }
 
-  const handlePrintLoan = (loan: Loan) => {
-    const printWindow = window.open("", "_blank")
-    if (!printWindow) return
+  useEffect(() => {
+    fetchLoans()
+  }, [searchTerm])
 
-    const printContent = `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>Préstamo - ${loan.loan_code}</title>
-          <style>
-            body { font-family: Arial, sans-serif; margin: 20px; color: #000; }
-            .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #333; padding-bottom: 10px; }
-            .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
-            .info-item { margin-bottom: 10px; }
-            .label { font-weight: bold; color: #333; }
-            .value { margin-left: 10px; }
-            .cronograma { margin-top: 30px; }
-            table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-            th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-            th { background-color: #f2f2f2; }
-            @media print { body { margin: 0; } }
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <h1>BM MICROCRÉDITOS</h1>
-            <h2>Contrato de Préstamo</h2>
-            <p>Código: ${loan.loan_code}</p>
-          </div>
-          <div class="info-grid">
-            <div>
-              <div class="info-item">
-                <span class="label">Cliente:</span>
-                <span class="value">${loan.clients?.first_name} ${loan.clients?.last_name}</span>
-              </div>
-              <div class="info-item">
-                <span class="label">Código Cliente:</span>
-                <span class="value">${loan.clients?.client_code}</span>
-              </div>
-              <div class="info-item">
-                <span class="label">Monto Prestado:</span>
-                <span class="value">$${loan.amount.toLocaleString()}</span>
-              </div>
-              <div class="info-item">
-                <span class="label">Tipo de Préstamo:</span>
-                <span class="value">${loan.loan_type}</span>
-              </div>
-            </div>
-            <div>
-              <div class="info-item">
-                <span class="label">Número de Cuotas:</span>
-                <span class="value">${loan.installments}</span>
-              </div>
-              <div class="info-item">
-                <span class="label">Monto por Cuota:</span>
-                <span class="value">$${(loan.installment_amount || 0).toLocaleString()}</span>
-              </div>
-              <div class="info-item">
-                <span class="label">Total a Pagar:</span>
-                <span class="value">$${(loan.amount_to_repay || 0).toLocaleString()}</span>
-              </div>
-              <div class="info-item">
-                <span class="label">Fecha de Inicio:</span>
-                <span class="value">${loan.start_date ? new Date(loan.start_date).toLocaleDateString() : "No definida"}</span>
-              </div>
-            </div>
-          </div>
-          <div class="cronograma">
-            <h3>Cronograma de Pagos</h3>
-            <table>
-              <thead>
-                <tr>
-                  <th>Cuota</th>
-                  <th>Fecha Vencimiento</th>
-                  <th>Monto</th>
-                  <th>Estado</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${Array.from({ length: loan.installments }, (_, i) => {
-                  const installmentDate = new Date(loan.start_date || new Date())
-                  if (loan.loan_type === "Semanal") {
-                    installmentDate.setDate(installmentDate.getDate() + i * 7)
-                  } else if (loan.loan_type === "Quincenal") {
-                    installmentDate.setDate(installmentDate.getDate() + i * 15)
-                  } else {
-                    installmentDate.setMonth(installmentDate.getMonth() + i)
-                  }
-                  return `
-                    <tr>
-                      <td>${i + 1}</td>
-                      <td>${installmentDate.toLocaleDateString()}</td>
-                      <td>$${(loan.installment_amount || 0).toLocaleString()}</td>
-                      <td>Pendiente</td>
-                    </tr>
-                  `
-                }).join("")}
-              </tbody>
-            </table>
-          </div>
-          <script>window.print(); window.close();</script>
-        </body>
-      </html>
-    `
+  const handleNewLoanSuccess = () => {
+    setShowNewLoanDialog(false)
+    fetchLoans()
+    toast({
+      title: "Éxito",
+      description: "Préstamo creado correctamente",
+    })
+  }
 
-    printWindow.document.write(printContent)
-    printWindow.document.close()
+  const getStatusBadge = (status: string) => {
+    const statusMap = {
+      activo: { label: "Activo", variant: "default" as const },
+      "En Mora": { label: "En Mora", variant: "destructive" as const },
+      Completado: { label: "Completado", variant: "secondary" as const },
+      Cancelado: { label: "Cancelado", variant: "outline" as const },
+    }
+
+    const statusInfo = statusMap[status as keyof typeof statusMap] || { label: status, variant: "outline" as const }
+    return <Badge variant={statusInfo.variant}>{statusInfo.label}</Badge>
+  }
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat("es-CO", {
+      style: "currency",
+      currency: "COP",
+      minimumFractionDigits: 0,
+    }).format(amount)
+  }
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString("es-CO")
   }
 
   return (
-    <PageLayout title="Gestión de Préstamos">
-      <div className="space-y-6">
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle>Préstamos Registrados</CardTitle>
-                <CardDescription>Administra todos los préstamos del sistema</CardDescription>
-              </div>
-              <Button onClick={() => setIsCreateDialogOpen(true)} className="gap-2">
-                <PlusCircle className="h-4 w-4" />
+    <div className="min-h-screen bg-gray-900 text-gray-100">
+      <div className="container mx-auto px-4 py-8">
+        <div className="flex justify-between items-center mb-8">
+          <div>
+            <h1 className="text-3xl font-bold text-white">Gestión de Préstamos</h1>
+            <p className="text-gray-400 mt-2">Administra todos los préstamos del sistema</p>
+          </div>
+
+          <Dialog open={showNewLoanDialog} onOpenChange={setShowNewLoanDialog}>
+            <DialogTrigger asChild>
+              <Button className="bg-blue-600 hover:bg-blue-700 text-white">
+                <Plus className="w-4 h-4 mr-2" />
                 Nuevo Préstamo
               </Button>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center gap-4 mb-6">
-              <div className="relative flex-1 max-w-sm">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-                <Input
-                  placeholder="Buscar por código o cliente..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-            </div>
+            </DialogTrigger>
+            <DialogContent className="bg-gray-800 border-gray-700 text-gray-100 max-w-2xl">
+              <DialogHeader>
+                <DialogTitle className="text-white">Crear Nuevo Préstamo</DialogTitle>
+              </DialogHeader>
+              <NewLoanForm onSuccess={handleNewLoanSuccess} onCancel={() => setShowNewLoanDialog(false)} />
+            </DialogContent>
+          </Dialog>
+        </div>
 
-            {loading ? (
-              <div className="text-center py-8">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-                <p className="mt-2 text-muted-foreground">Cargando préstamos...</p>
-              </div>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Código</TableHead>
-                    <TableHead>Cliente</TableHead>
-                    <TableHead>Monto</TableHead>
-                    <TableHead>Cuotas</TableHead>
-                    <TableHead>Tipo</TableHead>
-                    <TableHead>Estado</TableHead>
-                    <TableHead className="text-right">Acciones</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {loans.map((loan) => (
-                    <TableRow key={loan.id}>
-                      <TableCell className="font-medium">{loan.loan_code}</TableCell>
-                      <TableCell>
-                        {loan.clients
-                          ? `${loan.clients.first_name} ${loan.clients.last_name}`
-                          : "Cliente no encontrado"}
-                      </TableCell>
-                      <TableCell>${loan.amount.toLocaleString()}</TableCell>
-                      <TableCell>{loan.installments}</TableCell>
-                      <TableCell>{loan.loan_type}</TableCell>
-                      <TableCell>
-                        <span
-                          className={`px-2 py-1 rounded-full text-xs ${
-                            loan.status === "activo" ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800"
-                          }`}
-                        >
-                          {loan.status}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" className="h-8 w-8 p-0">
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem
-                              onClick={() => {
-                                setCurrentLoan(loan)
-                                setIsDetailDialogOpen(true)
-                              }}
-                            >
-                              <Eye className="mr-2 h-4 w-4" />
-                              Ver Detalles
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handlePrintLoan(loan)}>
-                              <Printer className="mr-2 h-4 w-4" />
-                              Imprimir Contrato
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Dialog para crear nuevo préstamo */}
-        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-          <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Crear Nuevo Préstamo</DialogTitle>
-              <DialogDescription>Completa la información para crear un nuevo préstamo</DialogDescription>
-            </DialogHeader>
-            <NewLoanForm
-              onSuccess={() => {
-                setIsCreateDialogOpen(false)
-                fetchLoans()
-              }}
-              onCancel={() => setIsCreateDialogOpen(false)}
+        {/* Barra de búsqueda */}
+        <div className="mb-6">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+            <Input
+              placeholder="Buscar por código de préstamo, cliente..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10 bg-gray-800 border-gray-700 text-gray-100 placeholder:text-gray-400"
             />
-          </DialogContent>
-        </Dialog>
+          </div>
+        </div>
+
+        {/* Lista de préstamos */}
+        {loading ? (
+          <div className="text-center py-8">
+            <p className="text-gray-400">Cargando préstamos...</p>
+          </div>
+        ) : loans.length === 0 ? (
+          <div className="text-center py-8">
+            <p className="text-gray-400">No se encontraron préstamos</p>
+          </div>
+        ) : (
+          <div className="grid gap-4">
+            {loans.map((loan) => (
+              <Card key={loan.id} className="bg-gray-800 border-gray-700">
+                <CardHeader className="pb-3">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <CardTitle className="text-white text-lg">Préstamo #{loan.loan_code}</CardTitle>
+                      <p className="text-gray-400 text-sm mt-1">
+                        {loan.clients.first_name} {loan.clients.last_name} ({loan.clients.client_code})
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">{getStatusBadge(loan.status)}</div>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                    <div>
+                      <p className="text-gray-400">Monto</p>
+                      <p className="text-white font-semibold">{formatCurrency(loan.amount)}</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-400">Cuotas</p>
+                      <p className="text-white">{loan.installments}</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-400">Valor Cuota</p>
+                      <p className="text-white">{formatCurrency(loan.installment_amount)}</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-400">Tipo</p>
+                      <p className="text-white">{loan.loan_type}</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-400">Fecha Inicio</p>
+                      <p className="text-white">{formatDate(loan.start_date)}</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-400">Total a Pagar</p>
+                      <p className="text-white font-semibold">{formatCurrency(loan.amount_to_repay)}</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-400">Interés</p>
+                      <p className="text-white">{loan.interest_rate?.toFixed(1)}%</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-400">Entrega</p>
+                      <p className="text-white">{loan.delivery_mode}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end gap-2 mt-4 pt-4 border-t border-gray-700">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="border-gray-600 text-gray-300 hover:bg-gray-700 bg-transparent"
+                    >
+                      <Eye className="w-4 h-4 mr-1" />
+                      Ver
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="border-gray-600 text-gray-300 hover:bg-gray-700 bg-transparent"
+                    >
+                      <Edit className="w-4 h-4 mr-1" />
+                      Editar
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="border-red-600 text-red-400 hover:bg-red-900/20 bg-transparent"
+                    >
+                      <Trash2 className="w-4 h-4 mr-1" />
+                      Eliminar
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
       </div>
-    </PageLayout>
+    </div>
   )
 }
