@@ -32,7 +32,7 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { supabase } from "@/lib/supabaseClient"
+import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
 
@@ -40,14 +40,14 @@ const navItems = [
   { title: "Inicio", href: "/dashboard", icon: Home, route: "dashboard" },
   { title: "Usuarios", href: "/dashboard/users", icon: Users, route: "users" },
   { title: "Socios", href: "/dashboard/partners", icon: Handshake, route: "partners" },
-  { title: "Clientes", href: "/dashboard/clients", icon: User2, route: "clients" },
-  { title: "Préstamos", href: "/dashboard/loans", icon: CreditCard, route: "loans" },
+  { title: "Clientes", href: "/clientes", icon: User2, route: "clients" },
+  { title: "Préstamos", href: "/prestamos", icon: CreditCard, route: "loans" },
   { title: "Recibo", href: "/dashboard/receipts", icon: Receipt, route: "receipts" },
-  { title: "Cronograma", href: "/dashboard/cronograma", icon: Calendar, route: "cronograma" },
+  { title: "Cronograma", href: "/cronogramas", icon: Calendar, route: "cronograma" },
   { title: "Transacciones", href: "/dashboard/transactions", icon: DollarSign, route: "transactions" },
   { title: "Seguimientos", href: "/dashboard/followups", icon: CalendarCheck, route: "followups" },
   { title: "Resumen para Socios", href: "/dashboard/resumen", icon: FileText, route: "reports" },
-  { title: "Informe de situación Financiera", href: "/dashboard/reports", icon: BarChart2, route: "reports" },
+  { title: "Informe de situación Financiera", href: "/reportes", icon: BarChart2, route: "reports" },
   { title: "Fórmulas", href: "/formulas", icon: Calculator, route: "formulas" },
 ]
 
@@ -60,18 +60,22 @@ export function DashboardSidebar() {
   useEffect(() => {
     const loadUserPermissions = async () => {
       try {
+        const supabase = createClient()
         const {
           data: { user },
         } = await supabase.auth.getUser()
         if (user) {
-          const response = await fetch(`/api/users/permissions?userId=${user.id}`)
-          const data = await response.json()
-
-          if (data.permissions && Array.isArray(data.permissions)) {
-            setUserPermissions(data.permissions)
-          } else {
-            setUserPermissions(["dashboard", "clients", "loans", "receipts", "cronograma", "transactions", "formulas"])
-          }
+          // For now, give all permissions since we don't have a permissions API
+          setUserPermissions([
+            "dashboard",
+            "clients",
+            "loans",
+            "receipts",
+            "cronograma",
+            "transactions",
+            "formulas",
+            "reports",
+          ])
         }
       } catch (error) {
         console.error("Error loading permissions:", error)
@@ -87,31 +91,32 @@ export function DashboardSidebar() {
   const filteredNavItems = navItems.filter((item) => userPermissions.includes(item.route) || item.route === "dashboard")
 
   const handleLogout = async () => {
+    const supabase = createClient()
     await supabase.auth.signOut()
-    router.push("/login")
+    router.push("/auth/login")
   }
 
   if (!permissionsLoaded) {
     return (
-      <Sidebar className="bg-gray-900 border-r border-gray-800">
-        <SidebarHeader className="p-4 border-b border-gray-800">
-          <h1 className="text-2xl font-bold text-gray-50">Microcréditos</h1>
+      <Sidebar className="bg-card border-r border-border">
+        <SidebarHeader className="p-4 border-b border-border">
+          <h1 className="text-2xl font-bold text-foreground">Microcréditos</h1>
         </SidebarHeader>
         <SidebarContent className="flex-1 overflow-auto py-4">
-          <div className="p-4 text-center text-gray-400">Cargando permisos...</div>
+          <div className="p-4 text-center text-muted-foreground">Cargando permisos...</div>
         </SidebarContent>
       </Sidebar>
     )
   }
 
   return (
-    <Sidebar className="bg-gray-900 border-r border-gray-800">
-      <SidebarHeader className="p-4 border-b border-gray-800">
-        <h1 className="text-2xl font-bold text-gray-50">Microcréditos</h1>
+    <Sidebar className="bg-card border-r border-border">
+      <SidebarHeader className="p-4 border-b border-border">
+        <h1 className="text-2xl font-bold text-foreground">Microcréditos</h1>
       </SidebarHeader>
       <SidebarContent className="flex-1 overflow-auto py-4">
         <SidebarGroup>
-          <SidebarGroupLabel className="text-gray-400 font-semibold text-sm uppercase tracking-wide">
+          <SidebarGroupLabel className="text-muted-foreground font-semibold text-sm uppercase tracking-wide">
             Navegación
           </SidebarGroupLabel>
           <SidebarGroupContent>
@@ -122,9 +127,8 @@ export function DashboardSidebar() {
                     <SidebarMenuButton
                       isActive={pathname === item.href}
                       className={cn(
-                        "text-gray-300 hover:bg-gray-800 hover:text-blue-400 transition-colors duration-200",
-                        pathname === item.href &&
-                          "bg-blue-600/20 text-blue-400 font-semibold border-r-2 border-blue-400",
+                        "hover:bg-primary/10 hover:text-primary transition-colors duration-200",
+                        pathname === item.href && "bg-primary/15 text-primary font-semibold border-r-2 border-primary",
                       )}
                     >
                       <item.icon className="size-5" />
@@ -137,13 +141,10 @@ export function DashboardSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
-      <SidebarFooter className="p-4 border-t border-gray-800 bg-gray-800/50">
+      <SidebarFooter className="p-4 border-t border-border bg-muted/30">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              className="w-full justify-start text-left text-gray-300 hover:bg-gray-700 hover:text-gray-100"
-            >
+            <Button variant="ghost" className="w-full justify-start text-left hover:bg-primary/10">
               <User2 className="mr-2 size-5" />
               <span className="flex-grow">Mi Cuenta</span>
               <ChevronDown className="size-4" />
@@ -152,9 +153,9 @@ export function DashboardSidebar() {
           <DropdownMenuContent
             side="top"
             align="start"
-            className="w-(--radix-popper-anchor-width) bg-gray-800 text-gray-100 border-gray-700"
+            className="w-(--radix-popper-anchor-width) bg-popover text-popover-foreground border-border"
           >
-            <DropdownMenuItem className="cursor-pointer hover:!bg-gray-700 text-gray-300 hover:!text-gray-100">
+            <DropdownMenuItem className="cursor-pointer hover:!bg-primary/10">
               <span>Perfil</span>
             </DropdownMenuItem>
             <DropdownMenuItem

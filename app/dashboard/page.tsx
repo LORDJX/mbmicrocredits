@@ -1,238 +1,254 @@
-"use client"
+import { redirect } from "next/navigation"
+import { createClient } from "@/lib/supabase/server"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { Progress } from "@/components/ui/progress"
+import { Users, CreditCard, DollarSign, AlertTriangle, Calendar, CheckCircle, Clock } from "lucide-react"
 
-import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
-import { createClient } from "@/lib/supabase/client"
+async function getDashboardData() {
+  const supabase = await createClient()
 
-export default function DashboardPage() {
-  const [user, setUser] = useState<{ email: string } | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const router = useRouter()
-  const supabase = createClient()
+  // Get total clients
+  const { data: clients, error: clientsError } = await supabase
+    .from("active_clients")
+    .select("id")
+    .is("deleted_at", null)
 
-  useEffect(() => {
-    const checkAuth = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
+  // Get total loans
+  const { data: loans, error: loansError } = await supabase
+    .from("active_loans")
+    .select("id, amount, status")
+    .is("deleted_at", null)
 
-      if (!user) {
-        router.push("/auth/login")
-        return
-      }
+  // Get payment schedules for today
+  const today = new Date().toISOString().split("T")[0]
+  const { data: todayPayments, error: todayError } = await supabase
+    .from("payment_schedules")
+    .select("total_amount, status")
+    .eq("due_date", today)
 
-      setUser({ email: user.email || "" })
-      setIsLoading(false)
-    }
+  // Get overdue payments
+  const { data: overduePayments, error: overdueError } = await supabase
+    .from("payment_schedules")
+    .select("total_amount, status")
+    .lt("due_date", today)
+    .neq("status", "paid")
 
-    checkAuth()
-  }, [router, supabase])
+  return {
+    totalClients: clients?.length || 0,
+    totalLoans: loans?.length || 0,
+    activeLoans: loans?.filter((loan) => loan.status === "active").length || 0,
+    totalLoanAmount: loans?.reduce((sum, loan) => sum + (Number.parseFloat(loan.amount) || 0), 0) || 0,
+    todayPayments: todayPayments?.length || 0,
+    todayAmount: todayPayments?.reduce((sum, payment) => sum + (Number.parseFloat(payment.total_amount) || 0), 0) || 0,
+    overduePayments: overduePayments?.length || 0,
+    overdueAmount:
+      overduePayments?.reduce((sum, payment) => sum + (Number.parseFloat(payment.total_amount) || 0), 0) || 0,
+  }
+}
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut()
-    router.push("/auth/login")
+export default async function DashboardPage() {
+  const supabase = await createClient()
+
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser()
+
+  if (error || !user) {
+    redirect("/auth/login")
   }
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-      </div>
-    )
-  }
+  const dashboardData = await getDashboardData()
+
+  const stats = [
+    {
+      title: "Total Clientes",
+      value: dashboardData.totalClients.toString(),
+      description: "Clientes activos",
+      icon: Users,
+      color: "text-blue-600",
+      bgColor: "bg-blue-50",
+    },
+    {
+      title: "Préstamos Activos",
+      value: dashboardData.activeLoans.toString(),
+      description: `de ${dashboardData.totalLoans} totales`,
+      icon: CreditCard,
+      color: "text-green-600",
+      bgColor: "bg-green-50",
+    },
+    {
+      title: "Monto Total",
+      value: `$${dashboardData.totalLoanAmount.toLocaleString()}`,
+      description: "En préstamos activos",
+      icon: DollarSign,
+      color: "text-purple-600",
+      bgColor: "bg-purple-50",
+    },
+    {
+      title: "Pagos Hoy",
+      value: dashboardData.todayPayments.toString(),
+      description: `$${dashboardData.todayAmount.toLocaleString()}`,
+      icon: Calendar,
+      color: "text-orange-600",
+      bgColor: "bg-orange-50",
+    },
+  ]
+
+  const alerts = [
+    {
+      title: "Pagos Vencidos",
+      count: dashboardData.overduePayments,
+      amount: dashboardData.overdueAmount,
+      type: "danger" as const,
+      icon: AlertTriangle,
+    },
+    {
+      title: "Pagos de Hoy",
+      count: dashboardData.todayPayments,
+      amount: dashboardData.todayAmount,
+      type: "warning" as const,
+      icon: Clock,
+    },
+  ]
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <nav className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16">
-            <div className="flex items-center">
-              <h1 className="text-2xl font-bold text-blue-600">MB Microcréditos</h1>
-            </div>
-            <div className="flex items-center space-x-4">
-              <div className="hidden md:flex items-center space-x-6">
-                <a
-                  href="/dashboard"
-                  className="text-gray-700 hover:text-blue-600 px-3 py-2 rounded-md text-sm font-medium"
-                >
-                  Dashboard
-                </a>
-                <a
-                  href="/prestamos"
-                  className="text-gray-700 hover:text-blue-600 px-3 py-2 rounded-md text-sm font-medium"
-                >
-                  Préstamos
-                </a>
-                <a
-                  href="/clientes"
-                  className="text-gray-700 hover:text-blue-600 px-3 py-2 rounded-md text-sm font-medium"
-                >
-                  Clientes
-                </a>
-                <a
-                  href="/cronograma"
-                  className="text-gray-700 hover:text-blue-600 px-3 py-2 rounded-md text-sm font-medium"
-                >
-                  Cronograma
-                </a>
-                <a
-                  href="/reportes"
-                  className="text-gray-700 hover:text-blue-600 px-3 py-2 rounded-md text-sm font-medium"
-                >
-                  Reportes
-                </a>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold text-foreground font-work-sans">Dashboard</h1>
+        <p className="text-muted-foreground mt-2">
+          Bienvenido de vuelta, {user.email}. Aquí tienes un resumen de tu sistema de microcréditos.
+        </p>
+      </div>
+
+      {/* Stats Grid */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        {stats.map((stat) => (
+          <Card key={stat.title} className="border-border bg-card">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-card-foreground">{stat.title}</CardTitle>
+              <div className={`p-2 rounded-md ${stat.bgColor}`}>
+                <stat.icon className={`h-4 w-4 ${stat.color}`} />
               </div>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-card-foreground">{stat.value}</div>
+              <p className="text-xs text-muted-foreground">{stat.description}</p>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* Alerts Section */}
+      <div className="grid gap-4 md:grid-cols-2">
+        {alerts.map((alert) => (
+          <Card
+            key={alert.title}
+            className={`border-border bg-card ${
+              alert.type === "danger"
+                ? "border-l-4 border-l-destructive"
+                : alert.type === "warning"
+                  ? "border-l-4 border-l-orange-500"
+                  : ""
+            }`}
+          >
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-card-foreground">{alert.title}</CardTitle>
+              <alert.icon
+                className={`h-4 w-4 ${
+                  alert.type === "danger"
+                    ? "text-destructive"
+                    : alert.type === "warning"
+                      ? "text-orange-500"
+                      : "text-muted-foreground"
+                }`}
+              />
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-2xl font-bold text-card-foreground">{alert.count}</div>
+                  <p className="text-xs text-muted-foreground">${alert.amount.toLocaleString()}</p>
+                </div>
+                <Badge variant={alert.type === "danger" ? "destructive" : "secondary"}>
+                  {alert.type === "danger" ? "Urgente" : "Pendiente"}
+                </Badge>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* Quick Actions */}
+      <Card className="border-border bg-card">
+        <CardHeader>
+          <CardTitle className="text-card-foreground font-work-sans">Acciones Rápidas</CardTitle>
+          <CardDescription>Accede rápidamente a las funciones más utilizadas</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-4 md:grid-cols-3">
+            <Card className="p-4 hover:bg-muted/50 transition-colors cursor-pointer border-border">
               <div className="flex items-center space-x-3">
-                <span className="text-sm text-gray-700">Bienvenido, {user?.email}</span>
-                <button
-                  onClick={handleLogout}
-                  className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors"
-                >
-                  Cerrar Sesión
-                </button>
+                <Users className="h-8 w-8 text-primary" />
+                <div>
+                  <h3 className="font-semibold text-card-foreground">Nuevo Cliente</h3>
+                  <p className="text-sm text-muted-foreground">Registrar cliente</p>
+                </div>
               </div>
-            </div>
+            </Card>
+            <Card className="p-4 hover:bg-muted/50 transition-colors cursor-pointer border-border">
+              <div className="flex items-center space-x-3">
+                <CreditCard className="h-8 w-8 text-primary" />
+                <div>
+                  <h3 className="font-semibold text-card-foreground">Nuevo Préstamo</h3>
+                  <p className="text-sm text-muted-foreground">Otorgar préstamo</p>
+                </div>
+              </div>
+            </Card>
+            <Card className="p-4 hover:bg-muted/50 transition-colors cursor-pointer border-border">
+              <div className="flex items-center space-x-3">
+                <CheckCircle className="h-8 w-8 text-primary" />
+                <div>
+                  <h3 className="font-semibold text-card-foreground">Registrar Pago</h3>
+                  <p className="text-sm text-muted-foreground">Procesar pago</p>
+                </div>
+              </div>
+            </Card>
           </div>
-        </div>
-      </nav>
+        </CardContent>
+      </Card>
 
-      <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        <div className="px-4 py-6 sm:px-0">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <div className="bg-white overflow-hidden shadow rounded-lg">
-              <div className="p-5">
-                <div className="flex items-center">
-                  <div className="flex-shrink-0">
-                    <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
-                      <span className="text-white font-bold">$</span>
-                    </div>
-                  </div>
-                  <div className="ml-5 w-0 flex-1">
-                    <dl>
-                      <dt className="text-sm font-medium text-gray-500 truncate">Préstamos Activos</dt>
-                      <dd className="text-lg font-medium text-gray-900">24</dd>
-                    </dl>
-                  </div>
-                </div>
-              </div>
+      {/* Performance Overview */}
+      <Card className="border-border bg-card">
+        <CardHeader>
+          <CardTitle className="text-card-foreground font-work-sans">Rendimiento del Mes</CardTitle>
+          <CardDescription>Progreso hacia los objetivos mensuales</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-medium text-card-foreground">Nuevos Clientes</span>
+              <span className="text-sm text-muted-foreground">75%</span>
             </div>
-
-            <div className="bg-white overflow-hidden shadow rounded-lg">
-              <div className="p-5">
-                <div className="flex items-center">
-                  <div className="flex-shrink-0">
-                    <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
-                      <span className="text-white font-bold">✓</span>
-                    </div>
-                  </div>
-                  <div className="ml-5 w-0 flex-1">
-                    <dl>
-                      <dt className="text-sm font-medium text-gray-500 truncate">Pagos Recibidos Hoy</dt>
-                      <dd className="text-lg font-medium text-gray-900">$12,450</dd>
-                    </dl>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white overflow-hidden shadow rounded-lg">
-              <div className="p-5">
-                <div className="flex items-center">
-                  <div className="flex-shrink-0">
-                    <div className="w-8 h-8 bg-yellow-500 rounded-full flex items-center justify-center">
-                      <span className="text-white font-bold">!</span>
-                    </div>
-                  </div>
-                  <div className="ml-5 w-0 flex-1">
-                    <dl>
-                      <dt className="text-sm font-medium text-gray-500 truncate">Pagos Pendientes</dt>
-                      <dd className="text-lg font-medium text-gray-900">8</dd>
-                    </dl>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white overflow-hidden shadow rounded-lg">
-              <div className="p-5">
-                <div className="flex items-center">
-                  <div className="flex-shrink-0">
-                    <div className="w-8 h-8 bg-purple-500 rounded-full flex items-center justify-center">
-                      <span className="text-white font-bold">%</span>
-                    </div>
-                  </div>
-                  <div className="ml-5 w-0 flex-1">
-                    <dl>
-                      <dt className="text-sm font-medium text-gray-500 truncate">Tasa Morosidad</dt>
-                      <dd className="text-lg font-medium text-gray-900">3.2%</dd>
-                    </dl>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <Progress value={75} className="h-2" />
           </div>
-
-          <div className="mt-8 bg-white shadow rounded-lg">
-            <div className="px-4 py-5 sm:p-6">
-              <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">Cronograma de Pagos Recientes</h3>
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Cliente
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Monto
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Fecha Vencimiento
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Estado
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Acciones
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    <tr>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">María González</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">$500</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">2024-01-15</td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
-                          Pagado
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        <button className="text-blue-600 hover:text-blue-900">Ver detalles</button>
-                      </td>
-                    </tr>
-                    <tr>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                        Carlos Rodríguez
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">$750</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">2024-01-20</td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">
-                          Pendiente
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        <button className="text-blue-600 hover:text-blue-900 mr-3">Registrar pago</button>
-                        <button className="text-gray-600 hover:text-gray-900">Ver detalles</button>
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-medium text-card-foreground">Préstamos Otorgados</span>
+              <span className="text-sm text-muted-foreground">60%</span>
             </div>
+            <Progress value={60} className="h-2" />
           </div>
-        </div>
-      </main>
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-medium text-card-foreground">Tasa de Recuperación</span>
+              <span className="text-sm text-muted-foreground">92%</span>
+            </div>
+            <Progress value={92} className="h-2" />
+          </div>
+        </CardContent>
+      </Card>
     </div>
   )
 }
