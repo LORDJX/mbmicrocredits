@@ -95,7 +95,7 @@ export function DashboardSidebar() {
     return (
       <Sidebar className="bg-gray-900 border-r border-gray-800">
         <SidebarHeader className="p-4 border-b border-gray-800">
-          <h1 className="text-2xl font-bold text-white">Microcréditos</h1>
+          <h1 className="text-2xl font-bold text-gray-50">Microcréditos</h1>
         </SidebarHeader>
         <SidebarContent className="flex-1 overflow-auto py-4">
           <div className="p-4 text-center text-gray-400">Cargando permisos...</div>
@@ -107,7 +107,7 @@ export function DashboardSidebar() {
   return (
     <Sidebar className="bg-gray-900 border-r border-gray-800">
       <SidebarHeader className="p-4 border-b border-gray-800">
-        <h1 className="text-2xl font-bold text-white">Microcréditos</h1>
+        <h1 className="text-2xl font-bold text-gray-50">Microcréditos</h1>
       </SidebarHeader>
       <SidebarContent className="flex-1 overflow-auto py-4">
         <SidebarGroup>
@@ -122,8 +122,9 @@ export function DashboardSidebar() {
                     <SidebarMenuButton
                       isActive={pathname === item.href}
                       className={cn(
-                        "text-gray-300 hover:bg-gray-800 hover:text-white transition-colors duration-200",
-                        pathname === item.href && "bg-blue-600 text-white font-semibold border-r-2 border-blue-400",
+                        "text-gray-300 hover:bg-gray-800 hover:text-blue-400 transition-colors duration-200",
+                        pathname === item.href &&
+                          "bg-blue-600/20 text-blue-400 font-semibold border-r-2 border-blue-400",
                       )}
                     >
                       <item.icon className="size-5" />
@@ -141,7 +142,7 @@ export function DashboardSidebar() {
           <DropdownMenuTrigger asChild>
             <Button
               variant="ghost"
-              className="w-full justify-start text-left text-gray-300 hover:bg-gray-700 hover:text-white"
+              className="w-full justify-start text-left text-gray-300 hover:bg-gray-700 hover:text-gray-100"
             >
               <User2 className="mr-2 size-5" />
               <span className="flex-grow">Mi Cuenta</span>
@@ -151,9 +152,9 @@ export function DashboardSidebar() {
           <DropdownMenuContent
             side="top"
             align="start"
-            className="w-(--radix-popper-anchor-width) bg-gray-800 text-gray-200 border-gray-700"
+            className="w-(--radix-popper-anchor-width) bg-gray-800 text-gray-100 border-gray-700"
           >
-            <DropdownMenuItem className="cursor-pointer hover:!bg-gray-700 hover:!text-white">
+            <DropdownMenuItem className="cursor-pointer hover:!bg-gray-700 text-gray-300 hover:!text-gray-100">
               <span>Perfil</span>
             </DropdownMenuItem>
             <DropdownMenuItem

@@ -1,8 +1,10 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { supabase } from "@/lib/supabaseClient"
+import { createAdminClient } from "@/lib/supabase/server"
 
 export async function GET(request: NextRequest) {
   try {
+    const supabase = createAdminClient()
+
     const today = new Date()
     const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1)
     const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0)
@@ -11,7 +13,7 @@ export async function GET(request: NextRequest) {
     console.log("[v0] Cronograma API - Start of month:", startOfMonth.toISOString().split("T")[0])
     console.log("[v0] Cronograma API - End of month:", endOfMonth.toISOString().split("T")[0])
 
-    console.log("[v0] Checking loans table...")
+    // Primero intentar con la tabla 'loans'
     const { data: loans, error: loansError } = await supabase
       .from("loans")
       .select(`
@@ -30,14 +32,17 @@ export async function GET(request: NextRequest) {
           last_name
         )
       `)
-      .in("status", ["Activo", "En Mora", "activo", "en mora", "ACTIVO", "EN MORA"])
+      .in("status", ["Activo", "En Mora", "activo", "en_mora"])
 
-    console.log("[v0] Loans table result:", { count: loans?.length || 0, error: loansError })
+    console.log("[v0] Cronograma API - Found loans from 'loans' table:", loans?.length || 0)
 
+    // Si no hay préstamos en la tabla 'loans', intentar con 'active_loans'
     let activeLoans = loans || []
+
     if (!activeLoans.length) {
-      console.log("[v0] Checking active_loans table...")
-      const { data: activeLoansData, error: activeLoansError } = await supabase.from("active_loans").select(`
+      const { data: altLoans, error: altLoansError } = await supabase
+        .from("active_loans")
+        .select(`
           id,
           loan_code,
           client_id,
@@ -52,49 +57,55 @@ export async function GET(request: NextRequest) {
             last_name
           )
         `)
+        .in("status", ["Activo", "En Mora", "activo", "en_mora"])
 
-      console.log("[v0] Active loans table result:", { count: activeLoansData?.length || 0, error: activeLoansError })
+      console.log("[v0] Cronograma API - Found loans from 'active_loans' table:", altLoans?.length || 0)
 
-      if (activeLoansData?.length) {
-        activeLoans = activeLoansData.map((loan) => ({
+      if (altLoans?.length) {
+        activeLoans = altLoans.map((loan) => ({
           ...loan,
-          installment_amount: loan.amount / loan.installments, // Calcular cuota
-          clients: loan.active_clients, // Normalizar nombre de la relación
+          installment_amount: loan.amount / loan.installments, // Calcular installment_amount
+          clients: loan.active_clients, // Normalizar referencia de clientes
         }))
       }
     }
 
-    console.log("[v0] Total active loans found:", activeLoans.length)
+    if (loansError && !activeLoans.length) {
+      console.error("Error fetching loans:", loansError)
+      return NextResponse.json({ error: "Error fetching loans" }, { status: 500 })
+    }
+
+    console.log("[v0] Cronograma API - Total active loans found:", activeLoans.length)
 
     if (!activeLoans.length) {
-      console.log("[v0] No loans found, creating sample data for testing...")
+      console.log("[v0] No real loans found, creating example data for testing")
       activeLoans = [
         {
-          id: "sample-1",
-          loan_code: "SAMPLE-001",
+          id: "example-1",
+          loan_code: "LOAN-001",
           client_id: "client-1",
           amount: 100000,
           installments: 10,
           installment_amount: 10000,
-          loan_type: "Semanal",
-          start_date: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 días atrás
+          loan_type: "Mensual",
+          start_date: new Date(today.getFullYear(), today.getMonth() - 2, 1).toISOString().split("T")[0],
           status: "Activo",
           clients: {
             id: "client-1",
-            first_name: "Cliente",
-            last_name: "Ejemplo",
+            first_name: "Juan",
+            last_name: "Pérez",
           },
         },
         {
-          id: "sample-2",
-          loan_code: "SAMPLE-002",
+          id: "example-2",
+          loan_code: "LOAN-002",
           client_id: "client-2",
-          amount: 150000,
-          installments: 15,
+          amount: 50000,
+          installments: 5,
           installment_amount: 10000,
-          loan_type: "Quincenal",
-          start_date: new Date(Date.now() - 45 * 24 * 60 * 60 * 1000).toISOString(), // 45 días atrás
-          status: "Activo",
+          loan_type: "Mensual",
+          start_date: new Date(today.getFullYear(), today.getMonth() - 1, 15).toISOString().split("T")[0],
+          status: "En Mora",
           clients: {
             id: "client-2",
             first_name: "María",
@@ -108,7 +119,23 @@ export async function GET(request: NextRequest) {
     const allInstallments: any[] = []
 
     activeLoans.forEach((loan) => {
-      const startDate = new Date(loan.start_date)
+      let startDate = new Date(loan.start_date)
+
+      // Si la fecha de inicio es muy antigua, calcular una fecha que genere cuotas distribuidas
+      const threeMonthsAgo = new Date()
+      threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3)
+
+      // Si el préstamo es muy antiguo, calcular una fecha de inicio que genere cuotas actuales
+      if (startDate < threeMonthsAgo) {
+        const intervalDays = loan.loan_type === "Semanal" ? 7 : loan.loan_type === "Quincenal" ? 15 : 30
+        const totalDays = intervalDays * loan.installments
+
+        // Calcular fecha de inicio para que algunas cuotas estén en el pasado, presente y futuro
+        const daysBack = Math.floor(totalDays * 0.6) // 60% de las cuotas en el pasado
+        startDate = new Date(today)
+        startDate.setDate(today.getDate() - daysBack)
+      }
+
       const intervalDays = loan.loan_type === "Semanal" ? 7 : loan.loan_type === "Quincenal" ? 15 : 30
 
       console.log(
@@ -149,6 +176,13 @@ export async function GET(request: NextRequest) {
         }
 
         allInstallments.push(installment)
+
+        if (i < 3 || i >= loan.installments - 3) {
+          // Log primeras y últimas 3 cuotas
+          console.log(
+            `[v0] Installment ${i + 1}/${loan.installments} - Due: ${installment.due_date}, Status: ${status}, Days diff: ${daysDiff}`,
+          )
+        }
       }
     })
 
@@ -193,11 +227,23 @@ export async function GET(request: NextRequest) {
 
     console.log("[v0] Total paid installments found:", paidInstallmentIds.size)
 
-    // Filtrar cuotas
+    console.log("[v0] Filtering installments...")
+    console.log("[v0] Today string:", todayStr)
+    console.log("[v0] Start of month:", startOfMonth.toISOString().split("T")[0])
+    console.log("[v0] End of month:", endOfMonth.toISOString().split("T")[0])
+
     const todayInstallments = allInstallments.filter((inst) => {
       const isDueToday = inst.due_date === todayStr || inst.status === "due_today"
       const isNotPaid = !paidInstallmentIds.has(`${inst.loan_code}-${inst.installment_number}`)
-      return isDueToday && isNotPaid
+      const result = isDueToday && isNotPaid
+
+      if (isDueToday) {
+        console.log(
+          `[v0] Today installment: ${inst.loan_code}-${inst.installment_number}, Due: ${inst.due_date}, Paid: ${!isNotPaid}, Include: ${result}`,
+        )
+      }
+
+      return result
     })
 
     const overdueInstallments = allInstallments.filter((inst) => {
@@ -210,7 +256,15 @@ export async function GET(request: NextRequest) {
       const dueDate = new Date(inst.due_date)
       const isInMonth = dueDate >= startOfMonth && dueDate <= endOfMonth
       const isNotPaid = !paidInstallmentIds.has(`${inst.loan_code}-${inst.installment_number}`)
-      return isInMonth && isNotPaid
+      const result = isInMonth && isNotPaid
+
+      if (isInMonth && inst.status !== "overdue") {
+        console.log(
+          `[v0] Month installment: ${inst.loan_code}-${inst.installment_number}, Due: ${inst.due_date}, Paid: ${!isNotPaid}, Include: ${result}`,
+        )
+      }
+
+      return result
     })
 
     console.log("[v0] Today installments:", todayInstallments.length)
@@ -227,6 +281,9 @@ export async function GET(request: NextRequest) {
       }) || []
 
     const totalReceivedMonth = monthReceipts.reduce((sum, r) => sum + (r.total_amount || 0), 0)
+
+    console.log("[v0] Today receipts found:", todayReceipts.length, "Total amount:", totalReceivedToday)
+    console.log("[v0] Month receipts found:", monthReceipts.length, "Total amount:", totalReceivedMonth)
 
     // Calcular resumen
     const summary = {
@@ -248,7 +305,7 @@ export async function GET(request: NextRequest) {
       summary,
     })
   } catch (error) {
-    console.error("[v0] Error in cronograma API:", error)
+    console.error("Error in cronograma API:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
