@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createAdminClient } from "@/lib/supabase/server"
+import { createAdminClient } from "../../../lib/supabase/server"
 
 async function processLoans(
   loans: any[],
