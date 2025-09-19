@@ -91,9 +91,17 @@ export function DashboardSidebar() {
   const filteredNavItems = navItems.filter((item) => userPermissions.includes(item.route) || item.route === "dashboard")
 
   const handleLogout = async () => {
-    const supabase = createClient()
-    await supabase.auth.signOut()
-    router.push("/auth/login")
+    try {
+      const supabase = createClient()
+      await supabase.auth.signOut()
+      localStorage.removeItem("mb_session")
+      router.push("/login")
+    } catch (error) {
+      console.error("Error during logout:", error)
+      // Forzar logout local si falla Supabase
+      localStorage.removeItem("mb_session")
+      router.push("/login")
+    }
   }
 
   if (!permissionsLoaded) {
