@@ -342,25 +342,7 @@ BM Microcréditos`
     const clientName = `${receipt.clients.first_name} ${receipt.clients.last_name}`
     const loanInfo = receipt.selected_loans?.[0] || {}
 
-    const message = `🧾 *RECIBO DE PAGO* 🧾
-
-Hola ${clientName}!
-
-Su recibo N° *${receipt.receipt_number}* ha sido generado exitosamente.
-
-📋 *DETALLE DEL PAGO:*
-💰 Monto: *${formatCurrency(receipt.total_amount)}*
-📅 Fecha: ${formatDate(receipt.receipt_date)}
-💳 Tipo: ${receipt.payment_type}
-${loanInfo.loan_code ? `🏦 Préstamo: ${loanInfo.loan_code}` : ""}
-${loanInfo.installment_number ? `📊 Cuota: ${loanInfo.installment_number}` : ""}
-
-${receipt.observations ? `📝 Observaciones: ${receipt.observations}` : ""}
-
-✅ Gracias por su pago puntual.
-
-*BM Microcréditos*
-_Su confianza es nuestro compromiso_`
+    const message = `🧾 RECIBO DE PAGO 📋 Recibo N°: ${receipt.receipt_number} 📅 Fecha: ${new Date(receipt.receipt_date).toLocaleDateString("es-ES")} 👤 Cliente: ${clientName} 💰 Total Pagado: $${receipt.total_amount.toFixed(2)} 💵 Efectivo: $${(receipt.total_amount - (receipt.transfer_amount || 0)).toFixed(2)} 🏦 Transferencia: $${(receipt.transfer_amount || 0).toFixed(2)} 📝 Tipo: ${receipt.payment_type} ${receipt.observations ? `📋 Observaciones: ${receipt.observations}` : ""} ¡Gracias por su pago! 🙏 BM Microcréditos`
 
     const whatsappUrl = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`
     window.open(whatsappUrl, "_blank")
