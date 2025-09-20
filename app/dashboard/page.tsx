@@ -1,282 +1,220 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Users, CreditCard, Calendar, Receipt, AlertCircle, DollarSign, Activity } from "lucide-react"
-import Link from "next/link"
-import { authService } from "@/lib/auth-service"
-
-interface DashboardStats {
-  totalClients: number
-  activeLoans: number
-  todayPayments: number
-  overduePayments: number
-  totalDueToday: number
-  totalReceivedToday: number
-  totalOverdue: number
-  monthlyTotal: number
-}
+import { supabase } from "@/lib/supabaseClient"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { CheckCircle, AlertCircle, Loader2 } from "lucide-react"
 
 export default function DashboardPage() {
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
-  const [stats, setStats] = useState<DashboardStats | null>(null)
-  const [cronogramData, setCronogramData] = useState<any>(null)
-  const router = useRouter()
+  const [diagnostics, setDiagnostics] = useState({
+    authStatus: "checking",
+    permissionsStatus: "checking",
+    sessionStatus: "checking",
+  })
 
   useEffect(() => {
-    const checkUser = () => {
+    const runDiagnostics = async () => {
+      console.log("[v0] Iniciando diagnóstico completo del dashboard")
+
       try {
-        const currentUser = authService.getCurrentUser()
-        if (currentUser && authService.isAuthenticated()) {
-          setUser(currentUser)
-          loadDashboardStats()
-          loadCronogramData()
+        setDiagnostics((prev) => ({ ...prev, authStatus: "checking" }))
+        const {
+          data: { user },
+          error: authError,
+        } = await supabase.auth.getUser()
+
+        if (authError) {
+          console.log("[v0] Error de autenticación:", authError)
+          setDiagnostics((prev) => ({ ...prev, authStatus: "error" }))
+          return
+        }
+
+        if (!user) {
+          console.log("[v0] No hay usuario autenticado")
+          setDiagnostics((prev) => ({ ...prev, authStatus: "no-user" }))
+          return
+        }
+
+        console.log("[v0] Usuario autenticado:", user.id)
+        setUser(user)
+        setDiagnostics((prev) => ({ ...prev, authStatus: "success" }))
+
+        setDiagnostics((prev) => ({ ...prev, sessionStatus: "checking" }))
+        const {
+          data: { session },
+          error: sessionError,
+        } = await supabase.auth.getSession()
+
+        if (sessionError || !session) {
+          console.log("[v0] Error de sesión:", sessionError)
+          setDiagnostics((prev) => ({ ...prev, sessionStatus: "error" }))
         } else {
-          router.push("/login")
+          console.log("[v0] Sesión válida")
+          setDiagnostics((prev) => ({ ...prev, sessionStatus: "success" }))
+        }
+
+        setDiagnostics((prev) => ({ ...prev, permissionsStatus: "checking" }))
+        try {
+          const response = await fetch(`/api/users/permissions?userId=${user.id}`)
+          if (response.ok) {
+            console.log("[v0] API de permisos funcionando correctamente")
+            setDiagnostics((prev) => ({ ...prev, permissionsStatus: "success" }))
+          } else {
+            console.log("[v0] Error en API de permisos:", response.status)
+            setDiagnostics((prev) => ({ ...prev, permissionsStatus: "error" }))
+          }
+        } catch (permError) {
+          console.log("[v0] Error al verificar permisos:", permError)
+          setDiagnostics((prev) => ({ ...prev, permissionsStatus: "error" }))
         }
       } catch (error) {
-        console.error("Error checking user:", error)
-        router.push("/login")
+        console.log("[v0] Error general en diagnóstico:", error)
+        setDiagnostics((prev) => ({
+          ...prev,
+          authStatus: "error",
+          sessionStatus: "error",
+          permissionsStatus: "error",
+        }))
       } finally {
         setLoading(false)
       }
     }
 
-    const loadDashboardStats = async () => {
-      try {
-        const [clientsRes, loansRes] = await Promise.all([fetch("/api/clients"), fetch("/api/loans")])
+    runDiagnostics()
 
-        const clients = clientsRes.ok ? await clientsRes.json() : []
-        const loans = loansRes.ok ? await loansRes.json() : []
-
-        setStats({
-          totalClients: clients.length || 0,
-          activeLoans: loans.filter((l: any) => l.status === "activo").length || 0,
-          todayPayments: 0,
-          overduePayments: 0,
-          totalDueToday: 0,
-          totalReceivedToday: 0,
-          totalOverdue: 0,
-          monthlyTotal: 0,
-        })
-      } catch (error) {
-        console.error("Error loading dashboard stats:", error)
+    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log("[v0] Cambio de estado de auth:", event)
+      if (session?.user) {
+        setUser(session.user)
+      } else {
+        setUser(null)
       }
+    })
+
+    return () => {
+      authListener.subscription.unsubscribe()
     }
+  }, [])
 
-    const loadCronogramData = async () => {
-      try {
-        const response = await fetch("/api/cronograma")
-        if (response.ok) {
-          const data = await response.json()
-          setCronogramData(data)
-        }
-      } catch (error) {
-        console.error("Error loading cronogram data:", error)
-      }
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case "success":
+        return <CheckCircle className="h-4 w-4 text-green-500" />
+      case "error":
+      case "no-user":
+        return <AlertCircle className="h-4 w-4 text-red-500" />
+      case "checking":
+        return <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
+      default:
+        return <AlertCircle className="h-4 w-4 text-gray-500" />
     }
+  }
 
-    checkUser()
-  }, [router])
-
-  const handleLogout = async () => {
-    await authService.logout()
-    router.push("/login")
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case "success":
+        return "Funcionando correctamente"
+      case "error":
+        return "Error detectado"
+      case "no-user":
+        return "Usuario no autenticado"
+      case "checking":
+        return "Verificando..."
+      default:
+        return "Estado desconocido"
+    }
   }
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-2 text-gray-600">Loading...</p>
+      <div className="flex min-h-screen items-center justify-center bg-gray-900 text-gray-100">
+        <div className="text-center space-y-4">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto text-blue-500" />
+          <p>Ejecutando diagnóstico del dashboard...</p>
         </div>
       </div>
     )
   }
 
-  if (!user) {
-    return null // Will redirect to login
-  }
-
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-white shadow">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-6">
-            <h1 className="text-3xl font-bold text-gray-900">MB Microcredits Dashboard</h1>
-            <button
-              onClick={handleLogout}
-              className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              Sign Out
-            </button>
-          </div>
-        </div>
-      </header>
+    <div className="flex flex-col space-y-6 h-full w-full">
+      <Card className="w-full bg-gray-800 text-gray-100 border border-gray-700">
+        <CardHeader>
+          <CardTitle className="text-xl font-bold text-gray-50">Diagnóstico del Sistema</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Alert className="bg-gray-700 border-gray-600">
+              <div className="flex items-center space-x-2">
+                {getStatusIcon(diagnostics.authStatus)}
+                <div>
+                  <h4 className="font-semibold">Autenticación</h4>
+                  <AlertDescription className="text-sm">{getStatusText(diagnostics.authStatus)}</AlertDescription>
+                </div>
+              </div>
+            </Alert>
 
-      <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        <div className="px-4 py-6 sm:px-0">
-          <div className="bg-white rounded-lg shadow p-6 mb-6">
-            <h2 className="text-xl font-bold text-gray-900 mb-2">Welcome back!</h2>
-            <p className="text-gray-600 mb-4">You are logged in as {user.email}</p>
-            <p className="text-gray-600">
-              Your microcredit management dashboard is ready. You can start managing your loans, clients, and financial
-              operations.
+            <Alert className="bg-gray-700 border-gray-600">
+              <div className="flex items-center space-x-2">
+                {getStatusIcon(diagnostics.sessionStatus)}
+                <div>
+                  <h4 className="font-semibold">Sesión</h4>
+                  <AlertDescription className="text-sm">{getStatusText(diagnostics.sessionStatus)}</AlertDescription>
+                </div>
+              </div>
+            </Alert>
+
+            <Alert className="bg-gray-700 border-gray-600">
+              <div className="flex items-center space-x-2">
+                {getStatusIcon(diagnostics.permissionsStatus)}
+                <div>
+                  <h4 className="font-semibold">API Permisos</h4>
+                  <AlertDescription className="text-sm">
+                    {getStatusText(diagnostics.permissionsStatus)}
+                  </AlertDescription>
+                </div>
+              </div>
+            </Alert>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="w-full bg-gray-800 text-gray-100 border border-gray-700 shadow-lg rounded-lg">
+        <CardHeader className="text-center">
+          <CardTitle className="text-3xl font-bold text-gray-50">¡Bienvenido al Dashboard!</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4 text-center">
+          {user && (
+            <p className="text-lg text-gray-300">
+              Has iniciado sesión como: <span className="font-semibold">{user.email}</span>
             </p>
-          </div>
+          )}
+          <p className="text-gray-400">
+            Esta es tu área de trabajo. Usa la barra lateral para navegar por las diferentes secciones.
+          </p>
 
-          {cronogramData && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              <div className="bg-white rounded-lg shadow p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">Today's Installments</h3>
-                <p className="text-3xl font-bold text-blue-600">{cronogramData.today?.length || 0}</p>
-                <p className="text-sm text-gray-500">Due today</p>
-              </div>
-
-              <div className="bg-white rounded-lg shadow p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">Overdue Payments</h3>
-                <p className="text-3xl font-bold text-red-600">{cronogramData.overdue?.length || 0}</p>
-                <p className="text-sm text-gray-500">Past due</p>
-              </div>
-
-              <div className="bg-white rounded-lg shadow p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">This Month</h3>
-                <p className="text-3xl font-bold text-green-600">{cronogramData.month?.length || 0}</p>
-                <p className="text-sm text-gray-500">Total installments</p>
-              </div>
-            </div>
+          {Object.values(diagnostics).every((status) => status === "success") && (
+            <Alert className="bg-green-900/20 border-green-500/50">
+              <CheckCircle className="h-4 w-4 text-green-500" />
+              <AlertDescription className="text-green-400">
+                Todos los sistemas funcionan correctamente. El dashboard se ha cargado exitosamente.
+              </AlertDescription>
+            </Alert>
           )}
 
-          {/* Quick Stats */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mt-6">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Clientes</CardTitle>
-                <Users className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{stats?.totalClients || 0}</div>
-                <p className="text-xs text-muted-foreground">Clientes registrados</p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Préstamos Activos</CardTitle>
-                <CreditCard className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{stats?.activeLoans || 0}</div>
-                <p className="text-xs text-muted-foreground">En curso</p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Pagos Hoy</CardTitle>
-                <Calendar className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{cronogramData?.today?.length || 0}</div>
-                <p className="text-xs text-muted-foreground">Vencen hoy</p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Pagos Vencidos</CardTitle>
-                <AlertCircle className="h-4 w-4 text-destructive" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-destructive">{cronogramData?.overdue?.length || 0}</div>
-                <p className="text-xs text-muted-foreground">Requieren atención</p>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Financial Summary */}
-          <Card className="mt-6">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <DollarSign className="h-5 w-5" />
-                Resumen Financiero
-              </CardTitle>
-              <CardDescription>Estado financiero actual del día y mes</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="text-center p-4 bg-blue-50 dark:bg-blue-950/20 rounded-lg">
-                  <p className="text-sm text-muted-foreground">Por Cobrar Hoy</p>
-                  <p className="text-xl font-bold text-blue-600">
-                    ${(cronogramData?.summary?.total_due_today || 0).toLocaleString()}
-                  </p>
-                </div>
-                <div className="text-center p-4 bg-green-50 dark:bg-green-950/20 rounded-lg">
-                  <p className="text-sm text-muted-foreground">Recibido Hoy</p>
-                  <p className="text-xl font-bold text-green-600">
-                    ${(cronogramData?.summary?.total_received_today || 0).toLocaleString()}
-                  </p>
-                </div>
-                <div className="text-center p-4 bg-red-50 dark:bg-red-950/20 rounded-lg">
-                  <p className="text-sm text-muted-foreground">Monto Vencido</p>
-                  <p className="text-xl font-bold text-red-600">
-                    ${(cronogramData?.summary?.total_overdue || 0).toLocaleString()}
-                  </p>
-                </div>
-                <div className="text-center p-4 bg-gray-50 dark:bg-gray-950/20 rounded-lg">
-                  <p className="text-sm text-muted-foreground">Total del Mes</p>
-                  <p className="text-xl font-bold">
-                    ${(cronogramData?.summary?.total_due_month || 0).toLocaleString()}
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Quick Actions */}
-          <Card className="mt-6">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Activity className="h-5 w-5" />
-                Acciones Rápidas
-              </CardTitle>
-              <CardDescription>Accede rápidamente a las funciones principales</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <Button asChild variant="outline" className="h-20 flex-col gap-2 bg-transparent">
-                  <Link href="/clientes">
-                    <Users className="h-6 w-6" />
-                    <span>Gestionar Clientes</span>
-                  </Link>
-                </Button>
-                <Button asChild variant="outline" className="h-20 flex-col gap-2 bg-transparent">
-                  <Link href="/prestamos">
-                    <CreditCard className="h-6 w-6" />
-                    <span>Nuevo Préstamo</span>
-                  </Link>
-                </Button>
-                <Button asChild variant="outline" className="h-20 flex-col gap-2 bg-transparent">
-                  <Link href="/cronogramas">
-                    <Calendar className="h-6 w-6" />
-                    <span>Ver Cronogramas</span>
-                  </Link>
-                </Button>
-                <Button asChild variant="outline" className="h-20 flex-col gap-2 bg-transparent">
-                  <Link href="/dashboard/receipts">
-                    <Receipt className="h-6 w-6" />
-                    <span>Generar Recibos</span>
-                  </Link>
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </main>
+          {Object.values(diagnostics).some((status) => status === "error" || status === "no-user") && (
+            <Alert className="bg-red-900/20 border-red-500/50">
+              <AlertCircle className="h-4 w-4 text-red-500" />
+              <AlertDescription className="text-red-400">
+                Se detectaron problemas en el sistema. Revisa el panel de diagnóstico arriba.
+              </AlertDescription>
+            </Alert>
+          )}
+        </CardContent>
+      </Card>
     </div>
   )
 }
