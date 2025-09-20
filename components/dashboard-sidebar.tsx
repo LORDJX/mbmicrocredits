@@ -17,7 +17,7 @@ import {
   Receipt,
   Calendar,
   Calculator,
-  CheckCircle,
+  Clock,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -33,7 +33,7 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { authService } from "@/lib/auth-service"
+import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
 
@@ -45,7 +45,7 @@ const navItems = [
   { title: "Préstamos", href: "/dashboard/loans", icon: CreditCard, route: "loans" },
   { title: "Recibo", href: "/dashboard/receipts", icon: Receipt, route: "receipts" },
   { title: "Cronograma", href: "/dashboard/cronograma", icon: Calendar, route: "cronograma" },
-  { title: "Gestión de Cuotas", href: "/dashboard/cuotas", icon: CheckCircle, route: "cuotas" },
+  { title: "Cuotas", href: "/dashboard/cuotas", icon: Clock, route: "cuotas" },
   { title: "Transacciones", href: "/dashboard/transactions", icon: DollarSign, route: "transactions" },
   { title: "Seguimientos", href: "/dashboard/followups", icon: CalendarCheck, route: "followups" },
   { title: "Resumen para Socios", href: "/dashboard/resumen", icon: FileText, route: "reports" },
@@ -63,65 +63,35 @@ export function DashboardSidebar() {
   useEffect(() => {
     const loadUserPermissions = async () => {
       try {
-        const user = authService.getCurrentUser()
+        const supabase = createClient()
+        const {
+          data: { user },
+        } = await supabase.auth.getUser()
         if (user) {
           setCurrentUser(user)
+          const response = await fetch(`/api/users/permissions?userId=${user.id}`)
+          const data = await response.json()
 
-          // Try to load permissions from API if it's a Supabase user
-          const session = authService.getSession()
-          if (session?.type === "supabase") {
-            try {
-              const response = await fetch(`/api/users/permissions?userId=${user.id}`)
-              const data = await response.json()
-
-              if (data.permissions && Array.isArray(data.permissions)) {
-                setUserPermissions(data.permissions)
-              } else {
-                setUserPermissions([
-                  "dashboard",
-                  "clients",
-                  "loans",
-                  "receipts",
-                  "cronograma",
-                  "transactions",
-                  "formulas",
-                ])
-              }
-            } catch (error) {
-              console.error("Error loading permissions:", error)
-              setUserPermissions([
-                "dashboard",
-                "clients",
-                "loans",
-                "receipts",
-                "cronograma",
-                "transactions",
-                "formulas",
-              ])
-            }
+          if (data.permissions && Array.isArray(data.permissions)) {
+            setUserPermissions(data.permissions)
           } else {
-            // Mock user gets all permissions
             setUserPermissions([
               "dashboard",
-              "users",
-              "partners",
               "clients",
               "loans",
               "receipts",
               "cronograma",
+              "cuotas",
               "transactions",
-              "followups",
-              "reports",
               "formulas",
             ])
           }
         } else {
-          // No user logged in, redirect to login
           router.push("/login")
         }
       } catch (error) {
-        console.error("Error loading user data:", error)
-        setUserPermissions(["dashboard", "clients", "loans", "cronograma", "formulas"])
+        console.error("Error loading permissions:", error)
+        setUserPermissions(["dashboard", "clients", "loans", "cronograma", "cuotas", "formulas"])
       } finally {
         setPermissionsLoaded(true)
       }
@@ -133,7 +103,8 @@ export function DashboardSidebar() {
   const filteredNavItems = navItems.filter((item) => userPermissions.includes(item.route) || item.route === "dashboard")
 
   const handleLogout = async () => {
-    await authService.logout()
+    const supabase = createClient()
+    await supabase.auth.signOut()
     router.push("/login")
   }
 
