@@ -59,6 +59,7 @@ export function DashboardSidebar() {
   const [userPermissions, setUserPermissions] = useState<string[]>([])
   const [permissionsLoaded, setPermissionsLoaded] = useState(false)
   const [currentUser, setCurrentUser] = useState<{ email: string; name: string } | null>(null)
+  const [error, setError] = useState<string | null>(null)
   const supabase = createClient()
 
   useEffect(() => {
@@ -71,12 +72,27 @@ export function DashboardSidebar() {
         console.log("[v0] User from auth:", user?.id)
 
         if (user) {
+          setCurrentUser({
+            email: user.email || "Usuario",
+            name: user.user_metadata?.name || user.email?.split("@")[0] || "Usuario",
+          })
+
           const url = `/api/users/permissions?userId=${user.id}`
           console.log("[v0] Fetching permissions from:", url)
 
-          const response = await fetch(url)
+          const response = await fetch(url, {
+            headers: {
+              "Content-Type": "application/json",
+            },
+            credentials: "include",
+          })
+
           console.log("[v0] Response status:", response.status)
           console.log("[v0] Response headers:", Object.fromEntries(response.headers.entries()))
+
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`)
+          }
 
           const contentType = response.headers.get("content-type")
           if (!contentType || !contentType.includes("application/json")) {
@@ -92,28 +108,49 @@ export function DashboardSidebar() {
           if (data.permissions && Array.isArray(data.permissions)) {
             setUserPermissions(data.permissions)
           } else {
-            setUserPermissions(["dashboard", "clients", "loans", "receipts", "cronograma", "transactions", "formulas"])
+            setUserPermissions([
+              "dashboard",
+              "clients",
+              "loans",
+              "receipts",
+              "cronograma",
+              "cuotas",
+              "transactions",
+              "formulas",
+            ])
           }
         } else {
           console.log("[v0] No user found, using default permissions")
-          setUserPermissions(["dashboard", "clients", "loans", "cronograma", "formulas"])
+          router.push("/auth/login")
+          return
         }
       } catch (error) {
         console.error("Error loading permissions:", error)
         setUserPermissions(["dashboard", "clients", "loans", "cronograma", "formulas"])
+        setError("No se pudieron cargar los permisos. Usando permisos básicos.")
       } finally {
         setPermissionsLoaded(true)
       }
     }
 
     loadUserPermissions()
-  }, [])
+  }, [router, supabase.auth])
 
   const filteredNavItems = navItems.filter((item) => userPermissions.includes(item.route) || item.route === "dashboard")
 
   const handleLogout = async () => {
-    await supabase.auth.signOut()
-    router.push("/login")
+    try {
+      console.log("[v0] Logging out user")
+      await supabase.auth.signOut()
+      setUserPermissions([])
+      setCurrentUser(null)
+      setPermissionsLoaded(false)
+      router.push("/auth/login")
+      router.refresh()
+    } catch (error) {
+      console.error("[v0] Logout error:", error)
+      router.push("/auth/login")
+    }
   }
 
   if (!permissionsLoaded) {

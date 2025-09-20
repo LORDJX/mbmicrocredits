@@ -26,13 +26,35 @@ export default function LoginPage() {
     setError(null)
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      console.log("[v0] Attempting login with email:", email)
+
+      const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       })
-      if (error) throw error
-      router.push("/dashboard")
+
+      console.log("[v0] Login response:", { data: data?.user?.id, error: error?.message })
+
+      if (error) {
+        let errorMessage = "Error al iniciar sesión"
+        if (error.message.includes("Invalid login credentials")) {
+          errorMessage = "Credenciales inválidas. Verifica tu email y contraseña."
+        } else if (error.message.includes("Email not confirmed")) {
+          errorMessage = "Por favor confirma tu email antes de iniciar sesión."
+        } else if (error.message.includes("Too many requests")) {
+          errorMessage = "Demasiados intentos. Intenta de nuevo en unos minutos."
+        }
+        throw new Error(errorMessage)
+      }
+
+      if (data?.user) {
+        console.log("[v0] Login successful, redirecting to dashboard")
+        await new Promise((resolve) => setTimeout(resolve, 100))
+        router.push("/dashboard")
+        router.refresh() // Force a refresh to update the session
+      }
     } catch (error: unknown) {
+      console.error("[v0] Login error:", error)
       setError(error instanceof Error ? error.message : "Error al iniciar sesión")
     } finally {
       setIsLoading(false)
