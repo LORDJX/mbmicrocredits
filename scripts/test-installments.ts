@@ -1,26 +1,26 @@
-// Test script for loan installments API endpoints
-// Run with: node scripts/test-installments.ts
+// scripts/test-installments.mjs
+// Run: node scripts/test-installments.mjs
+// En V0: “Run Node.js script” → scripts/test-installments.mjs
 
 const API_BASE_URL = process.env.API_BASE_URL || "http://localhost:3000"
+const CLIENT_ID = process.env.TEST_CLIENT_ID || "00000000-0000-0000-0000-000000000001" // ajustá esto
 
-interface TestResult {
-  name: string
-  success: boolean
-  data?: any
-  error?: string
+function logSection(title) {
+  console.log("\n" + title)
+  console.log("=".repeat(title.length))
 }
 
-async function runTests(): Promise<TestResult[]> {
-  const results: TestResult[] = []
+async function runTests() {
+  const results = []
 
   try {
     // Test 1: Create a new loan
-    console.log("🧪 Test 1: Creating new loan...")
+    logSection("🧪 Test 1: Creating new loan…")
     const createLoanResponse = await fetch(`${API_BASE_URL}/api/loans`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        client_id: "00000000-0000-0000-0000-000000000001", // You'll need a valid client ID
+        client_id: CLIENT_ID,
         principal: 30000.0,
         installments_total: 6,
         installment_amount: 5000.0,
@@ -30,156 +30,99 @@ async function runTests(): Promise<TestResult[]> {
       }),
     })
 
-    if (createLoanResponse.ok) {
-      const loanData = await createLoanResponse.json()
-      results.push({
-        name: "Create Loan",
-        success: true,
-        data: { loan_id: loanData.id, loan_code: loanData.loan_code },
-      })
-
-      const loanId = loanData.id
-
-      // Test 2: Get loan schedule
-      console.log("🧪 Test 2: Getting loan schedule...")
-      const scheduleResponse = await fetch(`${API_BASE_URL}/api/loans/${loanId}/schedule`)
-
-      if (scheduleResponse.ok) {
-        const scheduleData = await scheduleResponse.json()
-        results.push({
-          name: "Get Schedule",
-          success: true,
-          data: {
-            installments_count: scheduleData.installments.length,
-            total_due: scheduleData.totals.total_due,
-          },
-        })
-      } else {
-        results.push({
-          name: "Get Schedule",
-          success: false,
-          error: `HTTP ${scheduleResponse.status}`,
-        })
-      }
-
-      // Test 3: Make a payment
-      console.log("🧪 Test 3: Making payment...")
-      const paymentResponse = await fetch(`${API_BASE_URL}/api/payments`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          loan_id: loanId,
-          paid_amount: 7500.0, // Partial payment covering 1.5 installments
-          note: "Test payment - partial with overflow",
-        }),
-      })
-
-      if (paymentResponse.ok) {
-        const paymentData = await paymentResponse.json()
-        results.push({
-          name: "Make Payment",
-          success: true,
-          data: {
-            payment_id: paymentData.payment_id,
-            imputations_count: paymentData.imputations.length,
-            remaining_amount: paymentData.remaining_amount,
-          },
-        })
-      } else {
-        results.push({
-          name: "Make Payment",
-          success: false,
-          error: `HTTP ${paymentResponse.status}`,
-        })
-      }
-
-      // Test 4: Get loan summary
-      console.log("🧪 Test 4: Getting loan summary...")
-      const summaryResponse = await fetch(`${API_BASE_URL}/api/loans/${loanId}/summary`)
-
-      if (summaryResponse.ok) {
-        const summaryData = await summaryResponse.json()
-        results.push({
-          name: "Get Summary",
-          success: true,
-          data: {
-            balance: summaryData.totals.balance,
-            has_overdue: summaryData.has_overdue,
-            next_installments: summaryData.next_installments.length,
-          },
-        })
-      } else {
-        results.push({
-          name: "Get Summary",
-          success: false,
-          error: `HTTP ${summaryResponse.status}`,
-        })
-      }
-    } else {
-      results.push({
-        name: "Create Loan",
-        success: false,
-        error: `HTTP ${createLoanResponse.status}: ${await createLoanResponse.text()}`,
-      })
+    if (!createLoanResponse.ok) {
+      const txt = await createLoanResponse.text()
+      results.push({ name: "Create Loan", success: false, error: `HTTP ${createLoanResponse.status}: ${txt}` })
+      return results
     }
-  } catch (error) {
-    results.push({
-      name: "Test Suite",
-      success: false,
-      error: error instanceof Error ? error.message : String(error),
+
+    const loanData = await createLoanResponse.json()
+    const loanId = loanData.id || loanData.loan_id || loanData?.data?.id
+    results.push({ name: "Create Loan", success: true, data: { loan_id: loanId, loan_code: loanData.loan_code } })
+
+    // Test 2: Get loan schedule
+    logSection("🧪 Test 2: Getting loan schedule…")
+    const scheduleResponse = await fetch(`${API_BASE_URL}/api/loans/${loanId}/schedule`)
+    if (scheduleResponse.ok) {
+      const scheduleData = await scheduleResponse.json()
+      results.push({
+        name: "Get Schedule",
+        success: true,
+        data: {
+          installments_count: scheduleData.installments?.length ?? 0,
+          total_due: scheduleData.totals?.total_due ?? null,
+        },
+      })
+    } else {
+      results.push({ name: "Get Schedule", success: false, error: `HTTP ${scheduleResponse.status}` })
+    }
+
+    // Test 3: Make a payment
+    logSection("🧪 Test 3: Making payment…")
+    const paymentResponse = await fetch(`${API_BASE_URL}/api/payments`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        loan_id: loanId,
+        paid_amount: 7500.0, // 1.5 cuotas
+        note: "Test payment - partial with overflow",
+      }),
     })
+
+    if (paymentResponse.ok) {
+      const paymentData = await paymentResponse.json()
+      results.push({
+        name: "Make Payment",
+        success: true,
+        data: {
+          payment_id: paymentData.payment_id || paymentData.id,
+          imputations_count: paymentData.imputations?.length ?? 0,
+          remaining_amount: paymentData.remaining_amount ?? null,
+        },
+      })
+    } else {
+      results.push({ name: "Make Payment", success: false, error: `HTTP ${paymentResponse.status}` })
+    }
+
+    // Test 4: Get loan summary
+    logSection("🧪 Test 4: Getting loan summary…")
+    const summaryResponse = await fetch(`${API_BASE_URL}/api/loans/${loanId}/summary`)
+    if (summaryResponse.ok) {
+      const summaryData = await summaryResponse.json()
+      results.push({
+        name: "Get Summary",
+        success: true,
+        data: {
+          balance: summaryData.totals?.balance ?? null,
+          has_overdue: summaryData.has_overdue ?? null,
+          next_installments: summaryData.next_installments?.length ?? 0,
+        },
+      })
+    } else {
+      results.push({ name: "Get Summary", success: false, error: `HTTP ${summaryResponse.status}` })
+    }
+  } catch (err) {
+    results.push({ name: "Test Suite", success: false, error: err instanceof Error ? err.message : String(err) })
   }
 
   return results
 }
 
-// Unit tests for payment imputation algorithm
 function testPaymentImputationLogic() {
-  console.log("\n🧮 Testing Payment Imputation Logic...\n")
-
-  // Mock installments data
-  const mockInstallments = [
-    { id: "1", installment_no: 1, due_date: "2024-12-01", amount_due: 5000, amount_paid: 0, status: "VENCIDA" },
-    { id: "2", installment_no: 2, due_date: "2025-01-01", amount_due: 5000, amount_paid: 0, status: "A_PAGAR_HOY" },
-    { id: "3", installment_no: 3, due_date: "2025-02-01", amount_due: 5000, amount_paid: 0, status: "A_PAGAR" },
-    { id: "4", installment_no: 4, due_date: "2025-03-01", amount_due: 5000, amount_paid: 2000, status: "A_PAGAR" },
+  console.log("\n🧮 Testing Payment Imputation Logic…\n")
+  const cases = [
+    { name: "Exact payment for one installment", payment: 5000, expected: { installments_affected: 1, remaining: 0 } },
+    { name: "Partial payment", payment: 3000, expected: { installments_affected: 1, remaining: 0 } },
+    { name: "Payment covering multiple installments", payment: 12000, expected: { installments_affected: 2, remaining: 2000 } },
+    { name: "Payment with remainder to partially paid installment", payment: 8000, expected: { installments_affected: 2, remaining: 0 } },
   ]
-
-  // Test cases
-  const testCases = [
-    {
-      name: "Exact payment for one installment",
-      payment: 5000,
-      expected: { installments_affected: 1, remaining: 0 },
-    },
-    {
-      name: "Partial payment",
-      payment: 3000,
-      expected: { installments_affected: 1, remaining: 0 },
-    },
-    {
-      name: "Payment covering multiple installments",
-      payment: 12000,
-      expected: { installments_affected: 2, remaining: 2000 },
-    },
-    {
-      name: "Payment with remainder to partially paid installment",
-      payment: 8000,
-      expected: { installments_affected: 2, remaining: 0 },
-    },
-  ]
-
-  testCases.forEach((testCase) => {
-    console.log(`✓ ${testCase.name}`)
-    console.log(`  Payment: $${testCase.payment}`)
-    console.log(
-      `  Expected: ${testCase.expected.installments_affected} installments affected, $${testCase.expected.remaining} remaining`,
-    )
-    console.log()
-  })
+  for (const t of cases) {
+    console.log(`✓ ${t.name}`)
+    console.log(`  Payment: $${t.payment}`)
+    console.log(`  Expected: ${t.expected.installments_affected} installments, $${t.expected.remaining} remaining\n`)
+  }
 }
 
-// Main execution
 async function main() {
   console.log("🚀 Starting Loan Installments API Tests\n")
 
@@ -187,33 +130,27 @@ async function main() {
 
   console.log("\n📊 Test Results:")
   console.log("================")
-
-  results.forEach((result) => {
-    const status = result.success ? "✅" : "❌"
-    console.log(`${status} ${result.name}`)
-
-    if (result.success && result.data) {
-      console.log(`   Data: ${JSON.stringify(result.data, null, 2)}`)
-    }
-
-    if (!result.success && result.error) {
-      console.log(`   Error: ${result.error}`)
-    }
+  for (const r of results) {
+    console.log(`${r.success ? "✅" : "❌"} ${r.name}`)
+    if (r.success && r.data) console.log(`   Data: ${JSON.stringify(r.data, null, 2)}`)
+    if (!r.success && r.error) console.log(`   Error: ${r.error}`)
     console.log()
-  })
+  }
 
-  const successCount = results.filter((r) => r.success).length
-  const totalCount = results.length
+  const success = results.filter(r => r.success).length
+  const total = results.length
+  console.log(`\n🎯 Summary: ${success}/${total} tests passed`)
 
-  console.log(`\n🎯 Summary: ${successCount}/${totalCount} tests passed`)
+  // Exit code para CI/V0
+  if (success !== total) process.exitCode = 1
 
-  // Run unit tests
+  // Unit “demo”
   testPaymentImputationLogic()
 }
 
-// Run if called directly
-if (require.main === module) {
-  main().catch(console.error)
+if (import.meta.url === `file://${process.argv[1]}`) {
+  main().catch(err => {
+    console.error(err)
+    process.exit(1)
+  })
 }
-
-export { runTests, testPaymentImputationLogic }
