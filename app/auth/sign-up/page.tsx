@@ -10,13 +10,11 @@ import { Label } from "@/components/ui/label"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useState } from "react"
-import { Building2, Lock, Mail, User } from "lucide-react"
 
-export default function SignUpPage() {
+export default function Page() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
-  const [confirmPassword, setConfirmPassword] = useState("")
-  const [fullName, setFullName] = useState("")
+  const [repeatPassword, setRepeatPassword] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
@@ -27,8 +25,8 @@ export default function SignUpPage() {
     setIsLoading(true)
     setError(null)
 
-    if (password !== confirmPassword) {
-      setError("Las contraseñas no coinciden")
+    if (password !== repeatPassword) {
+      setError("Passwords do not match")
       setIsLoading(false)
       return
     }
@@ -38,125 +36,77 @@ export default function SignUpPage() {
         email,
         password,
         options: {
-          emailRedirectTo: `${window.location.origin}/dashboard`,
-          data: {
-            full_name: fullName,
-          },
+          emailRedirectTo: process.env.NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL || `${window.location.origin}/protected`,
         },
       })
       if (error) throw error
-      router.push("/auth/check-email")
+      router.push("/auth/sign-up-success")
     } catch (error: unknown) {
-      setError(error instanceof Error ? error.message : "Error al crear la cuenta")
+      setError(error instanceof Error ? error.message : "An error occurred")
     } finally {
       setIsLoading(false)
     }
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-6 bg-background">
-      <div className="w-full max-w-md">
+    <div className="flex min-h-svh w-full items-center justify-center p-6 md:p-10">
+      <div className="w-full max-w-sm">
         <div className="flex flex-col gap-6">
-          <div className="text-center mb-8">
-            <div className="flex items-center justify-center mb-4">
-              <Building2 className="h-12 w-12 text-primary" />
-            </div>
-            <h1 className="text-3xl font-bold text-foreground font-work-sans">MB Microcréditos</h1>
-            <p className="text-muted-foreground mt-2">Sistema de Gestión Financiera</p>
-          </div>
-
-          <Card className="border-border bg-card">
-            <CardHeader className="space-y-1">
-              <CardTitle className="text-2xl font-work-sans">Crear Cuenta</CardTitle>
-              <CardDescription>Completa los datos para crear tu cuenta</CardDescription>
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-2xl">Sign up</CardTitle>
+              <CardDescription>Create a new account</CardDescription>
             </CardHeader>
             <CardContent>
-              <form onSubmit={handleSignUp} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="fullName" className="text-sm font-medium">
-                    Nombre Completo
-                  </Label>
-                  <div className="relative">
-                    <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      id="fullName"
-                      type="text"
-                      placeholder="Juan Pérez"
-                      required
-                      value={fullName}
-                      onChange={(e) => setFullName(e.target.value)}
-                      className="pl-10 bg-input border-border"
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="email" className="text-sm font-medium">
-                    Correo Electrónico
-                  </Label>
-                  <div className="relative">
-                    <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+              <form onSubmit={handleSignUp}>
+                <div className="flex flex-col gap-6">
+                  <div className="grid gap-2">
+                    <Label htmlFor="email">Email</Label>
                     <Input
                       id="email"
                       type="email"
-                      placeholder="usuario@empresa.com"
+                      placeholder="m@example.com"
                       required
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      className="pl-10 bg-input border-border"
                     />
                   </div>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="password" className="text-sm font-medium">
-                    Contraseña
-                  </Label>
-                  <div className="relative">
-                    <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                  <div className="grid gap-2">
+                    <div className="flex items-center">
+                      <Label htmlFor="password">Password</Label>
+                    </div>
                     <Input
                       id="password"
                       type="password"
                       required
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      className="pl-10 bg-input border-border"
                     />
                   </div>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="confirmPassword" className="text-sm font-medium">
-                    Confirmar Contraseña
-                  </Label>
-                  <div className="relative">
-                    <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                  <div className="grid gap-2">
+                    <div className="flex items-center">
+                      <Label htmlFor="repeat-password">Repeat Password</Label>
+                    </div>
                     <Input
-                      id="confirmPassword"
+                      id="repeat-password"
                       type="password"
                       required
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      className="pl-10 bg-input border-border"
+                      value={repeatPassword}
+                      onChange={(e) => setRepeatPassword(e.target.value)}
                     />
                   </div>
+                  {error && <p className="text-sm text-red-500">{error}</p>}
+                  <Button type="submit" className="w-full" disabled={isLoading}>
+                    {isLoading ? "Creating an account..." : "Sign up"}
+                  </Button>
                 </div>
-                {error && (
-                  <div className="p-3 text-sm text-destructive-foreground bg-destructive/10 border border-destructive/20 rounded-md">
-                    {error}
-                  </div>
-                )}
-                <Button
-                  type="submit"
-                  className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
-                  disabled={isLoading}
-                >
-                  {isLoading ? "Creando cuenta..." : "Crear Cuenta"}
-                </Button>
+                <div className="mt-4 text-center text-sm">
+                  Already have an account?{" "}
+                  <Link href="/auth/login" className="underline underline-offset-4">
+                    Login
+                  </Link>
+                </div>
               </form>
-              <div className="mt-6 text-center text-sm text-muted-foreground">
-                ¿Ya tienes cuenta?{" "}
-                <Link href="/auth/login" className="text-primary hover:text-primary/80 underline underline-offset-4">
-                  Iniciar Sesión
-                </Link>
-              </div>
             </CardContent>
           </Card>
         </div>

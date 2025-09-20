@@ -4,8 +4,6 @@ import type React from "react"
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import Link from "next/link"
-import { authService } from "@/lib/auth-service"
 
 export default function LoginPage() {
   const [email, setEmail] = useState("")
@@ -19,18 +17,21 @@ export default function LoginPage() {
     setLoading(true)
     setError("")
 
-    if (!email || !password) {
-      setError("Please enter email and password")
-      setLoading(false)
-      return
-    }
-
-    const result = await authService.login(email, password)
-
-    if (result.success) {
-      router.push("/dashboard")
+    // Simple mock authentication
+    if (email && password) {
+      if (email === "admin@mb.com" && password === "admin123") {
+        // Create mock session
+        const session = {
+          user: { email, id: "1", name: "Admin User" },
+          expires: Date.now() + 24 * 60 * 60 * 1000, // 24 hours
+        }
+        localStorage.setItem("mb_session", JSON.stringify(session))
+        router.push("/dashboard")
+      } else {
+        setError("Invalid credentials. Try admin@mb.com / admin123")
+      }
     } else {
-      setError(result.error || "Login failed. Try admin@mb.com / admin123 for demo access.")
+      setError("Please enter email and password")
     }
 
     setLoading(false)
@@ -85,21 +86,6 @@ export default function LoginPage() {
             {loading ? "Signing in..." : "Sign In"}
           </button>
         </form>
-
-        <div className="mt-6 space-y-3">
-          <div className="text-center text-sm text-gray-600">
-            <Link href="/forgot-password" className="text-blue-600 hover:text-blue-500 underline">
-              Forgot your password?
-            </Link>
-          </div>
-
-          <div className="text-center text-sm text-gray-600">
-            Don't have an account?{" "}
-            <Link href="/register" className="text-blue-600 hover:text-blue-500 underline">
-              Sign up here
-            </Link>
-          </div>
-        </div>
 
         <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded text-sm text-blue-700">
           <strong>Demo credentials:</strong>
