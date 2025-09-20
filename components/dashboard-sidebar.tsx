@@ -17,7 +17,7 @@ import {
   Receipt,
   Calendar,
   Calculator,
-  CalendarClock,
+  Clock,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -33,7 +33,7 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { supabase } from "@/lib/supabaseClient"
+import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
 
@@ -45,12 +45,7 @@ const navItems = [
   { title: "Préstamos", href: "/dashboard/loans", icon: CreditCard, route: "loans" },
   { title: "Recibo", href: "/dashboard/receipts", icon: Receipt, route: "receipts" },
   { title: "Cronograma", href: "/dashboard/cronograma", icon: Calendar, route: "cronograma" },
-  {
-    title: "Cronograma Mejorado",
-    href: "/dashboard/cronograma/enhanced",
-    icon: CalendarClock,
-    route: "cronograma-enhanced",
-  },
+  { title: "Cuotas", href: "/dashboard/cuotas", icon: Clock, route: "cuotas" },
   { title: "Transacciones", href: "/dashboard/transactions", icon: DollarSign, route: "transactions" },
   { title: "Seguimientos", href: "/dashboard/followups", icon: CalendarCheck, route: "followups" },
   { title: "Resumen para Socios", href: "/dashboard/resumen", icon: FileText, route: "reports" },
@@ -63,6 +58,8 @@ export function DashboardSidebar() {
   const router = useRouter()
   const [userPermissions, setUserPermissions] = useState<string[]>([])
   const [permissionsLoaded, setPermissionsLoaded] = useState(false)
+  const [currentUser, setCurrentUser] = useState<{ email: string; name: string } | null>(null)
+  const supabase = createClient()
 
   useEffect(() => {
     const loadUserPermissions = async () => {
@@ -70,19 +67,40 @@ export function DashboardSidebar() {
         const {
           data: { user },
         } = await supabase.auth.getUser()
+
+        console.log("[v0] User from auth:", user?.id)
+
         if (user) {
-          const response = await fetch(`/api/users/permissions?userId=${user.id}`)
+          const url = `/api/users/permissions?userId=${user.id}`
+          console.log("[v0] Fetching permissions from:", url)
+
+          const response = await fetch(url)
+          console.log("[v0] Response status:", response.status)
+          console.log("[v0] Response headers:", Object.fromEntries(response.headers.entries()))
+
+          const contentType = response.headers.get("content-type")
+          if (!contentType || !contentType.includes("application/json")) {
+            console.error("[v0] Response is not JSON, content-type:", contentType)
+            const text = await response.text()
+            console.error("[v0] Response text:", text.substring(0, 200))
+            throw new Error(`API returned non-JSON response: ${response.status}`)
+          }
+
           const data = await response.json()
+          console.log("[v0] Permissions data:", data)
 
           if (data.permissions && Array.isArray(data.permissions)) {
             setUserPermissions(data.permissions)
           } else {
             setUserPermissions(["dashboard", "clients", "loans", "receipts", "cronograma", "transactions", "formulas"])
           }
+        } else {
+          console.log("[v0] No user found, using default permissions")
+          setUserPermissions(["dashboard", "clients", "loans", "cronograma", "formulas"])
         }
       } catch (error) {
         console.error("Error loading permissions:", error)
-        setUserPermissions(["dashboard", "clients", "loans", "cronograma", "transactions", "formulas"])
+        setUserPermissions(["dashboard", "clients", "loans", "cronograma", "formulas"])
       } finally {
         setPermissionsLoaded(true)
       }
@@ -148,7 +166,10 @@ export function DashboardSidebar() {
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="w-full justify-start text-left hover:bg-primary/10">
               <User2 className="mr-2 size-5" />
-              <span className="flex-grow">Mi Cuenta</span>
+              <div className="flex-grow text-left">
+                <div className="text-sm font-medium">{currentUser?.name || "Usuario"}</div>
+                <div className="text-xs text-muted-foreground truncate">{currentUser?.email}</div>
+              </div>
               <ChevronDown className="size-4" />
             </Button>
           </DropdownMenuTrigger>
