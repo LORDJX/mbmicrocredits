@@ -32,7 +32,7 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { createClient } from "@/lib/supabase/client"
+import { authService } from "@/lib/auth-service"
 import { useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
 
@@ -40,14 +40,14 @@ const navItems = [
   { title: "Inicio", href: "/dashboard", icon: Home, route: "dashboard" },
   { title: "Usuarios", href: "/dashboard/users", icon: Users, route: "users" },
   { title: "Socios", href: "/dashboard/partners", icon: Handshake, route: "partners" },
-  { title: "Clientes", href: "/clientes", icon: User2, route: "clients" },
-  { title: "Préstamos", href: "/prestamos", icon: CreditCard, route: "loans" },
+  { title: "Clientes", href: "/dashboard/clients", icon: User2, route: "clients" },
+  { title: "Préstamos", href: "/dashboard/loans", icon: CreditCard, route: "loans" },
   { title: "Recibo", href: "/dashboard/receipts", icon: Receipt, route: "receipts" },
-  { title: "Cronograma", href: "/cronogramas", icon: Calendar, route: "cronograma" },
+  { title: "Cronograma", href: "/dashboard/cronograma", icon: Calendar, route: "cronograma" },
   { title: "Transacciones", href: "/dashboard/transactions", icon: DollarSign, route: "transactions" },
   { title: "Seguimientos", href: "/dashboard/followups", icon: CalendarCheck, route: "followups" },
   { title: "Resumen para Socios", href: "/dashboard/resumen", icon: FileText, route: "reports" },
-  { title: "Informe de situación Financiera", href: "/reportes", icon: BarChart2, route: "reports" },
+  { title: "Informe de situación Financiera", href: "/dashboard/reports", icon: BarChart2, route: "reports" },
   { title: "Fórmulas", href: "/formulas", icon: Calculator, route: "formulas" },
 ]
 
@@ -56,29 +56,69 @@ export function DashboardSidebar() {
   const router = useRouter()
   const [userPermissions, setUserPermissions] = useState<string[]>([])
   const [permissionsLoaded, setPermissionsLoaded] = useState(false)
+  const [currentUser, setCurrentUser] = useState<{ email: string; name: string } | null>(null)
 
   useEffect(() => {
     const loadUserPermissions = async () => {
       try {
-        const supabase = createClient()
-        const {
-          data: { user },
-        } = await supabase.auth.getUser()
+        const user = authService.getCurrentUser()
         if (user) {
-          // For now, give all permissions since we don't have a permissions API
-          setUserPermissions([
-            "dashboard",
-            "clients",
-            "loans",
-            "receipts",
-            "cronograma",
-            "transactions",
-            "formulas",
-            "reports",
-          ])
+          setCurrentUser(user)
+
+          // Try to load permissions from API if it's a Supabase user
+          const session = authService.getSession()
+          if (session?.type === "supabase") {
+            try {
+              const response = await fetch(`/api/users/permissions?userId=${user.id}`)
+              const data = await response.json()
+
+              if (data.permissions && Array.isArray(data.permissions)) {
+                setUserPermissions(data.permissions)
+              } else {
+                setUserPermissions([
+                  "dashboard",
+                  "clients",
+                  "loans",
+                  "receipts",
+                  "cronograma",
+                  "transactions",
+                  "formulas",
+                ])
+              }
+            } catch (error) {
+              console.error("Error loading permissions:", error)
+              setUserPermissions([
+                "dashboard",
+                "clients",
+                "loans",
+                "receipts",
+                "cronograma",
+                "transactions",
+                "formulas",
+              ])
+            }
+          } else {
+            // Mock user gets all permissions
+            setUserPermissions([
+              "dashboard",
+              "users",
+              "partners",
+              "clients",
+              "loans",
+              "receipts",
+              "cronograma",
+              "transactions",
+              "followups",
+              "reports",
+              "formulas",
+            ])
+          }
+        } else {
+          // No user logged in, redirect to login
+          router.push("/login")
         }
       } catch (error) {
-        console.error("Error loading permissions:", error)
+        console.error("Error loading user data:", error)
         setUserPermissions(["dashboard", "clients", "loans", "cronograma", "formulas"])
       } finally {
         setPermissionsLoaded(true)
@@ -86,22 +126,13 @@ export function DashboardSidebar() {
     }
 
     loadUserPermissions()
-  }, [])
+  }, [router])
 
   const filteredNavItems = navItems.filter((item) => userPermissions.includes(item.route) || item.route === "dashboard")
 
   const handleLogout = async () => {
-    try {
-      const supabase = createClient()
-      await supabase.auth.signOut()
-      localStorage.removeItem("mb_session")
-      router.push("/login")
-    } catch (error) {
-      console.error("Error during logout:", error)
-      // Forzar logout local si falla Supabase
-      localStorage.removeItem("mb_session")
-      router.push("/login")
-    }
+    await authService.logout()
+    router.push("/login")
   }
 
   if (!permissionsLoaded) {
@@ -154,7 +185,10 @@ export function DashboardSidebar() {
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="w-full justify-start text-left hover:bg-primary/10">
               <User2 className="mr-2 size-5" />
-              <span className="flex-grow">Mi Cuenta</span>
+              <div className="flex-grow text-left">
+                <div className="text-sm font-medium">{currentUser?.name || "Usuario"}</div>
+                <div className="text-xs text-muted-foreground truncate">{currentUser?.email}</div>
+              </div>
               <ChevronDown className="size-4" />
             </Button>
           </DropdownMenuTrigger>

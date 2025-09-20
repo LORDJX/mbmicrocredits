@@ -1,167 +1,114 @@
 "use client"
 
 import type React from "react"
+
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { supabase } from "@/lib/supabaseClient"
-import { Eye, EyeOff, LogIn } from "lucide-react"
+import { authService } from "@/lib/auth-service"
 
 export default function LoginPage() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
-  const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState("")
   const router = useRouter()
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
-    setError(null)
+    setError("")
 
-    try {
-      const { data, error: signInError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      })
-
-      if (signInError) {
-        throw signInError
-      }
-
-      if (data.user) {
-        // Crear sesión local para compatibilidad con el sistema existente
-        const session = {
-          user: {
-            email: data.user.email,
-            id: data.user.id,
-            name: data.user.user_metadata?.full_name || data.user.email,
-          },
-          expires: Date.now() + 24 * 60 * 60 * 1000, // 24 hours
-        }
-        localStorage.setItem("mb_session", JSON.stringify(session))
-
-        // Redirigir al dashboard
-        router.push("/dashboard")
-      }
-    } catch (error: any) {
-      console.error("Error de login:", error)
-      setError(error.message || "Error al iniciar sesión. Verifica tus credenciales.")
-    } finally {
+    if (!email || !password) {
+      setError("Please enter email and password")
       setLoading(false)
+      return
     }
+
+    const result = await authService.login(email, password)
+
+    if (result.success) {
+      router.push("/dashboard")
+    } else {
+      setError(result.error || "Login failed. Try admin@mb.com / admin123 for demo access.")
+    }
+
+    setLoading(false)
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-900 p-4">
-      <Card className="w-full max-w-md bg-gray-800 text-gray-100 border border-gray-700 shadow-2xl shadow-blue-500/10 transition-all hover:shadow-blue-500/20">
-        <CardHeader className="text-center space-y-2">
-          <div className="mx-auto w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center mb-4">
-            <LogIn className="w-8 h-8 text-white" />
-          </div>
-          <CardTitle className="text-3xl font-bold text-gray-50">Iniciar Sesión</CardTitle>
-          <CardDescription className="text-gray-400">
-            Ingresa tus credenciales para acceder a MB Microcréditos
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleLogin} className="space-y-6">
-            <div className="grid gap-2">
-              <Label htmlFor="email" className="text-gray-300 font-medium">
-                Correo Electrónico
-              </Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="tu@ejemplo.com"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="bg-gray-700 border-gray-600 text-gray-100 placeholder:text-gray-400 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-                disabled={loading}
-              />
-            </div>
+    <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="w-full max-w-md bg-white rounded-lg shadow-md p-6">
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold text-gray-900">Sign In</h1>
+          <p className="text-gray-600 mt-2">Enter your credentials to access MB Microcredits</p>
+        </div>
 
-            <div className="grid gap-2">
-              <Label htmlFor="password" className="text-gray-300 font-medium">
-                Contraseña
-              </Label>
-              <div className="relative">
-                <Input
-                  id="password"
-                  type={showPassword ? "text" : "password"}
-                  placeholder="Ingresa tu contraseña"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="bg-gray-700 border-gray-600 text-gray-100 placeholder:text-gray-400 focus:ring-blue-500 focus:border-blue-500 transition-colors pr-10"
-                  disabled={loading}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-300 transition-colors"
-                  disabled={loading}
-                >
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-            </div>
+        <form onSubmit={handleLogin} className="space-y-4">
+          {error && <div className="p-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded">{error}</div>}
 
-            {error && (
-              <div className="p-3 text-sm text-red-400 bg-red-900/20 border border-red-800 rounded-md">{error}</div>
-            )}
-
-            <Button
-              type="submit"
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-md transition-all duration-200 shadow-md hover:shadow-lg hover:shadow-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
-              disabled={loading}
-            >
-              {loading ? (
-                <div className="flex items-center justify-center">
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                  Iniciando sesión...
-                </div>
-              ) : (
-                "Iniciar Sesión"
-              )}
-            </Button>
-          </form>
-
-          <div className="mt-6 space-y-4">
-            <div className="text-center text-sm text-gray-400">
-              <Link href="/forgot-password" className="text-blue-400 hover:text-blue-300 underline transition-colors">
-                ¿Olvidaste tu contraseña?
-              </Link>
-            </div>
-
-            <div className="text-center text-sm text-gray-400">
-              ¿No tienes una cuenta?{" "}
-              <Link href="/register" className="text-blue-400 hover:text-blue-300 underline transition-colors">
-                Registrarse
-              </Link>
-            </div>
+          <div className="space-y-2">
+            <label htmlFor="email" className="text-sm font-medium text-gray-700">
+              Email
+            </label>
+            <input
+              id="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              placeholder="Enter your email"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
           </div>
 
-          {process.env.NODE_ENV === "development" && (
-            <div className="mt-6 p-4 bg-blue-900/20 border border-blue-800 rounded-md text-sm text-blue-300">
-              <strong>Modo Desarrollo:</strong>
-              <br />
-              Usa las credenciales de tu cuenta Supabase registrada.
-              <br />
-              Si no tienes cuenta, ve a{" "}
-              <Link href="/register" className="underline">
-                Registrarse
-              </Link>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+          <div className="space-y-2">
+            <label htmlFor="password" className="text-sm font-medium text-gray-700">
+              Password
+            </label>
+            <input
+              id="password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              placeholder="Enter your password"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+          </div>
+
+          <button
+            type="submit"
+            className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={loading}
+          >
+            {loading ? "Signing in..." : "Sign In"}
+          </button>
+        </form>
+
+        <div className="mt-6 space-y-3">
+          <div className="text-center text-sm text-gray-600">
+            <Link href="/forgot-password" className="text-blue-600 hover:text-blue-500 underline">
+              Forgot your password?
+            </Link>
+          </div>
+
+          <div className="text-center text-sm text-gray-600">
+            Don't have an account?{" "}
+            <Link href="/register" className="text-blue-600 hover:text-blue-500 underline">
+              Sign up here
+            </Link>
+          </div>
+        </div>
+
+        <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded text-sm text-blue-700">
+          <strong>Demo credentials:</strong>
+          <br />
+          Email: admin@mb.com
+          <br />
+          Password: admin123
+        </div>
+      </div>
     </div>
   )
 }
