@@ -1,27 +1,41 @@
 "use client"
 
 import type React from "react"
-import { useState } from "react"
-import { useRouter } from "next/navigation"
+import { useState, useEffect } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { supabase } from "@/lib/supabaseClient"
-import { LogIn } from "lucide-react"
+import { LogIn, CheckCircle } from "lucide-react"
 
 export default function LoginPage() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [successMessage, setSuccessMessage] = useState<string | null>(null)
+  const [redirecting, setRedirecting] = useState(false)
   const router = useRouter()
+  const searchParams = useSearchParams()
+
+  useEffect(() => {
+    const message = searchParams.get("message")
+    if (message === "credentials_loaded") {
+      setSuccessMessage("Credenciales cargadas correctamente. Puedes iniciar sesión ahora.")
+      // Clear the URL parameter
+      const newUrl = window.location.pathname
+      window.history.replaceState({}, "", newUrl)
+    }
+  }, [searchParams])
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
     setError(null)
+    setSuccessMessage(null)
 
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
@@ -36,7 +50,12 @@ export default function LoginPage() {
           setError(error.message)
         }
       } else if (data?.user) {
-        router.push("/dashboard")
+        setSuccessMessage("¡Login exitoso! Redirigiendo al dashboard...")
+        setRedirecting(true)
+
+        setTimeout(() => {
+          router.push("/dashboard")
+        }, 1500)
       } else {
         setError("Error inesperado durante el login")
       }
@@ -48,12 +67,24 @@ export default function LoginPage() {
     setLoading(false)
   }
 
+  const simulateCredentialsLoad = () => {
+    setSuccessMessage("Simulando carga de credenciales...")
+    setTimeout(() => {
+      // Redirect back to login with success message
+      router.push("/login?message=credentials_loaded")
+    }, 2000)
+  }
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md bg-card text-card-foreground border-border shadow-2xl shadow-primary/10 transition-all hover:shadow-primary/20">
         <CardHeader className="text-center">
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
-            <LogIn className="h-8 w-8 text-primary" />
+            {successMessage ? (
+              <CheckCircle className="h-8 w-8 text-green-500" />
+            ) : (
+              <LogIn className="h-8 w-8 text-primary" />
+            )}
           </div>
           <CardTitle className="text-3xl font-bold">Iniciar Sesión</CardTitle>
           <CardDescription className="text-muted-foreground">
@@ -72,6 +103,7 @@ export default function LoginPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="bg-background/50 focus:shadow-inner focus:shadow-primary/10"
+                disabled={redirecting}
               />
             </div>
             <div className="grid gap-2">
@@ -88,15 +120,41 @@ export default function LoginPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="bg-background/50 focus:shadow-inner focus:shadow-primary/10"
+                disabled={redirecting}
               />
             </div>
-            {error && <p className="text-red-400 text-sm text-center">{error}</p>}
+
+            {error && (
+              <div className="p-3 rounded-md bg-red-50 border border-red-200">
+                <p className="text-red-600 text-sm text-center">{error}</p>
+              </div>
+            )}
+
+            {successMessage && (
+              <div className="p-3 rounded-md bg-green-50 border border-green-200">
+                <p className="text-green-600 text-sm text-center flex items-center justify-center gap-2">
+                  <CheckCircle className="h-4 w-4" />
+                  {successMessage}
+                </p>
+              </div>
+            )}
+
             <Button
               type="submit"
               className="w-full bg-gradient-to-r from-primary/80 to-primary text-primary-foreground font-semibold shadow-md transition-all hover:from-primary hover:to-primary/90 hover:shadow-lg hover:shadow-primary/20"
-              disabled={loading}
+              disabled={loading || redirecting}
             >
-              {loading ? "Iniciando sesión..." : "Entrar"}
+              {redirecting ? "Redirigiendo..." : loading ? "Iniciando sesión..." : "Entrar"}
+            </Button>
+
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full bg-transparent"
+              onClick={simulateCredentialsLoad}
+              disabled={loading || redirecting}
+            >
+              Simular Carga de Credenciales
             </Button>
           </form>
         </CardContent>
