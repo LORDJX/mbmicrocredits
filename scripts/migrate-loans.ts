@@ -1,121 +1,163 @@
-// Script de Node.js para ejecutar la migración de préstamos existentes
-// Este script puede ejecutarse desde la interfaz de v0
-
 import { createClient } from "@supabase/supabase-js"
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const supabaseUrl = process.env.SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 
-const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-  auth: {
-    autoRefreshToken: false,
-    persistSession: false,
-  },
-})
+const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
-async function migrateExistingLoans() {
-  console.log("🚀 Iniciando migración de préstamos existentes...")
-  console.log("📅 Fecha:", new Date().toLocaleString())
-  console.log("")
+interface MigrationResult {
+  success: boolean
+  loansProcessed: number
+  installmentsCreated: number
+  errors: string[]
+  details: Array<{
+    loanId: string
+    loanNumber: string
+    installmentsCreated: number
+    error?: string
+  }>
+}
 
+async function migrateLoanToInstallments(loanId: string): Promise<{
+  success: boolean
+  installmentsCreated: number
+  error?: string
+}> {
   try {
-    // Obtener reporte pre-migración
-    console.log("📊 REPORTE PRE-MIGRACIÓN:")
-    const { data: preReport, error: preError } = await supabase.rpc("get_migration_report")
+    console.log(`[v0] Migrating loan ${loanId}...`)
 
-    if (preError) {
-      console.error("❌ Error obteniendo reporte pre-migración:", preError)
-      return
+    // Call the generate_installments function
+    const { data, error } = await supabase.rpc("generate_installments", {
+      p_loan_id: loanId,
+    })
+
+    if (error) {
+      console.log(`[v0] Error generating installments for loan ${loanId}:`, error)
+      return {
+        success: false,
+        installmentsCreated: 0,
+        error: error.message,
+      }
     }
 
-    if (preReport && preReport.length > 0) {
-      const report = preReport[0]
-      console.log(`- Total de préstamos: ${report.total_loans}`)
-      console.log(`- Préstamos con cuotas: ${report.loans_with_installments}`)
-      console.log(`- Préstamos sin cuotas: ${report.loans_without_installments}`)
-      console.log(`- Préstamos con errores: ${report.loans_with_errors}`)
-      console.log(`- Total cuotas existentes: ${report.total_installments_generated}`)
-      console.log("")
-    }
+    // Count the installments created for this loan
+    const { count } = await supabase
+      .from("installments")
+      .select("*", { count: "exact", head: true })
+      .eq("loan_id", loanId)
 
-    // Ejecutar migración
-    console.log("⚙️ EJECUTANDO MIGRACIÓN:")
-    const { data: migrationResults, error: migrationError } = await supabase.rpc(
-      "migrate_existing_loans_to_installments",
-    )
+    console.log(`[v0] Successfully created ${count || 0} installments for loan ${loanId}`)
 
-    if (migrationError) {
-      console.error("❌ Error ejecutando migración:", migrationError)
-      return
-    }
-
-    // Procesar resultados
-    let totalProcessed = 0
-    let totalSuccess = 0
-    let totalErrors = 0
-
-    if (migrationResults && migrationResults.length > 0) {
-      migrationResults.forEach((result: any) => {
-        totalProcessed++
-
-        if (result.status === "SUCCESS") {
-          totalSuccess++
-          console.log(`✅ ${result.loan_code}: ${result.message}`)
-        } else {
-          totalErrors++
-          console.log(`❌ ${result.loan_code}: ${result.message}`)
-        }
-      })
-    } else {
-      console.log("ℹ️ No se encontraron préstamos para migrar")
-    }
-
-    console.log("")
-    console.log("📈 RESUMEN DE MIGRACIÓN:")
-    console.log(`- Préstamos procesados: ${totalProcessed}`)
-    console.log(`- Migraciones exitosas: ${totalSuccess}`)
-    console.log(`- Errores encontrados: ${totalErrors}`)
-    console.log("")
-
-    // Obtener reporte post-migración
-    console.log("📊 REPORTE POST-MIGRACIÓN:")
-    const { data: postReport, error: postError } = await supabase.rpc("get_migration_report")
-
-    if (postError) {
-      console.error("❌ Error obteniendo reporte post-migración:", postError)
-      return
-    }
-
-    if (postReport && postReport.length > 0) {
-      const report = postReport[0]
-      console.log(`- Total de préstamos: ${report.total_loans}`)
-      console.log(`- Préstamos con cuotas: ${report.loans_with_installments}`)
-      console.log(`- Préstamos sin cuotas: ${report.loans_without_installments}`)
-      console.log(`- Préstamos con errores: ${report.loans_with_errors}`)
-      console.log(`- Total cuotas generadas: ${report.total_installments_generated}`)
-    }
-
-    console.log("")
-    console.log("🎉 MIGRACIÓN COMPLETADA EXITOSAMENTE")
-
-    // Verificar integridad de datos
-    console.log("")
-    console.log("🔍 VERIFICANDO INTEGRIDAD DE DATOS:")
-
-    const { data: installmentsCheck, error: checkError } = await supabase
-      .from("installments_with_status")
-      .select("status, count(*)", { count: "exact" })
-
-    if (checkError) {
-      console.error("❌ Error verificando integridad:", checkError)
-    } else {
-      console.log("✅ Verificación de integridad completada")
-      console.log(`- Total de cuotas en el sistema: ${installmentsCheck?.length || 0}`)
+    return {
+      success: true,
+      installmentsCreated: count || 0,
     }
   } catch (error) {
-    console.error("💥 Error inesperado durante la migración:", error)
+    console.log(`[v0] Unexpected error migrating loan ${loanId}:`, error)
+    return {
+      success: false,
+      installmentsCreated: 0,
+      error: error instanceof Error ? error.message : "Unknown error",
+    }
   }
 }
 
-// Ejecutar migración
-migrateExistingLoans()
+async function migrateAllLoans(): Promise<MigrationResult> {
+  console.log("[v0] Starting loan migration process...")
+
+  const result: MigrationResult = {
+    success: true,
+    loansProcessed: 0,
+    installmentsCreated: 0,
+    errors: [],
+    details: [],
+  }
+
+  try {
+    // Get all loans that don't have installments yet
+    const { data: loans, error: loansError } = await supabase
+      .from("loans")
+      .select(`
+        id,
+        loan_number,
+        installments!left(id)
+      `)
+      .is("installments.id", null)
+
+    if (loansError) {
+      console.log("[v0] Error fetching loans:", loansError)
+      result.success = false
+      result.errors.push(`Error fetching loans: ${loansError.message}`)
+      return result
+    }
+
+    if (!loans || loans.length === 0) {
+      console.log("[v0] No loans found that need migration")
+      return result
+    }
+
+    console.log(`[v0] Found ${loans.length} loans to migrate`)
+
+    // Process each loan
+    for (const loan of loans) {
+      const migrationResult = await migrateLoanToInstallments(loan.id)
+
+      result.loansProcessed++
+      result.installmentsCreated += migrationResult.installmentsCreated
+
+      const detail = {
+        loanId: loan.id,
+        loanNumber: loan.loan_number || "N/A",
+        installmentsCreated: migrationResult.installmentsCreated,
+        error: migrationResult.error,
+      }
+
+      result.details.push(detail)
+
+      if (!migrationResult.success) {
+        result.success = false
+        result.errors.push(`Loan ${loan.loan_number}: ${migrationResult.error}`)
+      }
+    }
+
+    console.log("[v0] Migration process completed")
+    console.log(`[v0] Loans processed: ${result.loansProcessed}`)
+    console.log(`[v0] Total installments created: ${result.installmentsCreated}`)
+    console.log(`[v0] Errors: ${result.errors.length}`)
+
+    return result
+  } catch (error) {
+    console.log("[v0] Unexpected error during migration:", error)
+    result.success = false
+    result.errors.push(`Unexpected error: ${error instanceof Error ? error.message : "Unknown error"}`)
+    return result
+  }
+}
+
+// Execute migration
+migrateAllLoans()
+  .then((result) => {
+    console.log("\n=== MIGRATION SUMMARY ===")
+    console.log(`Success: ${result.success}`)
+    console.log(`Loans processed: ${result.loansProcessed}`)
+    console.log(`Installments created: ${result.installmentsCreated}`)
+    console.log(`Errors: ${result.errors.length}`)
+
+    if (result.errors.length > 0) {
+      console.log("\nErrors encountered:")
+      result.errors.forEach((error) => console.log(`- ${error}`))
+    }
+
+    console.log("\nDetailed results:")
+    result.details.forEach((detail) => {
+      const status = detail.error ? "❌ FAILED" : "✅ SUCCESS"
+      console.log(
+        `${status} Loan ${detail.loanNumber} (${detail.loanId}): ${detail.installmentsCreated} installments${detail.error ? ` - Error: ${detail.error}` : ""}`,
+      )
+    })
+
+    console.log("\n=== MIGRATION COMPLETE ===")
+  })
+  .catch((error) => {
+    console.error("Fatal error during migration:", error)
+  })
