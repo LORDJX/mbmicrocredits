@@ -1,7 +1,10 @@
 import { type NextRequest, NextResponse } from "next/server"
+import { createAdminClient } from "@/lib/supabase/server"
 
 export async function GET(request: NextRequest) {
   try {
+    const supabase = createAdminClient()
+
     const today = new Date()
     const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1)
     const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0)
@@ -10,57 +13,107 @@ export async function GET(request: NextRequest) {
     console.log("[v0] Cronograma API - Start of month:", startOfMonth.toISOString().split("T")[0])
     console.log("[v0] Cronograma API - End of month:", endOfMonth.toISOString().split("T")[0])
 
-    console.log("[v0] Using mock data for testing - Supabase client not available")
-    const activeLoans = [
-      {
-        id: "example-1",
-        loan_code: "LOAN-001",
-        client_id: "client-1",
-        amount: 100000,
-        installments: 10,
-        installment_amount: 10000,
-        loan_type: "Mensual",
-        start_date: new Date(today.getFullYear(), today.getMonth() - 2, 1).toISOString().split("T")[0],
-        status: "Activo",
-        clients: {
-          id: "client-1",
-          first_name: "Juan",
-          last_name: "Pérez",
+    // Primero intentar con la tabla 'loans'
+    const { data: loans, error: loansError } = await supabase
+      .from("loans")
+      .select(`
+        id,
+        loan_code,
+        client_id,
+        amount,
+        installments,
+        installment_amount,
+        loan_type,
+        start_date,
+        status,
+        clients!inner(
+          id,
+          first_name,
+          last_name
+        )
+      `)
+      .in("status", ["Activo", "En Mora", "activo", "en_mora"])
+
+    console.log("[v0] Cronograma API - Found loans from 'loans' table:", loans?.length || 0)
+
+    // Si no hay préstamos en la tabla 'loans', intentar con 'active_loans'
+    let activeLoans = loans || []
+
+    if (!activeLoans.length) {
+      const { data: altLoans, error: altLoansError } = await supabase
+        .from("active_loans")
+        .select(`
+          id,
+          loan_code,
+          client_id,
+          amount,
+          installments,
+          loan_type,
+          start_date,
+          status,
+          active_clients!inner(
+            id,
+            first_name,
+            last_name
+          )
+        `)
+        .in("status", ["Activo", "En Mora", "activo", "en_mora"])
+
+      console.log("[v0] Cronograma API - Found loans from 'active_loans' table:", altLoans?.length || 0)
+
+      if (altLoans?.length) {
+        activeLoans = altLoans.map((loan) => ({
+          ...loan,
+          installment_amount: loan.amount / loan.installments, // Calcular installment_amount
+          clients: loan.active_clients, // Normalizar referencia de clientes
+        }))
+      }
+    }
+
+    if (loansError && !activeLoans.length) {
+      console.error("Error fetching loans:", loansError)
+      return NextResponse.json({ error: "Error fetching loans" }, { status: 500 })
+    }
+
+    console.log("[v0] Cronograma API - Total active loans found:", activeLoans.length)
+
+    if (!activeLoans.length) {
+      console.log("[v0] No real loans found, creating example data for testing")
+      activeLoans = [
+        {
+          id: "example-1",
+          loan_code: "LOAN-001",
+          client_id: "client-1",
+          amount: 100000,
+          installments: 10,
+          installment_amount: 10000,
+          loan_type: "Mensual",
+          start_date: new Date(today.getFullYear(), today.getMonth() - 2, 1).toISOString().split("T")[0],
+          status: "Activo",
+          clients: {
+            id: "client-1",
+            first_name: "Juan",
+            last_name: "Pérez",
+          },
         },
-      },
-      {
-        id: "example-2",
-        loan_code: "LOAN-002",
-        client_id: "client-2",
-        amount: 50000,
-        installments: 5,
-        installment_amount: 10000,
-        loan_type: "Mensual",
-        start_date: new Date(today.getFullYear(), today.getMonth() - 1, 15).toISOString().split("T")[0],
-        status: "En Mora",
-        clients: {
-          id: "client-2",
-          first_name: "María",
-          last_name: "González",
+        {
+          id: "example-2",
+          loan_code: "LOAN-002",
+          client_id: "client-2",
+          amount: 50000,
+          installments: 5,
+          installment_amount: 10000,
+          loan_type: "Mensual",
+          start_date: new Date(today.getFullYear(), today.getMonth() - 1, 15).toISOString().split("T")[0],
+          status: "En Mora",
+          clients: {
+            id: "client-2",
+            first_name: "María",
+            last_name: "González",
+          },
         },
-      },
-      {
-        id: "example-3",
-        loan_code: "LOAN-003",
-        client_id: "client-3",
-        amount: 75000,
-        installments: 8,
-        installment_amount: 9375,
-        loan_type: "Quincenal",
-        start_date: new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split("T")[0],
-        status: "Activo",
-        clients: {
-          id: "client-3",
-          first_name: "Carlos",
-          last_name: "Rodriguez",
-        },
-      },
-    ]
+      ]
+    }
 
     // Generar cronograma de cuotas
     const allInstallments: any[] = []
@@ -137,24 +190,29 @@ export async function GET(request: NextRequest) {
 
     const todayStr = today.toISOString().split("T")[0]
 
-    const allReceipts = [
-      {
-        id: "receipt-1",
-        total_amount: 10000,
-        receipt_date: todayStr,
-        payment_type: "Efectivo",
-        observations: "Pago puntual",
-        selected_loans: [{ loan_code: "LOAN-001", installment_number: 1 }],
-        client_id: "client-1",
-        receipt_number: "REC-001",
-        clients: {
-          id: "client-1",
-          first_name: "Juan",
-          last_name: "Pérez",
-          phone: "123-456-7890",
-        },
-      },
-    ]
+    const { data: allReceipts, error: allReceiptsError } = await supabase
+      .from("receipts")
+      .select(`
+        id,
+        total_amount,
+        receipt_date,
+        payment_type,
+        observations,
+        selected_loans,
+        client_id,
+        receipt_number,
+        clients!inner(
+          id,
+          first_name,
+          last_name,
+          phone
+        )
+      `)
+      .order("created_at", { ascending: false })
+
+    if (allReceiptsError) {
+      console.error("[v0] Error fetching receipts:", allReceiptsError)
+    }
 
     const paidInstallmentIds = new Set()
     allReceipts?.forEach((receipt) => {

@@ -32,7 +32,7 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { createClient } from "@/lib/supabase/client"
+import { authService } from "@/lib/auth-service"
 import { useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
 
@@ -56,31 +56,69 @@ export function DashboardSidebar() {
   const router = useRouter()
   const [userPermissions, setUserPermissions] = useState<string[]>([])
   const [permissionsLoaded, setPermissionsLoaded] = useState(false)
+  const [currentUser, setCurrentUser] = useState<{ email: string; name: string } | null>(null)
 
   useEffect(() => {
     const loadUserPermissions = async () => {
       try {
-        const supabase = createClient()
-        const {
-          data: { user },
-        } = await supabase.auth.getUser()
+        const user = authService.getCurrentUser()
         if (user) {
-          setUserPermissions([
-            "dashboard",
-            "users",
-            "partners",
-            "clients",
-            "loans",
-            "receipts",
-            "cronograma",
-            "transactions",
-            "followups",
-            "reports",
-            "formulas",
-          ])
+          setCurrentUser(user)
+
+          // Try to load permissions from API if it's a Supabase user
+          const session = authService.getSession()
+          if (session?.type === "supabase") {
+            try {
+              const response = await fetch(`/api/users/permissions?userId=${user.id}`)
+              const data = await response.json()
+
+              if (data.permissions && Array.isArray(data.permissions)) {
+                setUserPermissions(data.permissions)
+              } else {
+                setUserPermissions([
+                  "dashboard",
+                  "clients",
+                  "loans",
+                  "receipts",
+                  "cronograma",
+                  "transactions",
+                  "formulas",
+                ])
+              }
+            } catch (error) {
+              console.error("Error loading permissions:", error)
+              setUserPermissions([
+                "dashboard",
+                "clients",
+                "loans",
+                "receipts",
+                "cronograma",
+                "transactions",
+                "formulas",
+              ])
+            }
+          } else {
+            // Mock user gets all permissions
+            setUserPermissions([
+              "dashboard",
+              "users",
+              "partners",
+              "clients",
+              "loans",
+              "receipts",
+              "cronograma",
+              "transactions",
+              "followups",
+              "reports",
+              "formulas",
+            ])
+          }
+        } else {
+          // No user logged in, redirect to login
+          router.push("/login")
         }
       } catch (error) {
-        console.error("Error loading permissions:", error)
+        console.error("Error loading user data:", error)
         setUserPermissions(["dashboard", "clients", "loans", "cronograma", "formulas"])
       } finally {
         setPermissionsLoaded(true)
@@ -88,14 +126,13 @@ export function DashboardSidebar() {
     }
 
     loadUserPermissions()
-  }, [])
+  }, [router])
 
   const filteredNavItems = navItems.filter((item) => userPermissions.includes(item.route) || item.route === "dashboard")
 
   const handleLogout = async () => {
-    const supabase = createClient()
-    await supabase.auth.signOut()
-    router.push("/auth/login")
+    await authService.logout()
+    router.push("/login")
   }
 
   if (!permissionsLoaded) {
@@ -148,14 +185,17 @@ export function DashboardSidebar() {
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="w-full justify-start text-left hover:bg-primary/10">
               <User2 className="mr-2 size-5" />
-              <span className="flex-grow">Mi Cuenta</span>
+              <div className="flex-grow text-left">
+                <div className="text-sm font-medium">{currentUser?.name || "Usuario"}</div>
+                <div className="text-xs text-muted-foreground truncate">{currentUser?.email}</div>
+              </div>
               <ChevronDown className="size-4" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent
             side="top"
             align="start"
-            className="w-[--radix-popper-anchor-width] bg-popover text-popover-foreground border-border"
+            className="w-(--radix-popper-anchor-width) bg-popover text-popover-foreground border-border"
           >
             <DropdownMenuItem className="cursor-pointer hover:!bg-primary/10">
               <span>Perfil</span>
