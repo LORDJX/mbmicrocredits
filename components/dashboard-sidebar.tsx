@@ -91,6 +91,8 @@ export function DashboardSidebar() {
           console.log("[v0] Response headers:", Object.fromEntries(response.headers.entries()))
 
           if (!response.ok) {
+            const errorText = await response.text()
+            console.error("[v0] API Error Response:", errorText)
             throw new Error(`HTTP error! status: ${response.status}`)
           }
 
