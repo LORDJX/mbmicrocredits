@@ -1,10 +1,10 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createAdminClient } from "@/lib/supabase/server"
+import { createClient } from "@/lib/supabase/server"
 
 export async function GET(request: NextRequest) {
   try {
     console.log("[v0] Cronograma API - Iniciando consulta de datos reales...")
-    const supabase = createAdminClient()
+    const supabase = await createClient()
 
     // Obtener fecha actual en zona horaria de Argentina (UTC-3)
     const now = new Date()
@@ -178,7 +178,7 @@ export async function GET(request: NextRequest) {
       },
     })
   } catch (error) {
-    console.error("[v0] Error in cronograma API:", error)
+    console.error("Error in cronograma API:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

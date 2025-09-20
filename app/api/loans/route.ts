@@ -1,7 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server"
-import { getSupabaseAdmin } from "@/lib/supabase-admin"
-
-export const dynamic = "force-dynamic"
+import { getSupabaseAdmin } from "@/lib/supabase/admin"
+import { z } from "zod"
 
 type CreateLoanBody = {
   client_id: string
@@ -40,6 +39,8 @@ const loanSelect = `
     last_name
   )
 `
+
+export const dynamic = "force-dynamic"
 
 export async function GET(request: NextRequest) {
   try {
@@ -134,6 +135,9 @@ export async function POST(request: NextRequest) {
     console.log("Préstamo creado exitosamente:", data)
     return NextResponse.json(data, { status: 201 })
   } catch (e: any) {
+    if (e instanceof z.ZodError) {
+      return NextResponse.json({ detail: "Datos de entrada inválidos", errors: e.errors }, { status: 400 })
+    }
     console.error("Error inesperado:", e)
     return NextResponse.json({ detail: `Fallo inesperado en POST /api/loans: ${e.message}` }, { status: 500 })
   }
