@@ -59,51 +59,59 @@ export function DashboardSidebar() {
   const [userPermissions, setUserPermissions] = useState<string[]>([])
   const [permissionsLoaded, setPermissionsLoaded] = useState(false)
   const [currentUser, setCurrentUser] = useState<{ email: string; name: string } | null>(null)
+  const supabase = createClient()
 
   useEffect(() => {
     const loadUserPermissions = async () => {
       try {
-        const supabase = createClient()
         const {
           data: { user },
         } = await supabase.auth.getUser()
+
+        console.log("[v0] User from auth:", user?.id)
+
         if (user) {
-          setCurrentUser(user)
-          const response = await fetch(`/api/users/permissions?userId=${user.id}`)
+          const url = `/api/users/permissions?userId=${user.id}`
+          console.log("[v0] Fetching permissions from:", url)
+
+          const response = await fetch(url)
+          console.log("[v0] Response status:", response.status)
+          console.log("[v0] Response headers:", Object.fromEntries(response.headers.entries()))
+
+          const contentType = response.headers.get("content-type")
+          if (!contentType || !contentType.includes("application/json")) {
+            console.error("[v0] Response is not JSON, content-type:", contentType)
+            const text = await response.text()
+            console.error("[v0] Response text:", text.substring(0, 200))
+            throw new Error(`API returned non-JSON response: ${response.status}`)
+          }
+
           const data = await response.json()
+          console.log("[v0] Permissions data:", data)
 
           if (data.permissions && Array.isArray(data.permissions)) {
             setUserPermissions(data.permissions)
           } else {
-            setUserPermissions([
-              "dashboard",
-              "clients",
-              "loans",
-              "receipts",
-              "cronograma",
-              "cuotas",
-              "transactions",
-              "formulas",
-            ])
+            setUserPermissions(["dashboard", "clients", "loans", "receipts", "cronograma", "transactions", "formulas"])
           }
         } else {
-          router.push("/login")
+          console.log("[v0] No user found, using default permissions")
+          setUserPermissions(["dashboard", "clients", "loans", "cronograma", "formulas"])
         }
       } catch (error) {
         console.error("Error loading permissions:", error)
-        setUserPermissions(["dashboard", "clients", "loans", "cronograma", "cuotas", "formulas"])
+        setUserPermissions(["dashboard", "clients", "loans", "cronograma", "formulas"])
       } finally {
         setPermissionsLoaded(true)
       }
     }
 
     loadUserPermissions()
-  }, [router])
+  }, [])
 
   const filteredNavItems = navItems.filter((item) => userPermissions.includes(item.route) || item.route === "dashboard")
 
   const handleLogout = async () => {
-    const supabase = createClient()
     await supabase.auth.signOut()
     router.push("/login")
   }
