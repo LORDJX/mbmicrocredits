@@ -17,6 +17,7 @@ import {
   Receipt,
   Calendar,
   Calculator,
+  CheckCircle,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -44,6 +45,7 @@ const navItems = [
   { title: "Préstamos", href: "/dashboard/loans", icon: CreditCard, route: "loans" },
   { title: "Recibo", href: "/dashboard/receipts", icon: Receipt, route: "receipts" },
   { title: "Cronograma", href: "/dashboard/cronograma", icon: Calendar, route: "cronograma" },
+  { title: "Gestión de Cuotas", href: "/dashboard/cuotas", icon: CheckCircle, route: "cuotas" },
   { title: "Transacciones", href: "/dashboard/transactions", icon: DollarSign, route: "transactions" },
   { title: "Seguimientos", href: "/dashboard/followups", icon: CalendarCheck, route: "followups" },
   { title: "Resumen para Socios", href: "/dashboard/resumen", icon: FileText, route: "reports" },
@@ -195,7 +197,7 @@ export function DashboardSidebar() {
           <DropdownMenuContent
             side="top"
             align="start"
-            className="w-(--radix-popper-anchor-width) bg-popover text-popover-foreground border-border"
+            className="w-[--radix-popper-anchor-width] bg-popover text-popover-foreground border-border"
           >
             <DropdownMenuItem className="cursor-pointer hover:!bg-primary/10">
               <span>Perfil</span>
