@@ -5,130 +5,93 @@ export async function GET(request: NextRequest) {
   try {
     const supabase = createAdminClient()
 
-    const today = new Date()
-    const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1)
-    const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0)
-    const yesterday = new Date(today)
-    yesterday.setDate(yesterday.getDate() - 1)
+    const now = new Date()
+    const argentinaOffset = -3 * 60 // UTC-3 in minutes
+    const argentinaTime = new Date(now.getTime() + argentinaOffset * 60 * 1000)
 
-    console.log("[v0] Cronograma API - Today:", today.toISOString().split("T")[0])
-    console.log("[v0] Cronograma API - Start of month:", startOfMonth.toISOString().split("T")[0])
-    console.log("[v0] Cronograma API - End of month:", endOfMonth.toISOString().split("T")[0])
+    const today = argentinaTime.toISOString().split("T")[0]
+    const startOfMonth = new Date(argentinaTime.getFullYear(), argentinaTime.getMonth(), 1).toISOString().split("T")[0]
+    const endOfMonth = new Date(argentinaTime.getFullYear(), argentinaTime.getMonth() + 1, 0)
+      .toISOString()
+      .split("T")[0]
 
-    // Obtener préstamos activos con información del cliente
-    const { data: loans, error: loansError } = await supabase
-      .from("loans")
+    console.log("[v0] Cronograma API - Today (Argentina):", today)
+    console.log("[v0] Cronograma API - Start of month:", startOfMonth)
+    console.log("[v0] Cronograma API - End of month:", endOfMonth)
+
+    const { data: installments, error: installmentsError } = await supabase
+      .from("installments_with_calculated_status")
       .select(`
         id,
+        loan_id,
+        installment_no,
+        installments_total,
+        code,
+        due_date,
+        amount_due,
+        amount_paid,
+        paid_at,
+        status,
+        payment_date,
         loan_code,
         client_id,
-        amount,
-        installments,
-        installment_amount,
-        loan_type,
-        start_date,
-        status,
-        clients!inner(
-          id,
-          first_name,
-          last_name
-        )
+        client_name,
+        calculated_status
       `)
-      .in("status", ["Activo", "En Mora"])
+      .order("due_date", { ascending: true })
 
-    if (loansError) {
-      console.error("Error fetching loans:", loansError)
-      return NextResponse.json({ error: "Error fetching loans" }, { status: 500 })
+    if (installmentsError) {
+      console.error("Error fetching installments:", installmentsError)
+      return NextResponse.json({ error: "Error fetching installments" }, { status: 500 })
     }
 
-    console.log("[v0] Cronograma API - Found loans:", loans?.length || 0)
+    console.log("[v0] Total installments found:", installments?.length || 0)
 
-    // Generar cronograma de cuotas
-    const allInstallments: any[] = []
+    const transformedInstallments =
+      installments?.map((inst) => ({
+        id: inst.id,
+        client_id: inst.client_id,
+        client_name: inst.client_name,
+        loan_code: inst.loan_code,
+        installment_number: inst.installment_no,
+        total_installments: inst.installments_total,
+        amount: inst.amount_due,
+        due_date: inst.due_date,
+        status: mapCalculatedStatus(inst.calculated_status),
+        calculated_status: inst.calculated_status,
+        amount_paid: inst.amount_paid,
+        paid_at: inst.paid_at,
+        payment_date: inst.payment_date,
+      })) || []
 
-    loans?.forEach((loan) => {
-      let startDate = new Date(loan.start_date)
+    const todayInstallments = transformedInstallments.filter(
+      (inst) => inst.calculated_status === "a_pagar_hoy" && !inst.amount_paid,
+    )
 
-      // Si la fecha de inicio es muy antigua, calcular una fecha que genere cuotas distribuidas
-      const threeMonthsAgo = new Date()
-      threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3)
+    const overdueInstallments = transformedInstallments.filter(
+      (inst) => inst.calculated_status === "con_mora" && !inst.amount_paid,
+    )
 
-      // Si el préstamo es muy antiguo, calcular una fecha de inicio que genere cuotas actuales
-      if (startDate < threeMonthsAgo) {
-        const intervalDays = loan.loan_type === "Semanal" ? 7 : loan.loan_type === "Quincenal" ? 15 : 30
-        const totalDays = intervalDays * loan.installments
-
-        // Calcular fecha de inicio para que algunas cuotas estén en el pasado, presente y futuro
-        const daysBack = Math.floor(totalDays * 0.6) // 60% de las cuotas en el pasado
-        startDate = new Date(today)
-        startDate.setDate(today.getDate() - daysBack)
-      }
-
-      const intervalDays = loan.loan_type === "Semanal" ? 7 : loan.loan_type === "Quincenal" ? 15 : 30
-
-      console.log(
-        "[v0] Processing loan:",
-        loan.loan_code,
-        "Start date:",
-        startDate.toISOString().split("T")[0],
-        "Interval:",
-        intervalDays,
-        "days",
-      )
-
-      for (let i = 0; i < loan.installments; i++) {
-        const dueDate = new Date(startDate)
-        dueDate.setDate(startDate.getDate() + intervalDays * (i + 1))
-
-        let status = "pending"
-        const daysDiff = Math.floor((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
-
-        if (daysDiff < 0) {
-          status = "overdue"
-        } else if (daysDiff === 0) {
-          status = "due_today"
-        } else {
-          status = "pending"
-        }
-
-        const installment = {
-          id: `${loan.id}-${i + 1}`,
-          client_id: loan.client_id,
-          client_name: `${loan.clients.first_name} ${loan.clients.last_name}`,
-          loan_code: loan.loan_code,
-          installment_number: i + 1,
-          total_installments: loan.installments,
-          amount: loan.installment_amount || loan.amount / loan.installments,
-          due_date: dueDate.toISOString().split("T")[0],
-          status: status,
-        }
-
-        allInstallments.push(installment)
-
-        if (i < 3 || i >= loan.installments - 3) {
-          // Log primeras y últimas 3 cuotas
-          console.log(
-            `[v0] Installment ${i + 1}/${loan.installments} - Due: ${installment.due_date}, Status: ${status}, Days diff: ${daysDiff}`,
-          )
-        }
-      }
+    const monthInstallments = transformedInstallments.filter((inst) => {
+      const dueDate = inst.due_date
+      return dueDate >= startOfMonth && dueDate <= endOfMonth && !inst.amount_paid
     })
 
-    console.log("[v0] Total installments generated:", allInstallments.length)
+    console.log("[v0] Today installments (a_pagar_hoy):", todayInstallments.length)
+    console.log("[v0] Overdue installments (con_mora):", overdueInstallments.length)
+    console.log("[v0] Month installments:", monthInstallments.length)
 
-    const todayStr = today.toISOString().split("T")[0]
-
-    const { data: allReceipts, error: allReceiptsError } = await supabase
+    const { data: todayReceipts, error: receiptsError } = await supabase
       .from("receipts")
       .select(`
         id,
+        receipt_number,
         total_amount,
         receipt_date,
         payment_type,
         observations,
         selected_loans,
         client_id,
-        receipt_number,
         clients!inner(
           id,
           first_name,
@@ -136,84 +99,29 @@ export async function GET(request: NextRequest) {
           phone
         )
       `)
+      .eq("receipt_date", today)
       .order("created_at", { ascending: false })
 
-    if (allReceiptsError) {
-      console.error("Error fetching all receipts:", allReceiptsError)
+    if (receiptsError) {
+      console.error("Error fetching today receipts:", receiptsError)
     }
 
-    const paidInstallmentIds = new Set()
-    allReceipts?.forEach((receipt) => {
-      if (receipt.selected_loans) {
-        receipt.selected_loans.forEach((loan: any) => {
-          if (loan.loan_code && loan.installment_number) {
-            paidInstallmentIds.add(`${loan.loan_code}-${loan.installment_number}`)
-          }
-        })
-      }
-    })
+    const { data: monthReceipts, error: monthReceiptsError } = await supabase
+      .from("receipts")
+      .select("total_amount")
+      .gte("receipt_date", startOfMonth)
+      .lte("receipt_date", endOfMonth)
 
-    console.log("[v0] Total paid installments found:", paidInstallmentIds.size)
+    if (monthReceiptsError) {
+      console.error("Error fetching month receipts:", monthReceiptsError)
+    }
 
-    console.log("[v0] Filtering installments...")
-    console.log("[v0] Today string:", todayStr)
-    console.log("[v0] Start of month:", startOfMonth.toISOString().split("T")[0])
-    console.log("[v0] End of month:", endOfMonth.toISOString().split("T")[0])
+    const totalReceivedToday = todayReceipts?.reduce((sum, r) => sum + (r.total_amount || 0), 0) || 0
+    const totalReceivedMonth = monthReceipts?.reduce((sum, r) => sum + (r.total_amount || 0), 0) || 0
 
-    const todayInstallments = allInstallments.filter((inst) => {
-      const isDueToday = inst.due_date === todayStr || inst.status === "due_today"
-      const isNotPaid = !paidInstallmentIds.has(`${inst.loan_code}-${inst.installment_number}`)
-      const result = isDueToday && isNotPaid
+    console.log("[v0] Today receipts found:", todayReceipts?.length || 0, "Total amount:", totalReceivedToday)
+    console.log("[v0] Month receipts total amount:", totalReceivedMonth)
 
-      if (isDueToday) {
-        console.log(
-          `[v0] Today installment: ${inst.loan_code}-${inst.installment_number}, Due: ${inst.due_date}, Paid: ${!isNotPaid}, Include: ${result}`,
-        )
-      }
-
-      return result
-    })
-
-    const overdueInstallments = allInstallments.filter((inst) => {
-      const isOverdue = inst.status === "overdue"
-      const isNotPaid = !paidInstallmentIds.has(`${inst.loan_code}-${inst.installment_number}`)
-      return isOverdue && isNotPaid
-    })
-
-    const monthInstallments = allInstallments.filter((inst) => {
-      const dueDate = new Date(inst.due_date)
-      const isInMonth = dueDate >= startOfMonth && dueDate <= endOfMonth
-      const isNotPaid = !paidInstallmentIds.has(`${inst.loan_code}-${inst.installment_number}`)
-      const result = isInMonth && isNotPaid
-
-      if (isInMonth && inst.status !== "overdue") {
-        console.log(
-          `[v0] Month installment: ${inst.loan_code}-${inst.installment_number}, Due: ${inst.due_date}, Paid: ${!isNotPaid}, Include: ${result}`,
-        )
-      }
-
-      return result
-    })
-
-    console.log("[v0] Today installments:", todayInstallments.length)
-    console.log("[v0] Overdue installments:", overdueInstallments.length)
-    console.log("[v0] Month installments:", monthInstallments.length)
-
-    const todayReceipts = allReceipts?.filter((receipt) => receipt.receipt_date === todayStr) || []
-    const totalReceivedToday = todayReceipts.reduce((sum, r) => sum + (r.total_amount || 0), 0)
-
-    const monthReceipts =
-      allReceipts?.filter((r) => {
-        const receiptDate = new Date(r.receipt_date)
-        return receiptDate >= startOfMonth && receiptDate <= endOfMonth
-      }) || []
-
-    const totalReceivedMonth = monthReceipts.reduce((sum, r) => sum + (r.total_amount || 0), 0)
-
-    console.log("[v0] Today receipts found:", todayReceipts.length, "Total amount:", totalReceivedToday)
-    console.log("[v0] Month receipts found:", monthReceipts.length, "Total amount:", totalReceivedMonth)
-
-    // Calcular resumen
     const summary = {
       total_due_today: todayInstallments.reduce((sum, inst) => sum + inst.amount, 0),
       total_received_today: totalReceivedToday,
@@ -229,11 +137,41 @@ export async function GET(request: NextRequest) {
       today: todayInstallments,
       overdue: overdueInstallments,
       month: monthInstallments,
-      todayReceipts: todayReceipts,
+      todayReceipts: todayReceipts || [],
       summary,
+      debug: {
+        total_installments: transformedInstallments.length,
+        argentina_time: today,
+        installments_by_status: {
+          a_vencer: transformedInstallments.filter((i) => i.calculated_status === "a_vencer").length,
+          a_pagar_hoy: transformedInstallments.filter((i) => i.calculated_status === "a_pagar_hoy").length,
+          con_mora: transformedInstallments.filter((i) => i.calculated_status === "con_mora").length,
+          pagadas: transformedInstallments.filter((i) => i.calculated_status === "pagadas").length,
+          pagadas_anticipadas: transformedInstallments.filter((i) => i.calculated_status === "pagadas_anticipadas")
+            .length,
+          pagadas_con_mora: transformedInstallments.filter((i) => i.calculated_status === "pagadas_con_mora").length,
+        },
+      },
     })
   } catch (error) {
     console.error("Error in cronograma API:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+  }
+}
+
+function mapCalculatedStatus(calculatedStatus: string): string {
+  switch (calculatedStatus) {
+    case "a_vencer":
+      return "pending"
+    case "a_pagar_hoy":
+      return "due_today"
+    case "con_mora":
+      return "overdue"
+    case "pagadas":
+    case "pagadas_anticipadas":
+    case "pagadas_con_mora":
+      return "paid"
+    default:
+      return "pending"
   }
 }

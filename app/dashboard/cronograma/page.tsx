@@ -23,6 +23,8 @@ interface Installment {
   amount: number
   due_date: string
   status: "pending" | "paid" | "overdue"
+  amount_paid: number
+  calculated_status?: string
 }
 
 interface DailySummary {
@@ -97,28 +99,49 @@ export default function CronogramaPage() {
   const fetchCronogramaData = async () => {
     try {
       setLoading(true)
+      console.log("[v0] Fetching cronograma data...")
+
       const response = await fetch("/api/cronograma")
       const data = await response.json()
+
+      console.log("[v0] Cronograma API response:", data)
 
       if (data.success) {
         setTodayInstallments(data.today || [])
         setOverdueInstallments(data.overdue || [])
         setMonthInstallments(data.month || [])
-        setTodayReceipts(data.todayReceipts || []) // Cargar recibos del día
+        setTodayReceipts(data.todayReceipts || [])
         setSummary(data.summary || {})
 
         const paidIds = new Set<string>()
-        data.todayReceipts?.forEach((receipt: Receipt) => {
-          receipt.selected_loans?.forEach((loan: any) => {
+
+        // Add installments that are already paid in the database
+        ;[data.today || [], data.overdue || [], data.month || []].forEach((inst: any) => {
+          if (inst.amount_paid > 0 || inst.calculated_status?.includes("pagadas")) {
+            paidIds.add(`${inst.loan_code}-${inst.installment_number}`)
+          }
+        })
+
+        // Add installments from today's receipts
+        ;(data.todayReceipts || []).forEach((receipt: Receipt) => {
+          ;(receipt.selected_loans || []).forEach((loan: any) => {
             if (loan.loan_code && loan.installment_number) {
               paidIds.add(`${loan.loan_code}-${loan.installment_number}`)
             }
           })
         })
+
         setPaidInstallments(paidIds)
+
+        console.log("[v0] Paid installments tracked:", paidIds.size)
+        console.log("[v0] Debug info:", data.debug)
+      } else {
+        console.error("[v0] Cronograma API error:", data.error)
+        toast.error("Error al cargar el cronograma: " + data.error)
       }
     } catch (error) {
-      console.error("Error fetching cronograma data:", error)
+      console.error("[v0] Error fetching cronograma data:", error)
+      toast.error("Error de conexión al cargar el cronograma")
     } finally {
       setLoading(false)
     }
@@ -186,7 +209,7 @@ export default function CronogramaPage() {
 
     try {
       setIsCreatingReceipt(true)
-      console.log("[v0] Starting receipt creation")
+      console.log("[v0] Starting receipt creation for installment:", installmentKey)
 
       if (!receiptForm.client_id || !selectedInstallment) {
         console.log("[v0] Missing required data for receipt creation")
@@ -210,6 +233,14 @@ export default function CronogramaPage() {
             amount: selectedInstallment?.amount,
           },
         ],
+        selected_installments: [
+          {
+            installment_id: selectedInstallment.id,
+            amount: selectedInstallment.amount,
+            loan_code: receiptForm.loan_code,
+            installment_number: selectedInstallment.installment_number,
+          },
+        ],
       }
 
       console.log("[v0] Sending receipt data:", receiptData)
@@ -225,7 +256,7 @@ export default function CronogramaPage() {
 
       if (response.ok && result.id) {
         console.log("[v0] Receipt created successfully")
-        toast.success("Recibo creado exitosamente")
+        toast.success(`Recibo N° ${result.receipt_number} creado exitosamente`)
 
         const receiptAmount = receiptData.total_amount
         setSummary((prev) => ({
@@ -244,33 +275,6 @@ export default function CronogramaPage() {
         newPaidInstallments.add(installmentKey)
         setPaidInstallments(newPaidInstallments)
 
-        const removeInstallment = (installments: Installment[]) =>
-          installments.filter((inst) => inst.id !== selectedInstallment.id)
-
-        setTodayInstallments((prev) => removeInstallment(prev))
-        setOverdueInstallments((prev) => removeInstallment(prev))
-        setMonthInstallments((prev) => removeInstallment(prev))
-
-        const newReceipt: Receipt = {
-          id: result.id,
-          receipt_number: result.receipt_number,
-          total_amount: result.total_amount,
-          receipt_date: result.receipt_date,
-          payment_type: result.payment_type,
-          observations: result.observations,
-          selected_loans: result.selected_loans,
-          client_id: result.client_id,
-          clients: {
-            id: selectedInstallment.client_id,
-            first_name: selectedInstallment.client_name.split(" ")[0] || "",
-            last_name: selectedInstallment.client_name.split(" ").slice(1).join(" ") || "",
-            phone: "", // Se obtendrá cuando se necesite para WhatsApp
-          },
-        }
-        setTodayReceipts((prev) => [newReceipt, ...prev])
-
-        console.log("[v0] Updated installment status to paid")
-
         setIsReceiptModalOpen(false)
         setSelectedInstallment(null)
         setReceiptForm({
@@ -286,7 +290,7 @@ export default function CronogramaPage() {
 
         setTimeout(() => {
           fetchCronogramaData()
-        }, 500)
+        }, 1000)
       } else {
         const errorMessage = result.error || result.message || "Error desconocido"
         console.log("[v0] Receipt creation failed:", errorMessage)
@@ -294,7 +298,6 @@ export default function CronogramaPage() {
       }
     } catch (error) {
       console.error("[v0] Error creating receipt:", error)
-      console.log("[v0] Receipt creation failed:", error)
       toast.error("Error al crear recibo: " + (error instanceof Error ? error.message : "Error de conexión"))
     } finally {
       setIsCreatingReceipt(false)
