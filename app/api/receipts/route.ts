@@ -1,11 +1,50 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createAdminClient } from "@/utils/supabaseAdminClient"
-import { v4 as uuidv4 } from "uuid"
+import { createAdminClient } from "@/lib/supabase/server"
+
+export async function GET(request: NextRequest) {
+  try {
+    const supabase = createAdminClient()
+
+    const { data: receipts, error } = await supabase
+      .from("receipts")
+      .select(`
+        *,
+        clients!inner(first_name, last_name)
+      `)
+      .order("created_at", { ascending: false })
+
+    if (error) {
+      console.error("Error fetching receipts:", error)
+      return NextResponse.json({ error: "Error fetching receipts" }, { status: 500 })
+    }
+
+    const formattedReceipts =
+      receipts?.map((receipt, index) => {
+        let receiptNumber = receipt.receipt_number
+
+        // If no receipt_number exists, generate sequential number based on position
+        if (!receiptNumber) {
+          const sequentialNumber = receipts.length - index
+          receiptNumber = `Rbo - ${sequentialNumber.toString().padStart(6, "0")}`
+        }
+
+        return {
+          ...receipt,
+          client_name: `${receipt.clients.first_name} ${receipt.clients.last_name}`,
+          receipt_number: receiptNumber,
+        }
+      }) || []
+
+    return NextResponse.json(formattedReceipts)
+  } catch (error) {
+    console.error("Error in receipts GET:", error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+  }
+}
 
 export async function POST(request: NextRequest) {
   try {
     const supabase = createAdminClient()
-    const receiptNumber = uuidv4()
 
     const body = await request.json()
     console.log("Received body:", body)
@@ -27,7 +66,47 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "La fecha es requerida" }, { status: 400 })
     }
 
-    // ... existing code for receipt creation ...
+    const { data: tableExists, error: tableCheckError } = await supabase.from("receipts").select("id").limit(1)
+
+    if (tableCheckError && tableCheckError.code === "42P01") {
+      console.error("Receipts table does not exist:", tableCheckError)
+      return NextResponse.json(
+        {
+          error:
+            "La tabla de recibos no existe. Por favor ejecute el script SQL 12-create-receipts-table.sql en su base de datos Supabase.",
+        },
+        { status: 500 },
+      )
+    }
+
+    let receiptNumber = "Rbo - 000001" // Default for first receipt
+
+    try {
+      // Try to get the last receipt to generate next sequential number
+      const { data: lastReceipt } = await supabase
+        .from("receipts")
+        .select("id, receipt_number")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .single()
+
+      if (lastReceipt) {
+        // If receipt_number column exists and has value, use it
+        if (lastReceipt.receipt_number && lastReceipt.receipt_number.startsWith("Rbo - ")) {
+          const lastNumber = Number.parseInt(lastReceipt.receipt_number.split(" - ")[1]) || 0
+          const nextNumber = lastNumber + 1
+          receiptNumber = `Rbo - ${nextNumber.toString().padStart(6, "0")}`
+        } else {
+          // If no receipt_number or invalid format, count total receipts + 1
+          const { count } = await supabase.from("receipts").select("*", { count: "exact", head: true })
+
+          const nextNumber = (count || 0) + 1
+          receiptNumber = `Rbo - ${nextNumber.toString().padStart(6, "0")}`
+        }
+      }
+    } catch (error) {
+      console.log("Could not get last receipt, using default number")
+    }
 
     const receiptData: any = {
       receipt_date,
@@ -57,37 +136,6 @@ export async function POST(request: NextRequest) {
         },
         { status: 500 },
       )
-    }
-
-    if (selected_loans && selected_loans.length > 0) {
-      for (const loan of selected_loans) {
-        if (loan.loan_code && loan.installment_number) {
-          // Buscar la cuota correspondiente
-          const { data: installment, error: installmentError } = await supabase
-            .from("installments")
-            .select("id")
-            .eq("code", loan.loan_code)
-            .eq("installment_no", loan.installment_number)
-            .single()
-
-          if (installment && !installmentError) {
-            const { error: updateError } = await supabase
-              .from("installments")
-              .update({
-                payment_date: receipt_date,
-                paid_at: new Date().toISOString(),
-                amount_paid: loan.amount || total_amount,
-              })
-              .eq("id", installment.id)
-
-            if (updateError) {
-              console.error("Error updating installment:", updateError)
-            } else {
-              console.log(`[v0] Updated installment ${loan.loan_code}-${loan.installment_number} as paid`)
-            }
-          }
-        }
-      }
     }
 
     const finalReceipt = {

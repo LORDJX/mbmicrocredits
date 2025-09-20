@@ -1,34 +1,28 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { getSupabaseAdmin } from "@/lib/supabase-admin"
-import { z } from "zod"
 
 export const dynamic = "force-dynamic"
 
-const CreateLoanSchema = z.object({
-  client_id: z.string().uuid(),
-  principal: z.number().positive(),
-  installments_total: z.number().int().positive(),
-  installment_amount: z.number().positive(),
-  start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  frequency: z.enum(["monthly", "weekly"]).default("monthly"),
-  loan_type: z.string().optional(),
-  delivery_mode: z.string().optional(),
-  interest_rate: z.number().optional(),
-  amount_to_repay: z.number().optional(),
-  end_date: z.string().optional(),
-  status: z.string().optional(),
-})
-
-type CreateLoanBody = z.infer<typeof CreateLoanSchema>
+type CreateLoanBody = {
+  client_id: string
+  amount: number
+  installments: number
+  installment_amount: number
+  loan_type?: string | null
+  delivery_mode?: string | null
+  interest_rate?: number | null
+  amount_to_repay?: number | null
+  start_date?: string | null
+  end_date?: string | null
+  status?: string | null
+}
 
 const loanSelect = `
   id,
   loan_code,
   client_id,
   amount,
-  principal,
   installments,
-  installments_total,
   installment_amount,
   delivery_mode,
   amount_to_repay,
@@ -36,7 +30,6 @@ const loanSelect = `
   interest_rate,
   start_date,
   end_date,
-  frequency,
   status,
   created_at,
   updated_at,
@@ -92,9 +85,6 @@ export async function GET(request: NextRequest) {
       installment_amount: loan.installment_amount ?? (loan.installments > 0 ? loan.amount / loan.installments : 0),
       amount_to_repay: loan.amount_to_repay ?? loan.amount * (1 + (loan.interest_rate || 0) / 100),
       delivery_mode: loan.delivery_mode ?? "Efectivo",
-      principal: loan.principal ?? loan.amount,
-      installments_total: loan.installments_total ?? loan.installments,
-      frequency: loan.frequency ?? "monthly",
     }))
 
     if (statusFilter === "active") {
@@ -112,25 +102,24 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const supabase = getSupabaseAdmin()
-    const body = await request.json()
+    const body = (await request.json()) as CreateLoanBody
 
-    const validatedData = CreateLoanSchema.parse(body)
+    if (!body.client_id || !body.amount || !body.installments || !body.installment_amount) {
+      return NextResponse.json({ detail: "Faltan campos requeridos" }, { status: 400 })
+    }
 
     const insertPayload = {
-      client_id: validatedData.client_id,
-      amount: validatedData.principal, // Keep backward compatibility
-      principal: validatedData.principal,
-      installments: validatedData.installments_total, // Keep backward compatibility
-      installments_total: validatedData.installments_total,
-      installment_amount: validatedData.installment_amount,
-      start_date: validatedData.start_date,
-      frequency: validatedData.frequency,
-      delivery_mode: validatedData.delivery_mode ?? "Efectivo",
-      amount_to_repay: validatedData.amount_to_repay ?? null,
-      loan_type: validatedData.loan_type ?? "Semanal",
-      interest_rate: validatedData.interest_rate ?? null,
-      end_date: validatedData.end_date ?? null,
-      status: validatedData.status ?? "activo",
+      client_id: body.client_id,
+      amount: body.amount,
+      installments: body.installments,
+      installment_amount: body.installment_amount,
+      delivery_mode: body.delivery_mode ?? "Efectivo",
+      amount_to_repay: body.amount_to_repay ?? null,
+      loan_type: body.loan_type ?? "Semanal",
+      interest_rate: body.interest_rate ?? null,
+      start_date: body.start_date ?? null,
+      end_date: body.end_date ?? null,
+      status: body.status ?? "activo",
     }
 
     console.log("Insertando préstamo con datos:", insertPayload)
@@ -143,12 +132,8 @@ export async function POST(request: NextRequest) {
     }
 
     console.log("Préstamo creado exitosamente:", data)
-
     return NextResponse.json(data, { status: 201 })
   } catch (e: any) {
-    if (e instanceof z.ZodError) {
-      return NextResponse.json({ detail: "Datos de entrada inválidos", errors: e.errors }, { status: 400 })
-    }
     console.error("Error inesperado:", e)
     return NextResponse.json({ detail: `Fallo inesperado en POST /api/loans: ${e.message}` }, { status: 500 })
   }
