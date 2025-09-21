@@ -1,15 +1,13 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { PageLayout } from "@/components/page-layout"
+import { AppHeader } from "@/components/app-header"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Search, Calendar, AlertCircle, CheckCircle, Clock, Printer, Filter, History } from "lucide-react"
+import { Search, Calendar, AlertCircle, CheckCircle, Clock, Printer } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 
 interface CronogramItem {
@@ -201,12 +199,13 @@ export default function DashboardCronogramaPage() {
 
   if (loading) {
     return (
-      <PageLayout title="Cronograma de Pagos">
+      <div className="space-y-6">
+        <AppHeader title="Cronograma de Pagos" subtitle="Gestión de pagos programados y realizados" />
         <div className="text-center py-8">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
           <p className="mt-2 text-muted-foreground">Cargando cronograma...</p>
         </div>
-      </PageLayout>
+      </div>
     )
   }
 
@@ -232,201 +231,144 @@ export default function DashboardCronogramaPage() {
   console.log("[v0] Debug info:", cronogramData?.debug)
 
   return (
-    <PageLayout title="Cronograma de Pagos" showPrintButton={true} onPrint={handlePrintCronogram}>
-      <div className="space-y-6">
-        <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-          <Tabs value={viewMode} onValueChange={(value) => setViewMode(value as ViewMode)} className="w-full sm:w-auto">
-            <TabsList className="grid w-full grid-cols-3 sm:w-auto">
-              <TabsTrigger value="current" className="gap-2">
-                <Calendar className="h-4 w-4" />
-                Actual
-              </TabsTrigger>
-              <TabsTrigger value="historical" className="gap-2">
-                <History className="h-4 w-4" />
-                Histórico
-              </TabsTrigger>
-              <TabsTrigger value="all" className="gap-2">
-                <Filter className="h-4 w-4" />
-                Completo
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
+    <div className="space-y-6">
+      <AppHeader title="Cronograma de Pagos" subtitle="Gestión de pagos programados y realizados">
+        <Button onClick={handlePrintCronogram} variant="outline" className="gap-2 bg-transparent">
+          <Printer className="h-4 w-4" />
+          Imprimir Cronograma
+        </Button>
+      </AppHeader>
 
-          <div className="flex gap-2 w-full sm:w-auto">
-            <Select value={dateRange} onValueChange={setDateRange}>
-              <SelectTrigger className="w-full sm:w-[180px]">
-                <SelectValue placeholder="Rango de fechas" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="current_month">Mes Actual</SelectItem>
-                <SelectItem value="last_month">Mes Anterior</SelectItem>
-                <SelectItem value="last_3_months">Últimos 3 Meses</SelectItem>
-                <SelectItem value="last_6_months">Últimos 6 Meses</SelectItem>
-                <SelectItem value="current_year">Año Actual</SelectItem>
-                <SelectItem value="all_time">Todo el Tiempo</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-
-        {/* Resumen */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Pagos Vencidos</CardTitle>
-              <AlertCircle className="h-4 w-4 text-destructive" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-destructive">{cronogramData?.overdue?.length || 0}</div>
-              <p className="text-xs text-muted-foreground">
-                ${(cronogramData?.summary?.total_overdue || 0).toLocaleString()}
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Vencen Hoy</CardTitle>
-              <Clock className="h-4 w-4 text-orange-500" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-orange-600">{cronogramData?.today?.length || 0}</div>
-              <p className="text-xs text-muted-foreground">
-                ${(cronogramData?.summary?.total_due_today || 0).toLocaleString()}
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Próximos Pagos</CardTitle>
-              <Calendar className="h-4 w-4 text-blue-500" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-blue-600">{cronogramData?.upcoming?.length || 0}</div>
-              <p className="text-xs text-muted-foreground">
-                ${(cronogramData?.summary?.total_upcoming || 0).toLocaleString()}
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Pagos Realizados</CardTitle>
-              <CheckCircle className="h-4 w-4 text-green-500" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-green-600">{cronogramData?.paid?.length || 0}</div>
-              <p className="text-xs text-muted-foreground">
-                ${(cronogramData?.summary?.total_paid || 0).toLocaleString()}
-              </p>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Tabla de Cronograma */}
+      {/* Resumen */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle>Cronograma Completo</CardTitle>
-                <CardDescription>
-                  {viewMode === "current" && "Pagos del mes actual"}
-                  {viewMode === "historical" && "Datos históricos de pagos"}
-                  {viewMode === "all" && "Todos los pagos programados y realizados"}
-                </CardDescription>
-              </div>
-              <Button onClick={handlePrintCronogram} variant="outline" className="gap-2 bg-transparent">
-                <Printer className="h-4 w-4" />
-                Imprimir Cronograma
-              </Button>
-            </div>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Pagos Vencidos</CardTitle>
+            <AlertCircle className="h-4 w-4 text-destructive" />
           </CardHeader>
           <CardContent>
-            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 mb-6">
-              <div className="relative flex-1 max-w-sm">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-                <Input
-                  placeholder="Buscar por préstamo o cliente..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
+            <div className="text-2xl font-bold text-destructive">{cronogramData?.overdue?.length || 0}</div>
+            <p className="text-xs text-muted-foreground">
+              ${(cronogramData?.summary?.total_overdue || 0).toLocaleString()}
+            </p>
+          </CardContent>
+        </Card>
 
-              <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as StatusFilter)}>
-                <SelectTrigger className="w-full sm:w-[180px]">
-                  <SelectValue placeholder="Filtrar por estado" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos los Estados</SelectItem>
-                  <SelectItem value="overdue">Vencidos</SelectItem>
-                  <SelectItem value="due_today">Vencen Hoy</SelectItem>
-                  <SelectItem value="pending">Próximos</SelectItem>
-                  <SelectItem value="paid">Pagados</SelectItem>
-                </SelectContent>
-              </Select>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Vencen Hoy</CardTitle>
+            <Clock className="h-4 w-4 text-orange-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-orange-600">{cronogramData?.today?.length || 0}</div>
+            <p className="text-xs text-muted-foreground">
+              ${(cronogramData?.summary?.total_due_today || 0).toLocaleString()}
+            </p>
+          </CardContent>
+        </Card>
 
-              <div className="text-sm text-muted-foreground whitespace-nowrap">
-                {filteredItems.length} pago{filteredItems.length !== 1 ? "s" : ""} encontrado
-                {filteredItems.length !== 1 ? "s" : ""}
-              </div>
-            </div>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Próximos Pagos</CardTitle>
+            <Calendar className="h-4 w-4 text-blue-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-blue-600">{cronogramData?.upcoming?.length || 0}</div>
+            <p className="text-xs text-muted-foreground">
+              ${(cronogramData?.summary?.total_upcoming || 0).toLocaleString()}
+            </p>
+          </CardContent>
+        </Card>
 
-            <div className="rounded-md border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Préstamo</TableHead>
-                    <TableHead>Cliente</TableHead>
-                    <TableHead>Cuota</TableHead>
-                    <TableHead>Fecha Vencimiento</TableHead>
-                    <TableHead>Monto</TableHead>
-                    <TableHead>Saldo</TableHead>
-                    <TableHead>Estado</TableHead>
-                    <TableHead>Fecha Pago</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredItems.map((item: CronogramItem) => (
-                    <TableRow key={`${item.id}-${item.installment_number}`}>
-                      <TableCell className="font-medium">{item.loan_code || "-"}</TableCell>
-                      <TableCell>{item.client_name || "-"}</TableCell>
-                      <TableCell>{item.installment_number || "-"}</TableCell>
-                      <TableCell>{item.due_date ? new Date(item.due_date).toLocaleDateString() : "-"}</TableCell>
-                      <TableCell>${(item.amount || 0).toLocaleString()}</TableCell>
-                      <TableCell>${(item.balance_due || 0).toLocaleString()}</TableCell>
-                      <TableCell>{getStatusBadge(item.status)}</TableCell>
-                      <TableCell>{item.paid_at ? new Date(item.paid_at).toLocaleDateString() : "-"}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-
-            {filteredItems.length === 0 && (
-              <div className="text-center py-8">
-                <p className="text-muted-foreground">
-                  {cronogramData?.debug?.total_installments === 0
-                    ? "No se encontraron cuotas en la base de datos. Asegúrate de que existan préstamos con cuotas generadas."
-                    : searchTerm || statusFilter !== "all"
-                      ? "No se encontraron resultados para los filtros aplicados."
-                      : "No hay datos disponibles para el rango seleccionado."}
-                </p>
-                {cronogramData?.debug && (
-                  <div className="mt-4 text-xs text-muted-foreground">
-                    <p>Total de cuotas en BD: {cronogramData.debug.total_installments}</p>
-                    <p>Fecha actual (Argentina): {cronogramData.debug.argentina_time}</p>
-                    <p>
-                      Vista actual: {viewMode} | Rango: {dateRange}
-                    </p>
-                  </div>
-                )}
-              </div>
-            )}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Pagos Realizados</CardTitle>
+            <CheckCircle className="h-4 w-4 text-green-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-green-600">{cronogramData?.paid?.length || 0}</div>
+            <p className="text-xs text-muted-foreground">
+              ${(cronogramData?.summary?.total_paid || 0).toLocaleString()}
+            </p>
           </CardContent>
         </Card>
       </div>
-    </PageLayout>
+
+      {/* Tabla de Cronograma */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Cronograma Completo</CardTitle>
+              <CardDescription>Todos los pagos programados y realizados</CardDescription>
+            </div>
+            <Button onClick={handlePrintCronogram} variant="outline" className="gap-2 bg-transparent">
+              <Printer className="h-4 w-4" />
+              Imprimir Cronograma
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center gap-4 mb-6">
+            <div className="relative flex-1 max-w-sm">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+              <Input
+                placeholder="Buscar por préstamo o cliente..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+            <div className="text-sm text-muted-foreground">
+              {filteredItems.length} pago{filteredItems.length !== 1 ? "s" : ""} encontrado
+              {filteredItems.length !== 1 ? "s" : ""}
+            </div>
+          </div>
+
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Préstamo</TableHead>
+                <TableHead>Cliente</TableHead>
+                <TableHead>Cuota</TableHead>
+                <TableHead>Fecha Vencimiento</TableHead>
+                <TableHead>Monto</TableHead>
+                <TableHead>Estado</TableHead>
+                <TableHead>Fecha Pago</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredItems.map((item: CronogramItem) => (
+                <TableRow key={`${item.id}-${item.installment_number}`}>
+                  <TableCell className="font-medium">{item.loan_code}</TableCell>
+                  <TableCell>{item.client_name}</TableCell>
+                  <TableCell>{item.installment_number}</TableCell>
+                  <TableCell>{new Date(item.due_date).toLocaleDateString()}</TableCell>
+                  <TableCell>${item.amount.toLocaleString()}</TableCell>
+                  <TableCell>{getStatusBadge(item.status)}</TableCell>
+                  <TableCell>{item.paid_at ? new Date(item.paid_at).toLocaleDateString() : "-"}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+
+          {filteredItems.length === 0 && (
+            <div className="text-center py-8">
+              <p className="text-muted-foreground">
+                {cronogramData?.debug?.total_installments === 0
+                  ? "No se encontraron cuotas en la base de datos. Asegúrate de que existan préstamos con cuotas generadas."
+                  : "No se encontraron resultados para la búsqueda."}
+              </p>
+              {cronogramData?.debug && (
+                <div className="mt-4 text-xs text-muted-foreground">
+                  <p>Total de cuotas en BD: {cronogramData.debug.total_installments}</p>
+                  <p>Fecha actual (Argentina): {cronogramData.debug.argentina_time}</p>
+                </div>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
   )
 }
