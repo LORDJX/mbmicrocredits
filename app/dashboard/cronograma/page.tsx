@@ -1,785 +1,432 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
+import { useEffect, useState } from "react"
+import { PageLayout } from "@/components/page-layout"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
+import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Calendar, AlertTriangle, DollarSign, Plus, MessageCircle, Search } from "lucide-react"
-import { AppHeader } from "@/components/app-header"
-import { toast } from "sonner"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Search, Calendar, AlertCircle, CheckCircle, Clock, Printer, Filter, History } from "lucide-react"
+import { useToast } from "@/hooks/use-toast"
 
-interface Installment {
+interface CronogramItem {
   id: string
-  client_id: string
-  client_name: string
   loan_code: string
+  client_name: string
   installment_number: number
-  total_installments: number
-  amount: number
   due_date: string
-  status: "pending" | "paid" | "overdue"
-  amount_paid: number
-  calculated_status?: string
+  amount: number
+  status: string
+  paid_at?: string
+  payment_date?: string
+  balance_due?: number
 }
 
-interface DailySummary {
-  total_due_today: number
-  total_received_today: number
-  total_overdue: number
-  total_received_month: number
-  total_due_month: number
-}
+type ViewMode = "current" | "historical" | "all"
+type StatusFilter = "all" | "overdue" | "due_today" | "pending" | "paid"
 
-interface ReceiptFormData {
-  receipt_date: string
-  client_id: string
-  client_name: string
-  loan_code: string
-  payment_type: string
-  cash_amount: string
-  transfer_amount: string
-  observations: string
-}
-
-interface Receipt {
-  id: string
-  receipt_number: string
-  total_amount: number
-  receipt_date: string
-  payment_type: string
-  observations: string
-  selected_loans: any[]
-  client_id: string
-  clients: {
-    id: string
-    first_name: string
-    last_name: string
-    phone: string
-  }
-}
-
-export default function CronogramaPage() {
-  const [todayInstallments, setTodayInstallments] = useState<Installment[]>([])
-  const [overdueInstallments, setOverdueInstallments] = useState<Installment[]>([])
-  const [monthInstallments, setMonthInstallments] = useState<Installment[]>([])
-  const [todayReceipts, setTodayReceipts] = useState<Receipt[]>([]) // Agregar estado para recibos del día
-  const [summary, setSummary] = useState<DailySummary>({
-    total_due_today: 0,
-    total_received_today: 0,
-    total_overdue: 0,
-    total_received_month: 0,
-    total_due_month: 0,
-  })
+export default function DashboardCronogramaPage() {
+  const [cronogramData, setCronogramData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
-  const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false)
-  const [selectedInstallment, setSelectedInstallment] = useState<Installment | null>(null)
-  const [receiptForm, setReceiptForm] = useState<ReceiptFormData>({
-    receipt_date: new Date().toISOString().split("T")[0],
-    client_id: "",
-    client_name: "",
-    loan_code: "",
-    payment_type: "Total",
-    cash_amount: "0",
-    transfer_amount: "0",
-    observations: "",
-  })
-  const [isCreatingReceipt, setIsCreatingReceipt] = useState(false)
-  const [searchFilter, setSearchFilter] = useState("") // Added filter state for search functionality
-  const [paidInstallments, setPaidInstallments] = useState<Set<string>>(new Set()) // Agregar estado para cuotas pagadas
+  const [searchTerm, setSearchTerm] = useState("")
+  const [viewMode, setViewMode] = useState<ViewMode>("current")
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all")
+  const [dateRange, setDateRange] = useState<string>("current_month")
+  const { toast } = useToast()
 
   useEffect(() => {
-    fetchCronogramaData()
-  }, [])
+    fetchCronogramData()
+  }, [viewMode, dateRange])
 
-  const fetchCronogramaData = async () => {
+  const fetchCronogramData = async () => {
+    setLoading(true)
     try {
-      setLoading(true)
       console.log("[v0] Fetching cronograma data...")
-
-      const response = await fetch("/api/cronograma")
+      const params = new URLSearchParams({
+        view: viewMode,
+        range: dateRange,
+      })
+      const response = await fetch(`/api/cronograma?${params}`)
+      if (!response.ok) throw new Error("Error al cargar cronograma")
       const data = await response.json()
-
       console.log("[v0] Cronograma API response:", data)
-
-      if (data.success) {
-        setTodayInstallments(data.today || [])
-        setOverdueInstallments(data.overdue || [])
-        setMonthInstallments(data.month || [])
-        setTodayReceipts(data.todayReceipts || [])
-        setSummary(data.summary || {})
-
-        const paidIds = new Set<string>()
-
-        // Add installments that are already paid in the database
-        ;[data.today || [], data.overdue || [], data.month || []].forEach((inst: any) => {
-          if (inst.amount_paid > 0 || inst.calculated_status?.includes("pagadas")) {
-            paidIds.add(`${inst.loan_code}-${inst.installment_number}`)
-          }
-        })
-
-        // Add installments from today's receipts
-        ;(data.todayReceipts || []).forEach((receipt: Receipt) => {
-          ;(receipt.selected_loans || []).forEach((loan: any) => {
-            if (loan.loan_code && loan.installment_number) {
-              paidIds.add(`${loan.loan_code}-${loan.installment_number}`)
-            }
-          })
-        })
-
-        setPaidInstallments(paidIds)
-
-        console.log("[v0] Paid installments tracked:", paidIds.size)
-        console.log("[v0] Debug info:", data.debug)
-      } else {
-        console.error("[v0] Cronograma API error:", data.error)
-        toast.error("Error al cargar el cronograma: " + data.error)
-      }
+      setCronogramData(data)
     } catch (error) {
-      console.error("[v0] Error fetching cronograma data:", error)
-      toast.error("Error de conexión al cargar el cronograma")
+      console.error("Error:", error)
+      toast({
+        title: "Error",
+        description: "No se pudo cargar el cronograma",
+        variant: "destructive",
+      })
     } finally {
       setLoading(false)
     }
   }
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("es-AR", {
-      style: "currency",
-      currency: "ARS",
-    }).format(amount)
-  }
+  const handlePrintCronogram = () => {
+    const printWindow = window.open("", "_blank")
+    if (!printWindow) return
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("es-AR")
-  }
+    const allItems = [
+      ...(cronogramData?.today || []),
+      ...(cronogramData?.overdue || []),
+      ...(cronogramData?.upcoming || []),
+      ...(cronogramData?.paid || []),
+    ].sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime())
 
-  const formatCurrencyInput = (value: string) => {
-    const numericValue = value.replace(/[^\d.]/g, "")
-    return numericValue
-  }
-
-  const openReceiptModal = (installment: Installment) => {
-    const installmentKey = `${installment.loan_code}-${installment.installment_number}`
-    if (paidInstallments.has(installmentKey)) {
-      toast.error("Ya existe un recibo para esta cuota. No se pueden crear recibos duplicados.")
-      return
-    }
-
-    if (installment.status === "paid") {
-      toast.error("Esta cuota ya está marcada como pagada.")
-      return
-    }
-
-    setSelectedInstallment(installment)
-    setReceiptForm({
-      receipt_date: new Date().toISOString().split("T")[0],
-      client_id: installment.client_id,
-      client_name: installment.client_name,
-      loan_code: installment.loan_code,
-      payment_type: "Total",
-      cash_amount: installment.amount.toString(),
-      transfer_amount: "0",
-      observations: `Pago cuota ${installment.installment_number} de ${installment.total_installments}`,
-    })
-    setIsReceiptModalOpen(true)
-  }
-
-  const handleCreateReceipt = async () => {
-    if (isCreatingReceipt) {
-      console.log("[v0] Already creating receipt, preventing duplicate")
-      return
-    }
-
-    if (!selectedInstallment) {
-      toast.error("No hay cuota seleccionada")
-      return
-    }
-
-    const installmentKey = `${selectedInstallment.loan_code}-${selectedInstallment.installment_number}`
-    if (paidInstallments.has(installmentKey)) {
-      toast.error("Ya existe un recibo para esta cuota. No se pueden crear recibos duplicados.")
-      setIsReceiptModalOpen(false)
-      return
-    }
-
-    try {
-      setIsCreatingReceipt(true)
-      console.log("[v0] Starting receipt creation for installment:", installmentKey)
-
-      if (!receiptForm.client_id || !selectedInstallment) {
-        console.log("[v0] Missing required data for receipt creation")
-        toast.error("Faltan datos requeridos para crear el recibo")
-        return
-      }
-
-      const receiptData = {
-        receipt_date: receiptForm.receipt_date,
-        client_id: receiptForm.client_id,
-        payment_type: receiptForm.payment_type,
-        cash_amount: Number.parseFloat(receiptForm.cash_amount) || 0,
-        transfer_amount: Number.parseFloat(receiptForm.transfer_amount) || 0,
-        total_amount:
-          (Number.parseFloat(receiptForm.cash_amount) || 0) + (Number.parseFloat(receiptForm.transfer_amount) || 0),
-        observations: receiptForm.observations,
-        selected_loans: [
-          {
-            loan_code: receiptForm.loan_code,
-            installment_number: selectedInstallment?.installment_number,
-            amount: selectedInstallment?.amount,
-          },
-        ],
-        selected_installments: [
-          {
-            installment_id: selectedInstallment.id,
-            amount: selectedInstallment.amount,
-            loan_code: receiptForm.loan_code,
-            installment_number: selectedInstallment.installment_number,
-          },
-        ],
-      }
-
-      console.log("[v0] Sending receipt data:", receiptData)
-
-      const response = await fetch("/api/receipts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(receiptData),
-      })
-
-      const result = await response.json()
-      console.log("[v0] Receipt API response:", result)
-
-      if (response.ok && result.id) {
-        console.log("[v0] Receipt created successfully")
-        toast.success(`Recibo N° ${result.receipt_number} creado exitosamente`)
-
-        const receiptAmount = receiptData.total_amount
-        setSummary((prev) => ({
-          ...prev,
-          total_received_today: prev.total_received_today + receiptAmount,
-          total_received_month: prev.total_received_month + receiptAmount,
-          total_due_today: Math.max(0, prev.total_due_today - receiptAmount),
-          total_overdue:
-            selectedInstallment.status === "overdue"
-              ? Math.max(0, prev.total_overdue - receiptAmount)
-              : prev.total_overdue,
-          total_due_month: Math.max(0, prev.total_due_month - receiptAmount),
-        }))
-
-        const newPaidInstallments = new Set(paidInstallments)
-        newPaidInstallments.add(installmentKey)
-        setPaidInstallments(newPaidInstallments)
-
-        setIsReceiptModalOpen(false)
-        setSelectedInstallment(null)
-        setReceiptForm({
-          receipt_date: new Date().toISOString().split("T")[0],
-          client_id: "",
-          client_name: "",
-          loan_code: "",
-          payment_type: "Total",
-          cash_amount: "0",
-          transfer_amount: "0",
-          observations: "",
-        })
-
-        setTimeout(() => {
-          fetchCronogramaData()
-        }, 1000)
-      } else {
-        const errorMessage = result.error || result.message || "Error desconocido"
-        console.log("[v0] Receipt creation failed:", errorMessage)
-        toast.error("Error al crear recibo: " + errorMessage)
-      }
-    } catch (error) {
-      console.error("[v0] Error creating receipt:", error)
-      toast.error("Error al crear recibo: " + (error instanceof Error ? error.message : "Error de conexión"))
-    } finally {
-      setIsCreatingReceipt(false)
-      console.log("[v0] Receipt creation process completed")
-    }
-  }
-
-  const shareViaWhatsApp = async (installment: Installment) => {
-    try {
-      // Get client phone number from database
-      const response = await fetch(`/api/clients/${installment.client_id}`)
-      const clientData = await response.json()
-
-      if (clientData.success && clientData.client.phone) {
-        const phoneNumber = clientData.client.phone.replace(/[^\d]/g, "") // Remove non-numeric characters
-        const message = `Hola ${installment.client_name}! 
-
-Su cuota ${installment.installment_number} de ${installment.total_installments} del préstamo ${installment.loan_code} por ${formatCurrency(installment.amount)} ha sido registrada como pagada.
-
-Gracias por su pago puntual.
-
-BM Microcréditos`
-
-        // Use WhatsApp Web API
-        const whatsappUrl = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`
-        window.open(whatsappUrl, "_blank")
-        toast.success("Mensaje de WhatsApp enviado")
-      } else {
-        toast.error("No se encontró número de teléfono para este cliente")
-      }
-    } catch (error) {
-      console.error("Error getting client phone:", error)
-      toast.error("Error al obtener datos del cliente")
-    }
-  }
-
-  const shareReceiptViaWhatsApp = (receipt: Receipt) => {
-    const phoneNumber = receipt.clients.phone?.replace(/[^\d]/g, "") // Remove non-numeric characters
-
-    if (!phoneNumber) {
-      toast.error("No se encontró número de teléfono para este cliente")
-      return
-    }
-
-    const clientName = `${receipt.clients.first_name} ${receipt.clients.last_name}`
-    const loanInfo = receipt.selected_loans?.[0] || {}
-
-    const message = `🧾 *RECIBO DE PAGO* 🧾
-
-Hola ${clientName}!
-
-Su recibo N° *${receipt.receipt_number}* ha sido generado exitosamente.
-
-📋 *DETALLE DEL PAGO:*
-💰 Monto: *${formatCurrency(receipt.total_amount)}*
-📅 Fecha: ${formatDate(receipt.receipt_date)}
-💳 Tipo: ${receipt.payment_type}
-${loanInfo.loan_code ? `🏦 Préstamo: ${loanInfo.loan_code}` : ""}
-${loanInfo.installment_number ? `📊 Cuota: ${loanInfo.installment_number}` : ""}
-
-${receipt.observations ? `📝 Observaciones: ${receipt.observations}` : ""}
-
-✅ Gracias por su pago puntual.
-
-*BM Microcréditos*
-_Su confianza es nuestro compromiso_`
-
-    const whatsappUrl = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`
-    window.open(whatsappUrl, "_blank")
-    toast.success("Recibo enviado por WhatsApp")
-  }
-
-  const InstallmentCard = ({ installment }: { installment: Installment }) => {
-    const installmentKey = `${installment.loan_code}-${installment.installment_number}`
-    const hasReceipt = paidInstallments.has(installmentKey)
-    const isPaid = installment.status === "paid" || hasReceipt
-
-    if (hasReceipt || isPaid) {
-      return null
-    }
-
-    return (
-      <Card className="mb-3">
-        <CardContent className="p-4">
-          <div className="flex justify-between items-start">
-            <div className="flex-1">
-              <h4 className="font-semibold text-lg">{installment.client_name}</h4>
-              <p className="text-sm text-muted-foreground">
-                Cuota {installment.installment_number} de {installment.total_installments} - {installment.loan_code}
-              </p>
-              <p className="text-sm text-muted-foreground">Vencimiento: {formatDate(installment.due_date)}</p>
+    const printContent = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Cronograma de Pagos - ${new Date().toLocaleDateString()}</title>
+          <style>
+            body { font-family: Arial, sans-serif; margin: 20px; color: #000; }
+            .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #333; padding-bottom: 10px; }
+            .summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-bottom: 30px; }
+            .summary-item { text-align: center; padding: 15px; border: 1px solid #ddd; }
+            table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+            th, td { border: 1px solid #ddd; padding: 8px; text-align: left; font-size: 12px; }
+            th { background-color: #f2f2f2; }
+            .overdue { background-color: #ffebee; }
+            .today { background-color: #fff3e0; }
+            .paid { background-color: #e8f5e8; }
+            @media print { body { margin: 0; } }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>BM MICROCRÉDITOS</h1>
+            <h2>Cronograma de Pagos</h2>
+            <p>Fecha de Reporte: ${new Date().toLocaleDateString()}</p>
+            <p>Vista: ${viewMode === "current" ? "Mes Actual" : viewMode === "historical" ? "Histórico" : "Completo"}</p>
+          </div>
+          
+          <div class="summary">
+            <div class="summary-item">
+              <h3>Vencidos</h3>
+              <p style="font-size: 24px; color: #d32f2f;">${cronogramData?.overdue?.length || 0}</p>
+              <p>$${(cronogramData?.summary?.total_overdue || 0).toLocaleString()}</p>
             </div>
-            <div className="text-right space-y-2">
-              <p className="text-xl font-bold">{formatCurrency(installment.amount)}</p>
-              <Badge variant={installment.status === "overdue" ? "destructive" : "secondary"} className="block">
-                {installment.status === "overdue" ? "Vencida" : "Pendiente"}
-              </Badge>
-              <Button size="sm" className="w-full mt-2" onClick={() => openReceiptModal(installment)}>
-                <Plus className="h-4 w-4 mr-1" />
-                Nuevo Recibo
-              </Button>
+            <div class="summary-item">
+              <h3>Hoy</h3>
+              <p style="font-size: 24px; color: #f57c00;">${cronogramData?.today?.length || 0}</p>
+              <p>$${(cronogramData?.summary?.total_due_today || 0).toLocaleString()}</p>
+            </div>
+            <div class="summary-item">
+              <h3>Próximos</h3>
+              <p style="font-size: 24px; color: #1976d2;">${cronogramData?.upcoming?.length || 0}</p>
+              <p>$${(cronogramData?.summary?.total_upcoming || 0).toLocaleString()}</p>
+            </div>
+            <div class="summary-item">
+              <h3>Pagados</h3>
+              <p style="font-size: 24px; color: #388e3c;">${cronogramData?.paid?.length || 0}</p>
+              <p>$${(cronogramData?.summary?.total_paid || 0).toLocaleString()}</p>
             </div>
           </div>
-        </CardContent>
-      </Card>
-    )
+
+          <table>
+            <thead>
+              <tr>
+                <th>Préstamo</th>
+                <th>Cliente</th>
+                <th>Cuota</th>
+                <th>Fecha Vencimiento</th>
+                <th>Monto</th>
+                <th>Estado</th>
+                <th>Fecha Pago</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${allItems
+                .map(
+                  (item) => `
+                <tr class="${item.status === "overdue" ? "overdue" : item.status === "due_today" ? "today" : item.status === "paid" ? "paid" : ""}">
+                  <td>${item.loan_code || ""}</td>
+                  <td>${item.client_name || ""}</td>
+                  <td>${item.installment_number || ""}</td>
+                  <td>${item.due_date ? new Date(item.due_date).toLocaleDateString() : ""}</td>
+                  <td>$${(item.amount || 0).toLocaleString()}</td>
+                  <td>${item.status || ""}</td>
+                  <td>${item.paid_at ? new Date(item.paid_at).toLocaleDateString() : "-"}</td>
+                </tr>
+              `,
+                )
+                .join("")}
+            </tbody>
+          </table>
+          <script>window.print(); window.close();</script>
+        </body>
+      </html>
+    `
+
+    printWindow.document.write(printContent)
+    printWindow.document.close()
   }
 
-  const ReceiptCard = ({ receipt }: { receipt: Receipt }) => (
-    <Card className="mb-3 border-green-200 bg-green-50">
-      <CardContent className="p-4">
-        <div className="flex justify-between items-start">
-          <div className="flex-1">
-            <h4 className="font-semibold text-lg text-green-800">
-              {receipt.clients.first_name} {receipt.clients.last_name}
-            </h4>
-            <p className="text-sm text-green-600">Recibo N° {receipt.receipt_number}</p>
-            <p className="text-sm text-green-600">
-              {receipt.selected_loans?.[0]?.loan_code && <>Préstamo: {receipt.selected_loans[0].loan_code}</>}
-            </p>
-            <p className="text-sm text-muted-foreground">
-              Tipo: {receipt.payment_type} - {formatDate(receipt.receipt_date)}
-            </p>
-          </div>
-          <div className="text-right space-y-2">
-            <p className="text-xl font-bold text-green-700">{formatCurrency(receipt.total_amount)}</p>
-            <Badge variant="secondary" className="block bg-green-100 text-green-800">
-              Pagado
-            </Badge>
-            <Button
-              size="sm"
-              variant="outline"
-              className="w-full mt-2 bg-green-100 border-green-300 text-green-700 hover:bg-green-200"
-              onClick={() => shareReceiptViaWhatsApp(receipt)}
-            >
-              <MessageCircle className="h-4 w-4 mr-1" />
-              Compartir
-            </Button>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  )
-
-  const filterData = (items: (Installment | Receipt)[], searchTerm: string) => {
-    if (!searchTerm.trim()) return items
-
-    const term = searchTerm.toLowerCase().trim()
-
-    return items.filter((item) => {
-      // For installments
-      if ("client_name" in item) {
-        return item.client_name.toLowerCase().includes(term) || item.loan_code.toLowerCase().includes(term)
-      }
-      // For receipts
-      if ("clients" in item) {
-        const fullName = `${item.clients.first_name} ${item.clients.last_name}`.toLowerCase()
-        return fullName.includes(term) || (item.receipt_number && item.receipt_number.toLowerCase().includes(term))
-      }
-      return false
-    })
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case "overdue":
+        return (
+          <Badge variant="destructive" className="gap-1">
+            <AlertCircle className="h-3 w-3" />
+            Vencido
+          </Badge>
+        )
+      case "due_today":
+        return (
+          <Badge variant="secondary" className="gap-1">
+            <Clock className="h-3 w-3" />
+            Hoy
+          </Badge>
+        )
+      case "paid":
+        return (
+          <Badge variant="default" className="gap-1 bg-green-600">
+            <CheckCircle className="h-3 w-3" />
+            Pagado
+          </Badge>
+        )
+      default:
+        return (
+          <Badge variant="outline" className="gap-1">
+            <Calendar className="h-3 w-3" />
+            Próximo
+          </Badge>
+        )
+    }
   }
-
-  const filteredTodayInstallments = filterData(todayInstallments, searchFilter) as Installment[]
-  const filteredOverdueInstallments = filterData(overdueInstallments, searchFilter) as Installment[]
-  const filteredMonthInstallments = filterData(monthInstallments, searchFilter) as Installment[]
-  const filteredTodayReceipts = filterData(todayReceipts, searchFilter) as Receipt[]
 
   if (loading) {
     return (
-      <div className="space-y-6">
-        <AppHeader title="Cronograma de Pagos" />
-        <div className="flex items-center justify-center h-64">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-            <p className="mt-2 text-muted-foreground">Cargando cronograma...</p>
-          </div>
+      <PageLayout title="Cronograma de Pagos">
+        <div className="text-center py-8">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+          <p className="mt-2 text-muted-foreground">Cargando cronograma...</p>
         </div>
-      </div>
+      </PageLayout>
     )
   }
 
+  const allItems = [
+    ...(cronogramData?.overdue || []).map((item: any) => ({ ...item, status: "overdue" })),
+    ...(cronogramData?.today || []).map((item: any) => ({ ...item, status: "due_today" })),
+    ...(cronogramData?.upcoming || []).map((item: any) => ({ ...item, status: "pending" })),
+    ...(cronogramData?.paid || []).map((item: any) => ({ ...item, status: "paid" })),
+  ]
+
+  const filteredItems = allItems.filter((item: CronogramItem) => {
+    const matchesSearch =
+      (item.loan_code || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (item.client_name || "").toLowerCase().includes(searchTerm.toLowerCase())
+
+    const matchesStatus = statusFilter === "all" || item.status === statusFilter
+
+    return matchesSearch && matchesStatus
+  })
+
+  const paidInstallments = cronogramData?.debug?.installments_by_status?.pagadas || 0
+  console.log("[v0] Paid installments tracked:", paidInstallments)
+  console.log("[v0] Debug info:", cronogramData?.debug)
+
   return (
-    <div className="space-y-6">
-      <AppHeader title="Cronograma de Pagos" />
+    <PageLayout title="Cronograma de Pagos" showPrintButton={true} onPrint={handlePrintCronogram}>
+      <div className="space-y-6">
+        <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+          <Tabs value={viewMode} onValueChange={(value) => setViewMode(value as ViewMode)} className="w-full sm:w-auto">
+            <TabsList className="grid w-full grid-cols-3 sm:w-auto">
+              <TabsTrigger value="current" className="gap-2">
+                <Calendar className="h-4 w-4" />
+                Actual
+              </TabsTrigger>
+              <TabsTrigger value="historical" className="gap-2">
+                <History className="h-4 w-4" />
+                Histórico
+              </TabsTrigger>
+              <TabsTrigger value="all" className="gap-2">
+                <Filter className="h-4 w-4" />
+                Completo
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
 
-      <Card className="border-gray-200">
-        <CardContent className="p-4">
-          <div className="flex items-center space-x-4">
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-              <Input
-                placeholder="Buscar por nombre del cliente, DNI o código de préstamo..."
-                value={searchFilter}
-                onChange={(e) => setSearchFilter(e.target.value)}
-                className="pl-10"
-              />
-            </div>
-            {searchFilter && (
-              <Button variant="outline" size="sm" onClick={() => setSearchFilter("")}>
-                Limpiar
-              </Button>
-            )}
+          <div className="flex gap-2 w-full sm:w-auto">
+            <Select value={dateRange} onValueChange={setDateRange}>
+              <SelectTrigger className="w-full sm:w-[180px]">
+                <SelectValue placeholder="Rango de fechas" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="current_month">Mes Actual</SelectItem>
+                <SelectItem value="last_month">Mes Anterior</SelectItem>
+                <SelectItem value="last_3_months">Últimos 3 Meses</SelectItem>
+                <SelectItem value="last_6_months">Últimos 6 Meses</SelectItem>
+                <SelectItem value="current_year">Año Actual</SelectItem>
+                <SelectItem value="all_time">Todo el Tiempo</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
-          {searchFilter && (
-            <p className="text-sm text-muted-foreground mt-2">Mostrando resultados para: "{searchFilter}"</p>
-          )}
-        </CardContent>
-      </Card>
+        </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Sección HOY */}
-        <div className="space-y-4">
-          <Card className="border-blue-200 bg-blue-50">
-            <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-2 text-blue-700">
-                <Calendar className="h-5 w-5" />
-                Hoy
-                {searchFilter && (
-                  <Badge variant="secondary" className="ml-2">
-                    {filteredTodayInstallments.length + filteredTodayReceipts.length}
-                  </Badge>
-                )}
-              </CardTitle>
+        {/* Resumen */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Pagos Vencidos</CardTitle>
+              <AlertCircle className="h-4 w-4 text-destructive" />
             </CardHeader>
             <CardContent>
-              <div className="space-y-3 mb-4 bg-white/50 p-3 rounded-lg border">
-                <div className="flex justify-between text-sm">
-                  <span className="font-medium text-gray-700">Por cobrar hoy:</span>
-                  <span className="font-bold text-lg text-blue-700">{formatCurrency(summary.total_due_today)}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="font-medium text-gray-700">Cobrado hoy:</span>
-                  <span className="font-bold text-lg text-green-700">
-                    {formatCurrency(summary.total_received_today)}
-                  </span>
-                </div>
-              </div>
+              <div className="text-2xl font-bold text-destructive">{cronogramData?.overdue?.length || 0}</div>
+              <p className="text-xs text-muted-foreground">
+                ${(cronogramData?.summary?.total_overdue || 0).toLocaleString()}
+              </p>
+            </CardContent>
+          </Card>
 
-              <div className="space-y-2 max-h-96 overflow-y-auto">
-                {filteredTodayReceipts.length > 0 && (
-                  <div className="mb-4">
-                    <h5 className="text-sm font-semibold text-green-700 mb-2">Recibos Generados Hoy</h5>
-                    {filteredTodayReceipts.map((receipt) => (
-                      <ReceiptCard key={receipt.id} receipt={receipt} />
-                    ))}
-                  </div>
-                )}
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Vencen Hoy</CardTitle>
+              <Clock className="h-4 w-4 text-orange-500" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-orange-600">{cronogramData?.today?.length || 0}</div>
+              <p className="text-xs text-muted-foreground">
+                ${(cronogramData?.summary?.total_due_today || 0).toLocaleString()}
+              </p>
+            </CardContent>
+          </Card>
 
-                {filteredTodayInstallments.filter((inst) => {
-                  const key = `${inst.loan_code}-${inst.installment_number}`
-                  return !paidInstallments.has(key) && inst.status !== "paid"
-                }).length > 0 && (
-                  <div>
-                    <h5 className="text-sm font-semibold text-blue-700 mb-2">Cuotas Pendientes</h5>
-                    {filteredTodayInstallments.map((installment) => (
-                      <InstallmentCard key={installment.id} installment={installment} />
-                    ))}
-                  </div>
-                )}
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Próximos Pagos</CardTitle>
+              <Calendar className="h-4 w-4 text-blue-500" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-blue-600">{cronogramData?.upcoming?.length || 0}</div>
+              <p className="text-xs text-muted-foreground">
+                ${(cronogramData?.summary?.total_upcoming || 0).toLocaleString()}
+              </p>
+            </CardContent>
+          </Card>
 
-                {filteredTodayInstallments.filter((inst) => {
-                  const key = `${inst.loan_code}-${inst.installment_number}`
-                  return !paidInstallments.has(key) && inst.status !== "paid"
-                }).length === 0 &&
-                  filteredTodayReceipts.length === 0 && (
-                    <p className="text-center text-muted-foreground py-4">
-                      {searchFilter ? "No se encontraron resultados" : "No hay cuotas ni recibos para hoy"}
-                    </p>
-                  )}
-
-                {filteredTodayInstallments.filter((inst) => {
-                  const key = `${inst.loan_code}-${inst.installment_number}`
-                  return !paidInstallments.has(key) && inst.status !== "paid"
-                }).length === 0 &&
-                  filteredTodayReceipts.length > 0 && (
-                    <p className="text-center text-green-600 py-2 text-sm font-medium">
-                      ✅ Todas las cuotas de hoy han sido cobradas
-                    </p>
-                  )}
-              </div>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Pagos Realizados</CardTitle>
+              <CheckCircle className="h-4 w-4 text-green-500" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-green-600">{cronogramData?.paid?.length || 0}</div>
+              <p className="text-xs text-muted-foreground">
+                ${(cronogramData?.summary?.total_paid || 0).toLocaleString()}
+              </p>
             </CardContent>
           </Card>
         </div>
 
-        {/* Sección VENCIDOS */}
-        <div className="space-y-4">
-          <Card className="border-red-200 bg-red-50">
-            <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-2 text-red-700">
-                <AlertTriangle className="h-5 w-5" />
-                Vencidos
-                {searchFilter && (
-                  <Badge variant="secondary" className="ml-2">
-                    {filteredOverdueInstallments.length}
-                  </Badge>
-                )}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3 mb-4 bg-white/50 p-3 rounded-lg border">
-                <div className="flex justify-between text-sm">
-                  <span className="font-medium text-gray-700">Total vencido:</span>
-                  <span className="font-bold text-lg text-red-700">{formatCurrency(summary.total_overdue)}</span>
-                </div>
-              </div>
-
-              <div className="space-y-2 max-h-96 overflow-y-auto">
-                {filteredOverdueInstallments.length > 0 ? (
-                  filteredOverdueInstallments.map((installment) => (
-                    <InstallmentCard key={installment.id} installment={installment} />
-                  ))
-                ) : (
-                  <p className="text-center text-muted-foreground py-4">
-                    {searchFilter ? "No se encontraron resultados" : "No hay cuotas vencidas"}
-                  </p>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Sección MES */}
-        <div className="space-y-4">
-          <Card className="border-green-200 bg-green-50">
-            <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-2 text-green-700">
-                <DollarSign className="h-5 w-5" />
-                Este Mes
-                {searchFilter && (
-                  <Badge variant="secondary" className="ml-2">
-                    {filteredMonthInstallments.length}
-                  </Badge>
-                )}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3 mb-4 bg-white/50 p-3 rounded-lg border">
-                <div className="flex justify-between text-sm">
-                  <span className="font-medium text-gray-700">Total a cobrar:</span>
-                  <span className="font-bold text-lg text-gray-800">
-                    {formatCurrency(summary.total_due_month + summary.total_received_month)}
-                  </span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="font-medium text-gray-700">Ya cobrado:</span>
-                  <span className="font-bold text-lg text-green-700">
-                    {formatCurrency(summary.total_received_month)}
-                  </span>
-                </div>
-                <div className="flex justify-between text-sm border-t pt-2 mt-2">
-                  <span className="font-semibold text-gray-800">Pendiente:</span>
-                  <span className="font-bold text-xl text-orange-600">{formatCurrency(summary.total_due_month)}</span>
-                </div>
-              </div>
-
-              <div className="space-y-2 max-h-96 overflow-y-auto">
-                {filteredMonthInstallments.length > 0 ? (
-                  filteredMonthInstallments.map((installment) => (
-                    <InstallmentCard key={installment.id} installment={installment} />
-                  ))
-                ) : (
-                  <p className="text-center text-muted-foreground py-4">
-                    {searchFilter ? "No se encontraron resultados" : "No hay cuotas para este mes"}
-                  </p>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-
-      {/* Receipt Modal */}
-      <Dialog open={isReceiptModalOpen} onOpenChange={setIsReceiptModalOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Nuevo Recibo - {receiptForm.client_name}</DialogTitle>
-          </DialogHeader>
-
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+        {/* Tabla de Cronograma */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
               <div>
-                <Label htmlFor="receipt_date">Fecha</Label>
+                <CardTitle>Cronograma Completo</CardTitle>
+                <CardDescription>
+                  {viewMode === "current" && "Pagos del mes actual"}
+                  {viewMode === "historical" && "Datos históricos de pagos"}
+                  {viewMode === "all" && "Todos los pagos programados y realizados"}
+                </CardDescription>
+              </div>
+              <Button onClick={handlePrintCronogram} variant="outline" className="gap-2 bg-transparent">
+                <Printer className="h-4 w-4" />
+                Imprimir Cronograma
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 mb-6">
+              <div className="relative flex-1 max-w-sm">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
                 <Input
-                  id="receipt_date"
-                  type="date"
-                  value={receiptForm.receipt_date}
-                  onChange={(e) => setReceiptForm({ ...receiptForm, receipt_date: e.target.value })}
+                  placeholder="Buscar por préstamo o cliente..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
                 />
               </div>
-              <div>
-                <Label htmlFor="payment_type">Tipo de Pago</Label>
-                <Select
-                  value={receiptForm.payment_type}
-                  onValueChange={(value) => setReceiptForm({ ...receiptForm, payment_type: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Total">Total</SelectItem>
-                    <SelectItem value="Parcial">Parcial</SelectItem>
-                  </SelectContent>
-                </Select>
+
+              <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as StatusFilter)}>
+                <SelectTrigger className="w-full sm:w-[180px]">
+                  <SelectValue placeholder="Filtrar por estado" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos los Estados</SelectItem>
+                  <SelectItem value="overdue">Vencidos</SelectItem>
+                  <SelectItem value="due_today">Vencen Hoy</SelectItem>
+                  <SelectItem value="pending">Próximos</SelectItem>
+                  <SelectItem value="paid">Pagados</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <div className="text-sm text-muted-foreground whitespace-nowrap">
+                {filteredItems.length} pago{filteredItems.length !== 1 ? "s" : ""} encontrado
+                {filteredItems.length !== 1 ? "s" : ""}
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="cash_amount">Importe en Efectivo</Label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">$</span>
-                  <Input
-                    id="cash_amount"
-                    type="text"
-                    placeholder="Ej: 15000.50"
-                    className="pl-8"
-                    value={receiptForm.cash_amount || "0"}
-                    onChange={(e) =>
-                      setReceiptForm({ ...receiptForm, cash_amount: formatCurrencyInput(e.target.value) })
-                    }
-                  />
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">Formato: 15000.50 (sin puntos ni espacios)</p>
+            <div className="rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Préstamo</TableHead>
+                    <TableHead>Cliente</TableHead>
+                    <TableHead>Cuota</TableHead>
+                    <TableHead>Fecha Vencimiento</TableHead>
+                    <TableHead>Monto</TableHead>
+                    <TableHead>Saldo</TableHead>
+                    <TableHead>Estado</TableHead>
+                    <TableHead>Fecha Pago</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredItems.map((item: CronogramItem) => (
+                    <TableRow key={`${item.id}-${item.installment_number}`}>
+                      <TableCell className="font-medium">{item.loan_code || "-"}</TableCell>
+                      <TableCell>{item.client_name || "-"}</TableCell>
+                      <TableCell>{item.installment_number || "-"}</TableCell>
+                      <TableCell>{item.due_date ? new Date(item.due_date).toLocaleDateString() : "-"}</TableCell>
+                      <TableCell>${(item.amount || 0).toLocaleString()}</TableCell>
+                      <TableCell>${(item.balance_due || 0).toLocaleString()}</TableCell>
+                      <TableCell>{getStatusBadge(item.status)}</TableCell>
+                      <TableCell>{item.paid_at ? new Date(item.paid_at).toLocaleDateString() : "-"}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+
+            {filteredItems.length === 0 && (
+              <div className="text-center py-8">
+                <p className="text-muted-foreground">
+                  {cronogramData?.debug?.total_installments === 0
+                    ? "No se encontraron cuotas en la base de datos. Asegúrate de que existan préstamos con cuotas generadas."
+                    : searchTerm || statusFilter !== "all"
+                      ? "No se encontraron resultados para los filtros aplicados."
+                      : "No hay datos disponibles para el rango seleccionado."}
+                </p>
+                {cronogramData?.debug && (
+                  <div className="mt-4 text-xs text-muted-foreground">
+                    <p>Total de cuotas en BD: {cronogramData.debug.total_installments}</p>
+                    <p>Fecha actual (Argentina): {cronogramData.debug.argentina_time}</p>
+                    <p>
+                      Vista actual: {viewMode} | Rango: {dateRange}
+                    </p>
+                  </div>
+                )}
               </div>
-              <div>
-                <Label htmlFor="transfer_amount">Importe en Transferencia</Label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">$</span>
-                  <Input
-                    id="transfer_amount"
-                    type="text"
-                    placeholder="Ej: 5000.00"
-                    className="pl-8"
-                    value={receiptForm.transfer_amount || "0"}
-                    onChange={(e) =>
-                      setReceiptForm({ ...receiptForm, transfer_amount: formatCurrencyInput(e.target.value) })
-                    }
-                  />
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">Formato: 5000.00 (sin puntos ni espacios)</p>
-              </div>
-            </div>
-
-            <div>
-              <Label htmlFor="observations">Observaciones</Label>
-              <Textarea
-                id="observations"
-                rows={3}
-                placeholder="Observaciones adicionales..."
-                value={receiptForm.observations}
-                onChange={(e) => setReceiptForm({ ...receiptForm, observations: e.target.value })}
-              />
-            </div>
-
-            <div className="bg-gray-50 p-3 rounded-lg">
-              <h4 className="font-semibold mb-2">Detalle del Pago</h4>
-              <p className="text-sm text-muted-foreground">Cliente: {receiptForm.client_name}</p>
-              <p className="text-sm text-muted-foreground">Préstamo: {receiptForm.loan_code}</p>
-              <p className="text-sm text-muted-foreground">
-                Cuota: {selectedInstallment?.installment_number} de {selectedInstallment?.total_installments}
-              </p>
-              <p className="text-sm font-semibold">
-                Monto: {selectedInstallment ? formatCurrency(selectedInstallment.amount) : "$0.00"}
-              </p>
-            </div>
-
-            <div className="flex justify-end space-x-2 pt-4">
-              <Button variant="outline" onClick={() => setIsReceiptModalOpen(false)} disabled={isCreatingReceipt}>
-                Cancelar
-              </Button>
-              <Button
-                onClick={handleCreateReceipt}
-                disabled={isCreatingReceipt || !receiptForm.client_id}
-                className={isCreatingReceipt ? "opacity-50 cursor-not-allowed" : ""}
-              >
-                {isCreatingReceipt ? "Creando..." : "Crear Recibo"}
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-    </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </PageLayout>
   )
 }
