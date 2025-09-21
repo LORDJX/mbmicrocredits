@@ -1,6 +1,6 @@
 import type React from "react"
 import type { Metadata } from "next"
-import { Inter, Work_Sans } from "next/font/google"
+import { Inter } from "next/font/google"
 import "./globals.css"
 
 const inter = Inter({
@@ -9,15 +9,9 @@ const inter = Inter({
   variable: "--font-inter",
 })
 
-const workSans = Work_Sans({
-  subsets: ["latin"],
-  display: "swap",
-  variable: "--font-work-sans",
-})
-
 export const metadata: Metadata = {
-  title: "MB Microcréditos",
-  description: "Sistema profesional de gestión de microcréditos",
+  title: "BM Microcréditos",
+  description: "Sistema de gestión de microcréditos",
   generator: "v0.dev",
 }
 
@@ -27,7 +21,7 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="es" className={`${inter.variable} ${workSans.variable} dark`}>
+    <html lang="es" className={inter.variable}>
       <body className="font-sans antialiased">{children}</body>
     </html>
   )

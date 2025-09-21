@@ -17,7 +17,7 @@ import {
   Receipt,
   Calendar,
   Calculator,
-  Clock,
+  CalendarClock,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -33,7 +33,7 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { createClient } from "@/lib/supabase/client"
+import { supabase } from "@/lib/supabaseClient"
 import { useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
 
@@ -45,7 +45,12 @@ const navItems = [
   { title: "Préstamos", href: "/dashboard/loans", icon: CreditCard, route: "loans" },
   { title: "Recibo", href: "/dashboard/receipts", icon: Receipt, route: "receipts" },
   { title: "Cronograma", href: "/dashboard/cronograma", icon: Calendar, route: "cronograma" },
-  { title: "Cuotas", href: "/dashboard/cuotas", icon: Clock, route: "cuotas" },
+  {
+    title: "Cronograma Mejorado",
+    href: "/dashboard/cronograma/enhanced",
+    icon: CalendarClock,
+    route: "cronograma-enhanced",
+  },
   { title: "Transacciones", href: "/dashboard/transactions", icon: DollarSign, route: "transactions" },
   { title: "Seguimientos", href: "/dashboard/followups", icon: CalendarCheck, route: "followups" },
   { title: "Resumen para Socios", href: "/dashboard/resumen", icon: FileText, route: "reports" },
@@ -58,9 +63,6 @@ export function DashboardSidebar() {
   const router = useRouter()
   const [userPermissions, setUserPermissions] = useState<string[]>([])
   const [permissionsLoaded, setPermissionsLoaded] = useState(false)
-  const [currentUser, setCurrentUser] = useState<{ email: string; name: string } | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const supabase = createClient()
 
   useEffect(() => {
     const loadUserPermissions = async () => {
@@ -68,91 +70,32 @@ export function DashboardSidebar() {
         const {
           data: { user },
         } = await supabase.auth.getUser()
-
-        console.log("[v0] User from auth:", user?.id)
-
         if (user) {
-          setCurrentUser({
-            email: user.email || "Usuario",
-            name: user.user_metadata?.name || user.email?.split("@")[0] || "Usuario",
-          })
-
-          const url = `/api/users/permissions?userId=${user.id}`
-          console.log("[v0] Fetching permissions from:", url)
-
-          const response = await fetch(url, {
-            headers: {
-              "Content-Type": "application/json",
-            },
-            credentials: "include",
-          })
-
-          console.log("[v0] Response status:", response.status)
-          console.log("[v0] Response headers:", Object.fromEntries(response.headers.entries()))
-
-          if (!response.ok) {
-            const errorText = await response.text()
-            console.error("[v0] API Error Response:", errorText)
-            throw new Error(`HTTP error! status: ${response.status}`)
-          }
-
-          const contentType = response.headers.get("content-type")
-          if (!contentType || !contentType.includes("application/json")) {
-            console.error("[v0] Response is not JSON, content-type:", contentType)
-            const text = await response.text()
-            console.error("[v0] Response text:", text.substring(0, 200))
-            throw new Error(`API returned non-JSON response: ${response.status}`)
-          }
-
+          const response = await fetch(`/api/users/permissions?userId=${user.id}`)
           const data = await response.json()
-          console.log("[v0] Permissions data:", data)
 
           if (data.permissions && Array.isArray(data.permissions)) {
             setUserPermissions(data.permissions)
           } else {
-            setUserPermissions([
-              "dashboard",
-              "clients",
-              "loans",
-              "receipts",
-              "cronograma",
-              "cuotas",
-              "transactions",
-              "formulas",
-            ])
+            setUserPermissions(["dashboard", "clients", "loans", "receipts", "cronograma", "transactions", "formulas"])
           }
-        } else {
-          console.log("[v0] No user found, using default permissions")
-          router.push("/auth/login")
-          return
         }
       } catch (error) {
         console.error("Error loading permissions:", error)
-        setUserPermissions(["dashboard", "clients", "loans", "cronograma", "formulas"])
-        setError("No se pudieron cargar los permisos. Usando permisos básicos.")
+        setUserPermissions(["dashboard", "clients", "loans", "cronograma", "transactions", "formulas"])
       } finally {
         setPermissionsLoaded(true)
       }
     }
 
     loadUserPermissions()
-  }, [router, supabase.auth])
+  }, [])
 
   const filteredNavItems = navItems.filter((item) => userPermissions.includes(item.route) || item.route === "dashboard")
 
   const handleLogout = async () => {
-    try {
-      console.log("[v0] Logging out user")
-      await supabase.auth.signOut()
-      setUserPermissions([])
-      setCurrentUser(null)
-      setPermissionsLoaded(false)
-      router.push("/auth/login")
-      router.refresh()
-    } catch (error) {
-      console.error("[v0] Logout error:", error)
-      router.push("/auth/login")
-    }
+    await supabase.auth.signOut()
+    router.push("/login")
   }
 
   if (!permissionsLoaded) {
@@ -205,10 +148,7 @@ export function DashboardSidebar() {
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="w-full justify-start text-left hover:bg-primary/10">
               <User2 className="mr-2 size-5" />
-              <div className="flex-grow text-left">
-                <div className="text-sm font-medium">{currentUser?.name || "Usuario"}</div>
-                <div className="text-xs text-muted-foreground truncate">{currentUser?.email}</div>
-              </div>
+              <span className="flex-grow">Mi Cuenta</span>
               <ChevronDown className="size-4" />
             </Button>
           </DropdownMenuTrigger>
