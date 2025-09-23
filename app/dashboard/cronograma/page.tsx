@@ -20,34 +20,23 @@ interface CronogramItem {
   status: string
   paid_at?: string
   payment_date?: string
-  balance_due?: number
 }
-
-type ViewMode = "current" | "historical" | "all"
-type StatusFilter = "all" | "overdue" | "due_today" | "pending" | "paid"
 
 export default function DashboardCronogramaPage() {
   const [cronogramData, setCronogramData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
-  const [viewMode, setViewMode] = useState<ViewMode>("current")
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all")
-  const [dateRange, setDateRange] = useState<string>("current_month")
   const { toast } = useToast()
 
   useEffect(() => {
     fetchCronogramData()
-  }, [viewMode, dateRange])
+  }, [])
 
   const fetchCronogramData = async () => {
     setLoading(true)
     try {
       console.log("[v0] Fetching cronograma data...")
-      const params = new URLSearchParams({
-        view: viewMode,
-        range: dateRange,
-      })
-      const response = await fetch(`/api/cronograma?${params}`)
+      const response = await fetch("/api/cronograma")
       if (!response.ok) throw new Error("Error al cargar cronograma")
       const data = await response.json()
       console.log("[v0] Cronograma API response:", data)
@@ -99,7 +88,6 @@ export default function DashboardCronogramaPage() {
             <h1>BM MICROCRÉDITOS</h1>
             <h2>Cronograma de Pagos</h2>
             <p>Fecha de Reporte: ${new Date().toLocaleDateString()}</p>
-            <p>Vista: ${viewMode === "current" ? "Mes Actual" : viewMode === "historical" ? "Histórico" : "Completo"}</p>
           </div>
           
           <div class="summary">
@@ -142,12 +130,12 @@ export default function DashboardCronogramaPage() {
                 .map(
                   (item) => `
                 <tr class="${item.status === "overdue" ? "overdue" : item.status === "due_today" ? "today" : item.status === "paid" ? "paid" : ""}">
-                  <td>${item.loan_code || ""}</td>
-                  <td>${item.client_name || ""}</td>
-                  <td>${item.installment_number || ""}</td>
-                  <td>${item.due_date ? new Date(item.due_date).toLocaleDateString() : ""}</td>
-                  <td>$${(item.amount || 0).toLocaleString()}</td>
-                  <td>${item.status || ""}</td>
+                  <td>${item.loan_code}</td>
+                  <td>${item.client_name}</td>
+                  <td>${item.installment_number}</td>
+                  <td>${new Date(item.due_date).toLocaleDateString()}</td>
+                  <td>$${item.amount.toLocaleString()}</td>
+                  <td>${item.status}</td>
                   <td>${item.paid_at ? new Date(item.paid_at).toLocaleDateString() : "-"}</td>
                 </tr>
               `,
@@ -200,7 +188,15 @@ export default function DashboardCronogramaPage() {
   if (loading) {
     return (
       <div className="space-y-6">
-        <AppHeader title="Cronograma de Pagos" subtitle="Gestión de pagos programados y realizados" />
+        <AppHeader
+          title="Cronograma de Pagos"
+          actions={
+            <Button onClick={handlePrintCronogram} variant="outline" className="gap-2 bg-transparent">
+              <Printer className="h-4 w-4" />
+              Imprimir
+            </Button>
+          }
+        />
         <div className="text-center py-8">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
           <p className="mt-2 text-muted-foreground">Cargando cronograma...</p>
@@ -216,15 +212,11 @@ export default function DashboardCronogramaPage() {
     ...(cronogramData?.paid || []).map((item: any) => ({ ...item, status: "paid" })),
   ]
 
-  const filteredItems = allItems.filter((item: CronogramItem) => {
-    const matchesSearch =
-      (item.loan_code || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (item.client_name || "").toLowerCase().includes(searchTerm.toLowerCase())
-
-    const matchesStatus = statusFilter === "all" || item.status === statusFilter
-
-    return matchesSearch && matchesStatus
-  })
+  const filteredItems = allItems.filter(
+    (item: CronogramItem) =>
+      item.loan_code.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      item.client_name.toLowerCase().includes(searchTerm.toLowerCase()),
+  )
 
   const paidInstallments = cronogramData?.debug?.installments_by_status?.pagadas || 0
   console.log("[v0] Paid installments tracked:", paidInstallments)
@@ -232,12 +224,15 @@ export default function DashboardCronogramaPage() {
 
   return (
     <div className="space-y-6">
-      <AppHeader title="Cronograma de Pagos" subtitle="Gestión de pagos programados y realizados">
-        <Button onClick={handlePrintCronogram} variant="outline" className="gap-2 bg-transparent">
-          <Printer className="h-4 w-4" />
-          Imprimir Cronograma
-        </Button>
-      </AppHeader>
+      <AppHeader
+        title="Cronograma de Pagos"
+        actions={
+          <Button onClick={handlePrintCronogram} variant="outline" className="gap-2 bg-transparent">
+            <Printer className="h-4 w-4" />
+            Imprimir Cronograma
+          </Button>
+        }
+      />
 
       {/* Resumen */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
