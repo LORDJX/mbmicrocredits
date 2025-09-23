@@ -3,49 +3,49 @@ import { createClient } from "@/lib/supabase/server"
 
 export async function GET(request: NextRequest) {
   try {
-    const supabase = createClient()
+    const supabase = await createClient()
+
     const { searchParams } = new URL(request.url)
     const viewMode = searchParams.get("view") || "current"
-    const dateRange = searchParams.get("range") || "current_month"
+    const dateRange = searchParams.get("dateRange") || "current_month"
+    const statusFilter = searchParams.get("status") || "all"
+    const searchQuery = searchParams.get("search") || ""
 
     const today = new Date()
     const argentinaTime = new Date(today.toLocaleString("en-US", { timeZone: "America/Argentina/Buenos_Aires" }))
     const todayStr = argentinaTime.toISOString().split("T")[0]
 
-    let startDate: Date, endDate: Date
-
-    switch (dateRange) {
-      case "last_month":
-        startDate = new Date(argentinaTime.getFullYear(), argentinaTime.getMonth() - 1, 1)
-        endDate = new Date(argentinaTime.getFullYear(), argentinaTime.getMonth(), 0)
-        break
-      case "last_3_months":
-        startDate = new Date(argentinaTime.getFullYear(), argentinaTime.getMonth() - 3, 1)
-        endDate = new Date(argentinaTime.getFullYear(), argentinaTime.getMonth() + 1, 0)
-        break
-      case "last_6_months":
-        startDate = new Date(argentinaTime.getFullYear(), argentinaTime.getMonth() - 6, 1)
-        endDate = new Date(argentinaTime.getFullYear(), argentinaTime.getMonth() + 1, 0)
-        break
-      case "current_year":
-        startDate = new Date(argentinaTime.getFullYear(), 0, 1)
-        endDate = new Date(argentinaTime.getFullYear(), 11, 31)
-        break
-      case "all_time":
-        startDate = new Date("2020-01-01") // Reasonable start date
-        endDate = new Date(argentinaTime.getFullYear() + 1, 11, 31)
-        break
-      default: // current_month
-        startDate = new Date(argentinaTime.getFullYear(), argentinaTime.getMonth(), 1)
-        endDate = new Date(argentinaTime.getFullYear(), argentinaTime.getMonth() + 1, 0)
-    }
-
     console.log("[v0] Cronograma API - Iniciando consulta de datos reales...")
     console.log("[v0] Cronograma API - Today (Argentina):", todayStr)
     console.log("[v0] Cronograma API - View mode:", viewMode)
     console.log("[v0] Cronograma API - Date range:", dateRange)
-    console.log("[v0] Cronograma API - Start date:", startDate.toISOString().split("T")[0])
-    console.log("[v0] Cronograma API - End date:", endDate.toISOString().split("T")[0])
+
+    // Calculate date ranges based on parameters
+    let startDate: string, endDate: string
+
+    if (dateRange === "current_month") {
+      const startOfMonth = new Date(argentinaTime.getFullYear(), argentinaTime.getMonth(), 1)
+      const endOfMonth = new Date(argentinaTime.getFullYear(), argentinaTime.getMonth() + 1, 0)
+      startDate = startOfMonth.toISOString().split("T")[0]
+      endDate = endOfMonth.toISOString().split("T")[0]
+    } else if (dateRange === "last_month") {
+      const startOfLastMonth = new Date(argentinaTime.getFullYear(), argentinaTime.getMonth() - 1, 1)
+      const endOfLastMonth = new Date(argentinaTime.getFullYear(), argentinaTime.getMonth(), 0)
+      startDate = startOfLastMonth.toISOString().split("T")[0]
+      endDate = endOfLastMonth.toISOString().split("T")[0]
+    } else if (dateRange === "custom") {
+      startDate = searchParams.get("startDate") || todayStr
+      endDate = searchParams.get("endDate") || todayStr
+    } else {
+      // Default to current month
+      const startOfMonth = new Date(argentinaTime.getFullYear(), argentinaTime.getMonth(), 1)
+      const endOfMonth = new Date(argentinaTime.getFullYear(), argentinaTime.getMonth() + 1, 0)
+      startDate = startOfMonth.toISOString().split("T")[0]
+      endDate = endOfMonth.toISOString().split("T")[0]
+    }
+
+    console.log("[v0] Cronograma API - Start date:", startDate)
+    console.log("[v0] Cronograma API - End date:", endDate)
 
     let query = supabase.from("installments_with_status").select(`
         id,
@@ -63,16 +63,21 @@ export async function GET(request: NextRequest) {
 
     // Apply date filtering based on view mode
     if (viewMode === "current") {
-      query = query
-        .gte("due_date", startDate.toISOString().split("T")[0])
-        .lte("due_date", endDate.toISOString().split("T")[0])
+      query = query.gte("due_date", startDate).lte("due_date", endDate)
     } else if (viewMode === "historical") {
-      query = query
-        .gte("due_date", startDate.toISOString().split("T")[0])
-        .lte("due_date", endDate.toISOString().split("T")[0])
-        .not("paid_at", "is", null) // Only show paid installments for historical view
+      query = query.gte("due_date", startDate).lte("due_date", endDate).not("paid_at", "is", null) // Only show paid installments for historical view
     }
     // For "all" mode, no date filtering is applied
+
+    // Apply status filtering
+    if (statusFilter !== "all") {
+      query = query.eq("status", statusFilter)
+    }
+
+    // Apply search query filtering
+    if (searchQuery) {
+      query = query.ilike("code", `%${searchQuery}%`)
+    }
 
     const { data: installments, error: installmentsError } = await query.order("due_date", { ascending: false })
 
@@ -234,8 +239,8 @@ export async function GET(request: NextRequest) {
     const { data: rangeReceipts } = await supabase
       .from("receipts")
       .select("total_amount, receipt_date")
-      .gte("receipt_date", startDate.toISOString().split("T")[0])
-      .lte("receipt_date", endDate.toISOString().split("T")[0])
+      .gte("receipt_date", startDate)
+      .lte("receipt_date", endDate)
 
     const totalReceivedToday = todayReceipts?.reduce((sum, r) => sum + (r.total_amount || 0), 0) || 0
     const totalReceivedRange = rangeReceipts?.reduce((sum, r) => sum + (r.total_amount || 0), 0) || 0
@@ -246,7 +251,12 @@ export async function GET(request: NextRequest) {
       total_overdue: overdueInstallments.reduce((sum, inst) => sum + (inst.amount || 0), 0),
       total_received_month: totalReceivedRange,
       total_due_month: processedInstallments
-        .filter((inst) => !inst.paid_at && new Date(inst.due_date) >= startDate && new Date(inst.due_date) <= endDate)
+        .filter(
+          (inst) =>
+            !inst.paid_at &&
+            new Date(inst.due_date) >= new Date(startDate) &&
+            new Date(inst.due_date) <= new Date(endDate),
+        )
         .reduce((sum, inst) => sum + (inst.amount || 0), 0),
       total_upcoming: upcomingInstallments.reduce((sum, inst) => sum + (inst.amount || 0), 0),
       total_paid: paidInstallments.reduce((sum, inst) => sum + (inst.amount || 0), 0),
