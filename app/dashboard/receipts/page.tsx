@@ -1,28 +1,22 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Separator } from "@/components/ui/separator"
-import { Receipt, DollarSign, Calendar, FileText, Printer, MessageCircle } from "lucide-react"
-
-interface PaymentImputation {
-  id: string
-  imputed_amount: number
-  installments: {
-    code: string
-    installment_no: number
-    due_date: string
-  }
-}
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Search, Download, Eye, Receipt, DollarSign } from "lucide-react"
+import { AppHeader } from "@/components/app-header"
+import { toast } from "sonner"
 
 interface Payment {
   id: string
   loan_id: string
   paid_amount: number
   paid_at: string
-  note: string | null
+  note?: string
   loans: {
     loan_code: string
     client_id: string
@@ -30,31 +24,37 @@ interface Payment {
       client_code: string
       first_name: string
       last_name: string
+      phone?: string
     }
   }
-  payment_imputations: PaymentImputation[]
+  payment_imputations: Array<{
+    id: string
+    imputed_amount: number
+    installments: {
+      code: string
+      installment_no: number
+      due_date: string
+    }
+  }>
 }
 
 export default function ReceiptsPage() {
   const [payments, setPayments] = useState<Payment[]>([])
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const [searchTerm, setSearchTerm] = useState("")
+
+  useEffect(() => {
+    fetchPayments()
+  }, [])
 
   const fetchPayments = async () => {
     try {
       setLoading(true)
-      setError(null)
+      console.log("[v0] Fetching payments from API...")
 
-      console.log("[v0] Fetching payments from /api/payments")
-      const response = await fetch("/api/payments", {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      })
-
+      const response = await fetch("/api/payments")
       console.log("[v0] Response status:", response.status)
-      console.log("[v0] Response headers:", Object.fromEntries(response.headers.entries()))
+      console.log("[v0] Response headers:", response.headers)
 
       if (!response.ok) {
         const errorText = await response.text()
@@ -62,29 +62,16 @@ export default function ReceiptsPage() {
         throw new Error(`HTTP ${response.status}: ${errorText}`)
       }
 
-      const contentType = response.headers.get("content-type")
-      console.log("[v0] Content-Type:", contentType)
-
-      if (!contentType || !contentType.includes("application/json")) {
-        const responseText = await response.text()
-        console.log("[v0] Non-JSON response:", responseText.substring(0, 200))
-        throw new Error(`Expected JSON response but got ${contentType}. Response: ${responseText.substring(0, 100)}...`)
-      }
-
       const data = await response.json()
-      console.log("[v0] Payments data:", data)
+      console.log("[v0] Payments data received:", data)
       setPayments(data)
-    } catch (err) {
-      console.error("[v0] Error fetching payments:", err)
-      setError(err instanceof Error ? err.message : "Error desconocido")
+    } catch (error) {
+      console.error("Error fetching payments:", error)
+      toast.error("Error al cargar recibos: " + (error as Error).message)
     } finally {
       setLoading(false)
     }
   }
-
-  useEffect(() => {
-    fetchPayments()
-  }, [])
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("es-AR", {
@@ -94,259 +81,187 @@ export default function ReceiptsPage() {
   }
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("es-AR", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-    })
+    return new Date(dateString).toLocaleDateString("es-AR")
   }
 
-  const getTotalReceived = () => {
-    return payments.reduce((total, payment) => total + payment.paid_amount, 0)
-  }
+  const filteredPayments = payments.filter(
+    (payment) =>
+      payment.loans.loan_code.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      `${payment.loans.clients.first_name} ${payment.loans.clients.last_name}`
+        .toLowerCase()
+        .includes(searchTerm.toLowerCase()) ||
+      payment.loans.clients.client_code.toLowerCase().includes(searchTerm.toLowerCase()),
+  )
 
-  const handlePrint = (payment: Payment) => {
-    const printContent = `
-      RECIBO DE PAGO
-      
-      Recibo N°: ${payment.id.slice(-6)}
-      Fecha: ${formatDate(payment.paid_at)}
-      Cliente: ${payment.loans.clients.first_name} ${payment.loans.clients.last_name}
-      Préstamo: ${payment.loans.loan_code}
-      
-      Total Pagado: ${formatCurrency(payment.paid_amount)}
-      
-      Imputaciones:
-      ${payment.payment_imputations
-        .map((imp) => `- Cuota ${imp.installments.installment_no}: ${formatCurrency(imp.imputed_amount)}`)
-        .join("\n")}
-      
-      Observaciones: ${payment.note || "Sin observaciones"}
-      
-      BM Microcréditos
-    `
-
-    const printWindow = window.open("", "_blank")
-    if (printWindow) {
-      printWindow.document.write(`
-        <html>
-          <head><title>Recibo de Pago</title></head>
-          <body style="font-family: monospace; white-space: pre-line; padding: 20px;">
-            ${printContent}
-          </body>
-        </html>
-      `)
-      printWindow.document.close()
-      printWindow.print()
-    }
-  }
-
-  const handleWhatsApp = (payment: Payment) => {
-    const message = `🧾 RECIBO DE PAGO
-
-📋 Recibo N°: Rbo - ${payment.id.slice(-6)}
-📅 Fecha: ${formatDate(payment.paid_at)}
-👤 Cliente: ${payment.loans.clients.first_name} ${payment.loans.clients.last_name}
-💰 Total Pagado: ${formatCurrency(payment.paid_amount)}
-💵 Efectivo: ${formatCurrency(payment.paid_amount)}
-🏦 Transferencia: $0.00
-📝 Tipo: ${payment.payment_imputations.length > 1 ? "Parcial" : "Total"}
-📋 Observaciones: ${payment.note || `Pago cuota ${payment.payment_imputations.map((imp) => imp.installments.installment_no).join(", ")}`}
-
-¡Gracias por su pago! 🙏
-BM Microcréditos`
-
-    const encodedMessage = encodeURIComponent(message)
-    const whatsappUrl = `https://web.whatsapp.com/send?text=${encodedMessage}`
-    window.open(whatsappUrl, "_blank")
-  }
+  const totalReceived = payments.reduce((sum, payment) => sum + payment.paid_amount, 0)
 
   if (loading) {
     return (
-      <div className="container mx-auto p-6">
+      <div className="space-y-6">
+        <AppHeader title="Recibos de Pago" />
         <div className="flex items-center justify-center h-64">
           <div className="text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-            <p>Cargando recibos...</p>
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+            <p className="mt-2 text-muted-foreground">Cargando recibos...</p>
           </div>
         </div>
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <div className="container mx-auto p-6">
-        <Card className="border-red-200 bg-red-50">
-          <CardHeader>
-            <CardTitle className="text-red-800">Error al cargar recibos</CardTitle>
-            <CardDescription className="text-red-600">{error}</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button onClick={fetchPayments} variant="outline">
-              Reintentar
-            </Button>
-          </CardContent>
-        </Card>
       </div>
     )
   }
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Recibos</h1>
-          <p className="text-muted-foreground">Gestión de recibos y pagos recibidos</p>
-        </div>
-        <Button onClick={fetchPayments} variant="outline">
-          Actualizar
-        </Button>
+    <div className="space-y-6">
+      <AppHeader title="Recibos de Pago" />
+
+      {/* Resumen */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Recibos</CardTitle>
+            <Receipt className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{payments.length}</div>
+            <p className="text-xs text-muted-foreground">Recibos emitidos</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Recibido</CardTitle>
+            <DollarSign className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{formatCurrency(totalReceived)}</div>
+            <p className="text-xs text-muted-foreground">Monto total cobrado</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Promedio por Recibo</CardTitle>
+            <DollarSign className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {formatCurrency(payments.length > 0 ? totalReceived / payments.length : 0)}
+            </div>
+            <p className="text-xs text-muted-foreground">Monto promedio</p>
+          </CardContent>
+        </Card>
       </div>
 
-      {/* Summary Card */}
+      {/* Filtros */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Receipt className="h-5 w-5" />
-            Resumen de Pagos Recibidos
+            <Search className="h-5 w-5" />
+            Buscar Recibos
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="text-center">
-              <div className="text-2xl font-bold text-green-600">{formatCurrency(getTotalReceived())}</div>
-              <div className="text-sm text-muted-foreground">Total Recibido</div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold">{payments.length}</div>
-              <div className="text-sm text-muted-foreground">Recibos Emitidos</div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold">
-                {payments.reduce((total, payment) => total + payment.payment_imputations.length, 0)}
+          <div className="flex gap-4">
+            <div className="flex-1">
+              <Label htmlFor="search">Buscar</Label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Input
+                  id="search"
+                  placeholder="Cliente, préstamo, código..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                />
               </div>
-              <div className="text-sm text-muted-foreground">Cuotas Imputadas</div>
+            </div>
+            <div className="flex items-end">
+              <Button onClick={fetchPayments}>
+                <Search className="h-4 w-4 mr-2" />
+                Actualizar
+              </Button>
             </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Payments List */}
-      <div className="space-y-4">
-        {payments.length === 0 ? (
-          <Card>
-            <CardContent className="flex items-center justify-center h-32">
-              <div className="text-center text-muted-foreground">
-                <Receipt className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                <p>No hay recibos registrados</p>
-              </div>
-            </CardContent>
-          </Card>
-        ) : (
-          payments.map((payment) => (
-            <Card key={payment.id} className="hover:shadow-md transition-shadow">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="bg-green-100 p-2 rounded-full">
-                      <Receipt className="h-4 w-4 text-green-600" />
-                    </div>
-                    <div>
-                      <CardTitle className="text-lg">Recibo N° {payment.id.slice(-6)}</CardTitle>
-                      <CardDescription>
-                        {payment.loans.clients.first_name} {payment.loans.clients.last_name} - {payment.loans.loan_code}
-                      </CardDescription>
-                    </div>
-                  </div>
-                  <Badge variant="secondary" className="bg-green-100 text-green-800">
-                    Pagado
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="flex items-center gap-2">
-                    <DollarSign className="h-4 w-4 text-muted-foreground" />
-                    <div>
-                      <div className="font-semibold">{formatCurrency(payment.paid_amount)}</div>
-                      <div className="text-sm text-muted-foreground">Monto Pagado</div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Calendar className="h-4 w-4 text-muted-foreground" />
-                    <div>
-                      <div className="font-semibold">{formatDate(payment.paid_at)}</div>
-                      <div className="text-sm text-muted-foreground">Fecha de Pago</div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <FileText className="h-4 w-4 text-muted-foreground" />
-                    <div>
-                      <div className="font-semibold">{payment.payment_imputations.length}</div>
-                      <div className="text-sm text-muted-foreground">Cuotas Imputadas</div>
-                    </div>
-                  </div>
-                </div>
-
-                {payment.payment_imputations.length > 0 && (
-                  <>
-                    <Separator />
-                    <div>
-                      <h4 className="font-semibold mb-2">Imputaciones:</h4>
-                      <div className="space-y-2">
+      {/* Tabla de Recibos */}
+      <Card>
+        <CardHeader>
+          <div className="flex justify-between items-center">
+            <CardTitle>Listado de Recibos ({filteredPayments.length})</CardTitle>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm">
+                <Download className="h-4 w-4 mr-2" />
+                Exportar
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Fecha</TableHead>
+                  <TableHead>Cliente</TableHead>
+                  <TableHead>Préstamo</TableHead>
+                  <TableHead>Monto</TableHead>
+                  <TableHead>Cuotas Imputadas</TableHead>
+                  <TableHead>Observaciones</TableHead>
+                  <TableHead>Acciones</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredPayments.map((payment) => (
+                  <TableRow key={payment.id}>
+                    <TableCell>{formatDate(payment.paid_at)}</TableCell>
+                    <TableCell>
+                      <div>
+                        <div className="font-medium">
+                          {payment.loans.clients.first_name} {payment.loans.clients.last_name}
+                        </div>
+                        <div className="text-sm text-muted-foreground">{payment.loans.clients.client_code}</div>
+                      </div>
+                    </TableCell>
+                    <TableCell className="font-mono text-sm">{payment.loans.loan_code}</TableCell>
+                    <TableCell className="font-semibold">{formatCurrency(payment.paid_amount)}</TableCell>
+                    <TableCell>
+                      <div className="space-y-1">
                         {payment.payment_imputations.map((imputation) => (
-                          <div
-                            key={imputation.id}
-                            className="flex justify-between items-center bg-muted/50 p-2 rounded"
-                          >
-                            <span className="text-sm">
-                              Cuota {imputation.installments.installment_no} - {imputation.installments.code}
-                            </span>
-                            <span className="font-semibold">{formatCurrency(imputation.imputed_amount)}</span>
-                          </div>
+                          <Badge key={imputation.id} variant="outline" className="text-xs">
+                            Cuota {imputation.installments.installment_no}: {formatCurrency(imputation.imputed_amount)}
+                          </Badge>
                         ))}
                       </div>
-                    </div>
-                  </>
-                )}
+                    </TableCell>
+                    <TableCell className="max-w-xs truncate">{payment.note || "-"}</TableCell>
+                    <TableCell>
+                      <div className="flex gap-1">
+                        <Button size="sm" variant="outline">
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                        <Button size="sm" variant="outline">
+                          <Download className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
 
-                {payment.note && (
-                  <>
-                    <Separator />
-                    <div>
-                      <h4 className="font-semibold mb-1">Observaciones:</h4>
-                      <p className="text-sm text-muted-foreground">{payment.note}</p>
-                    </div>
-                  </>
-                )}
-
-                <Separator />
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handlePrint(payment)}
-                    className="flex items-center gap-2"
-                  >
-                    <Printer className="h-4 w-4" />
-                    Imprimir
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleWhatsApp(payment)}
-                    className="flex items-center gap-2"
-                  >
-                    <MessageCircle className="h-4 w-4" />
-                    WhatsApp
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))
-        )}
-      </div>
+          {filteredPayments.length === 0 && (
+            <div className="text-center py-8">
+              <p className="text-muted-foreground">
+                {payments.length === 0
+                  ? "No se encontraron recibos de pago"
+                  : "No se encontraron recibos con los filtros aplicados"}
+              </p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   )
 }
