@@ -1,18 +1,14 @@
 "use client"
 
-import type React from "react"
-
 import { useState, useEffect } from "react"
-import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
-import { useToast } from "@/hooks/use-toast"
-import { createClient } from "@/lib/supabase/client"
-import { Receipt, Plus, Search, MessageCircle, Printer } from "lucide-react"
+import { Receipt, Search, Filter, Printer, MessageCircle, Plus, DollarSign, Calendar } from "lucide-react"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
 
@@ -21,51 +17,31 @@ interface Client {
   client_code: string
   first_name: string
   last_name: string
-  phone: string
 }
 
 interface Loan {
   id: string
   loan_code: string
-  amount: number
-  status: string
+  client_id: string
 }
 
 interface Installment {
   id: string
+  loan_id: string
   installment_no: number
-  due_date: string
   amount_due: number
   amount_paid: number
   balance_due: number
+  due_date: string
   status: string
 }
 
-interface ReceiptData {
+interface Payment {
   id: string
-  receipt_number: string
-  receipt_date: string
-  total_amount: number
-  cash_amount: number
-  transfer_amount: number
-  payment_type: string
-  observations: string
-  client_id: string
-  clients: {
-    first_name: string
-    last_name: string
-    phone: string
-    client_code: string
-  }
-  selected_loans: any[]
-  selected_installments: any[]
-}
-
-interface PaymentData {
-  id: string
+  loan_id: string
   paid_amount: number
   paid_at: string
-  note: string
+  note?: string
   loans: {
     loan_code: string
     client_id: string
@@ -86,600 +62,569 @@ interface PaymentData {
   }>
 }
 
-export default function ReceiptsPage() {
-  const [showForm, setShowForm] = useState(false)
-  const [clients, setClients] = useState<Client[]>([])
-  const [selectedClient, setSelectedClient] = useState<Client | null>(null)
-  const [clientLoans, setClientLoans] = useState<Loan[]>([])
-  const [clientInstallments, setClientInstallments] = useState<Installment[]>([])
-  const [receipts, setReceipts] = useState<ReceiptData[]>([])
-  const [payments, setPayments] = useState<PaymentData[]>([])
-  const [loading, setLoading] = useState(false)
-  const [searchTerm, setSearchTerm] = useState("")
-  const [filterType, setFilterType] = useState("all")
+interface ReceiptFormData {
+  client_id: string
+  loan_id: string
+  installment_ids: string[]
+  payment_type: "efectivo" | "transferencia" | "cheque"
+  total_amount: number
+  note: string
+}
 
-  // Form state
-  const [formData, setFormData] = useState({
-    receipt_number: "",
-    receipt_date: new Date().toISOString().split("T")[0],
-    total_amount: 0,
-    cash_amount: 0,
-    transfer_amount: 0,
+export default function ReceiptsPage() {
+  const [payments, setPayments] = useState<Payment[]>([])
+  const [clients, setClients] = useState<Client[]>([])
+  const [loans, setLoans] = useState<Loan[]>([])
+  const [installments, setInstallments] = useState<Installment[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [searchTerm, setSearchTerm] = useState("")
+  const [filterType, setFilterType] = useState<string>("all")
+  const [showForm, setShowForm] = useState(false)
+  const [formData, setFormData] = useState<ReceiptFormData>({
+    client_id: "",
+    loan_id: "",
+    installment_ids: [],
     payment_type: "efectivo",
-    observations: "",
-    selected_loans: [] as string[],
-    selected_installments: [] as string[],
+    total_amount: 0,
+    note: "",
   })
 
-  const { toast } = useToast()
-  const supabase = createClient()
-
-  useEffect(() => {
-    fetchClients()
-    fetchReceipts()
-    fetchPayments()
-  }, [])
-
-  const fetchClients = async () => {
-    try {
-      const { data, error } = await supabase
-        .from("clients")
-        .select("id, client_code, first_name, last_name, phone")
-        .eq("status", "active")
-        .order("first_name")
-
-      if (error) throw error
-      setClients(data || [])
-    } catch (error) {
-      console.error("Error fetching clients:", error)
-      toast({
-        title: "Error",
-        description: "No se pudieron cargar los clientes",
-        variant: "destructive",
-      })
-    }
-  }
-
-  const fetchClientData = async (clientId: string) => {
-    try {
-      setLoading(true)
-
-      // Fetch client loans
-      const { data: loansData, error: loansError } = await supabase
-        .from("loans")
-        .select("id, loan_code, amount, status")
-        .eq("client_id", clientId)
-        .eq("status", "active")
-
-      if (loansError) throw loansError
-      setClientLoans(loansData || [])
-
-      // Fetch client installments
-      const { data: installmentsData, error: installmentsError } = await supabase
-        .from("installments_with_status")
-        .select(`
-          id, loan_id, installment_no, due_date, amount_due, 
-          amount_paid, balance_due, status
-        `)
-        .in(
-          "loan_id",
-          (loansData || []).map((l) => l.id),
-        )
-        .gt("balance_due", 0)
-        .order("due_date")
-
-      if (installmentsError) throw installmentsError
-      setClientInstallments(installmentsData || [])
-    } catch (error) {
-      console.error("Error fetching client data:", error)
-      toast({
-        title: "Error",
-        description: "No se pudieron cargar los datos del cliente",
-        variant: "destructive",
-      })
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const fetchReceipts = async () => {
-    try {
-      const { data, error } = await supabase
-        .from("receipts")
-        .select(`
-          id, receipt_number, receipt_date, total_amount, cash_amount,
-          transfer_amount, payment_type, observations, client_id,
-          selected_loans, selected_installments,
-          clients!inner(first_name, last_name, phone, client_code)
-        `)
-        .order("receipt_date", { ascending: false })
-
-      if (error) throw error
-      setReceipts(data || [])
-    } catch (error) {
-      console.error("Error fetching receipts:", error)
-      toast({
-        title: "Error",
-        description: "No se pudieron cargar los recibos",
-        variant: "destructive",
-      })
-    }
-  }
-
+  // Fetch payments (receipts)
   const fetchPayments = async () => {
     try {
+      console.log("[v0] Fetching payments...")
       const response = await fetch("/api/payments")
-      if (!response.ok) throw new Error("Failed to fetch payments")
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error("[v0] API Error Response:", errorText)
+        throw new Error(`HTTP ${response.status}: ${errorText}`)
+      }
+
+      const contentType = response.headers.get("content-type")
+      if (!contentType || !contentType.includes("application/json")) {
+        const responseText = await response.text()
+        console.error("[v0] Non-JSON Response:", responseText)
+        throw new Error("API returned non-JSON response")
+      }
 
       const data = await response.json()
-      setPayments(data || [])
-    } catch (error) {
-      console.error("Error fetching payments:", error)
-      toast({
-        title: "Error",
-        description: "No se pudieron cargar los pagos",
-        variant: "destructive",
-      })
+      console.log("[v0] Payments fetched successfully:", data.length)
+      setPayments(data)
+    } catch (err) {
+      console.error("[v0] Error fetching payments:", err)
+      setError(err instanceof Error ? err.message : "Error desconocido")
     }
   }
 
-  const handleClientSelect = (clientId: string) => {
-    const client = clients.find((c) => c.id === clientId)
-    setSelectedClient(client || null)
-    if (client) {
-      fetchClientData(clientId)
-    }
-  }
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!selectedClient) return
-
+  // Fetch clients
+  const fetchClients = async () => {
     try {
-      setLoading(true)
+      console.log("[v0] Fetching clients...")
+      const response = await fetch("/api/loans?clients_only=true")
 
-      const receiptData = {
-        receipt_number: formData.receipt_number,
-        receipt_date: formData.receipt_date,
-        total_amount: formData.total_amount,
-        cash_amount: formData.cash_amount,
-        transfer_amount: formData.transfer_amount,
-        payment_type: formData.payment_type,
-        observations: formData.observations,
-        client_id: selectedClient.id,
-        selected_loans: formData.selected_loans,
-        selected_installments: formData.selected_installments,
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`)
       }
 
-      const { data, error } = await supabase.from("receipts").insert([receiptData]).select()
+      const data = await response.json()
+      console.log("[v0] Clients fetched:", data.length)
+      setClients(data)
+    } catch (err) {
+      console.error("[v0] Error fetching clients:", err)
+    }
+  }
 
-      if (error) throw error
+  // Fetch loans for selected client
+  const fetchLoansForClient = async (clientId: string) => {
+    try {
+      console.log("[v0] Fetching loans for client:", clientId)
+      const response = await fetch(`/api/loans?client_id=${clientId}`)
 
-      if (formData.selected_installments.length > 0 && formData.total_amount > 0) {
-        // Get the loan_id from the first selected installment
-        const firstInstallment = clientInstallments.find((i) => formData.selected_installments.includes(i.id))
-
-        if (firstInstallment) {
-          const paymentResponse = await fetch("/api/payments", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              loan_id: firstInstallment.loan_id,
-              paid_amount: formData.total_amount,
-              note: `Recibo #${formData.receipt_number} - ${formData.observations}`,
-            }),
-          })
-
-          if (!paymentResponse.ok) {
-            console.warn("Failed to create payment record")
-          }
-        }
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`)
       }
 
-      toast({
-        title: "Éxito",
-        description: "Recibo creado correctamente",
+      const data = await response.json()
+      console.log("[v0] Loans fetched:", data.length)
+      setLoans(data)
+    } catch (err) {
+      console.error("[v0] Error fetching loans:", err)
+    }
+  }
+
+  // Fetch installments for selected loan
+  const fetchInstallmentsForLoan = async (loanId: string) => {
+    try {
+      console.log("[v0] Fetching installments for loan:", loanId)
+      const response = await fetch(`/api/installments?loan_id=${loanId}&status=pending`)
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`)
+      }
+
+      const data = await response.json()
+      console.log("[v0] Installments fetched:", data.length)
+      setInstallments(data)
+    } catch (err) {
+      console.error("[v0] Error fetching installments:", err)
+    }
+  }
+
+  // Create receipt
+  const createReceipt = async () => {
+    try {
+      console.log("[v0] Creating receipt:", formData)
+      const response = await fetch("/api/payments", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          loan_id: formData.loan_id,
+          paid_amount: formData.total_amount,
+          note: `${formData.payment_type.toUpperCase()} - ${formData.note}`,
+        }),
       })
 
-      // Reset form
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.detail || "Error creating receipt")
+      }
+
+      const result = await response.json()
+      console.log("[v0] Receipt created successfully:", result)
+
+      // Reset form and refresh data
       setFormData({
-        receipt_number: "",
-        receipt_date: new Date().toISOString().split("T")[0],
-        total_amount: 0,
-        cash_amount: 0,
-        transfer_amount: 0,
+        client_id: "",
+        loan_id: "",
+        installment_ids: [],
         payment_type: "efectivo",
-        observations: "",
-        selected_loans: [],
-        selected_installments: [],
+        total_amount: 0,
+        note: "",
       })
-      setSelectedClient(null)
-      setClientLoans([])
-      setClientInstallments([])
       setShowForm(false)
-
-      // Refresh data
-      fetchReceipts()
-      fetchPayments()
-    } catch (error) {
-      console.error("Error creating receipt:", error)
-      toast({
-        title: "Error",
-        description: "No se pudo crear el recibo",
-        variant: "destructive",
-      })
-    } finally {
-      setLoading(false)
+      await fetchPayments()
+    } catch (err) {
+      console.error("[v0] Error creating receipt:", err)
+      setError(err instanceof Error ? err.message : "Error creating receipt")
     }
   }
 
-  const handleWhatsApp = (receipt: ReceiptData) => {
-    if (!receipt.clients.phone) {
-      toast({
-        title: "Error",
-        description: "El cliente no tiene número de teléfono registrado",
-        variant: "destructive",
-      })
-      return
+  useEffect(() => {
+    const loadData = async () => {
+      setLoading(true)
+      setError(null)
+
+      try {
+        await Promise.all([fetchPayments(), fetchClients()])
+      } catch (err) {
+        console.error("[v0] Error loading data:", err)
+        setError("Error cargando datos")
+      } finally {
+        setLoading(false)
+      }
     }
 
-    const message = `🧾 *RECIBO DE PAGO* 🧾
+    loadData()
+  }, [])
 
-📋 *Recibo:* ${receipt.receipt_number}
-📅 *Fecha:* ${format(new Date(receipt.receipt_date), "dd/MM/yyyy", { locale: es })}
-👤 *Cliente:* ${receipt.clients.first_name} ${receipt.clients.last_name}
-
-💰 *DETALLE DEL PAGO:*
-• Total Recibido: $${receipt.total_amount.toLocaleString()}
-${receipt.cash_amount > 0 ? `• Efectivo: $${receipt.cash_amount.toLocaleString()}` : ""}
-${receipt.transfer_amount > 0 ? `• Transferencia: $${receipt.transfer_amount.toLocaleString()}` : ""}
-
-${receipt.observations ? `📝 *Observaciones:* ${receipt.observations}` : ""}
-
-✅ *Pago registrado exitosamente*
-¡Gracias por su puntualidad! 🙏
-
-_Microcréditos - Sistema de Gestión_`
-
-    const phone = receipt.clients.phone.replace(/\D/g, "")
-    const whatsappUrl = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`
-    window.open(whatsappUrl, "_blank")
+  // Handle client selection
+  const handleClientChange = (clientId: string) => {
+    setFormData((prev) => ({ ...prev, client_id: clientId, loan_id: "", installment_ids: [] }))
+    setLoans([])
+    setInstallments([])
+    if (clientId) {
+      fetchLoansForClient(clientId)
+    }
   }
 
-  const filteredReceipts = receipts.filter((receipt) => {
+  // Handle loan selection
+  const handleLoanChange = (loanId: string) => {
+    setFormData((prev) => ({ ...prev, loan_id: loanId, installment_ids: [] }))
+    setInstallments([])
+    if (loanId) {
+      fetchInstallmentsForLoan(loanId)
+    }
+  }
+
+  // Handle installment selection
+  const handleInstallmentToggle = (installmentId: string, amount: number) => {
+    setFormData((prev) => {
+      const isSelected = prev.installment_ids.includes(installmentId)
+      const newIds = isSelected
+        ? prev.installment_ids.filter((id) => id !== installmentId)
+        : [...prev.installment_ids, installmentId]
+
+      const newAmount = isSelected ? prev.total_amount - amount : prev.total_amount + amount
+
+      return {
+        ...prev,
+        installment_ids: newIds,
+        total_amount: newAmount,
+      }
+    })
+  }
+
+  // Filter payments
+  const filteredPayments = payments.filter((payment) => {
     const matchesSearch =
-      receipt.receipt_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      `${receipt.clients.first_name} ${receipt.clients.last_name}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      receipt.clients.client_code.toLowerCase().includes(searchTerm.toLowerCase())
+      searchTerm === "" ||
+      payment.loans.clients.first_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      payment.loans.clients.last_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      payment.loans.loan_code.toLowerCase().includes(searchTerm.toLowerCase())
 
-    const matchesFilter = filterType === "all" || receipt.payment_type === filterType
+    const matchesFilter =
+      filterType === "all" || (payment.note && payment.note.toLowerCase().includes(filterType.toLowerCase()))
 
     return matchesSearch && matchesFilter
   })
 
-  const totalReceived = receipts.reduce((sum, r) => sum + r.total_amount, 0)
-  const todayReceipts = receipts.filter((r) => r.receipt_date === new Date().toISOString().split("T")[0])
-  const todayTotal = todayReceipts.reduce((sum, r) => sum + r.total_amount, 0)
+  // Calculate summary stats
+  const todayPayments = payments.filter(
+    (p) => format(new Date(p.paid_at), "yyyy-MM-dd") === format(new Date(), "yyyy-MM-dd"),
+  )
+  const monthlyPayments = payments.filter(
+    (p) => format(new Date(p.paid_at), "yyyy-MM") === format(new Date(), "yyyy-MM"),
+  )
+
+  const todayTotal = todayPayments.reduce((sum, p) => sum + p.paid_amount, 0)
+  const monthlyTotal = monthlyPayments.reduce((sum, p) => sum + p.paid_amount, 0)
+
+  // WhatsApp and Print functions
+  const sendWhatsApp = (payment: Payment) => {
+    const client = payment.loans.clients
+    const message = `Hola ${client.first_name}! Te confirmamos el pago de $${payment.paid_amount} para el préstamo ${payment.loans.loan_code}. Fecha: ${format(new Date(payment.paid_at), "dd/MM/yyyy HH:mm", { locale: es })}. ¡Gracias!`
+    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`
+    window.open(whatsappUrl, "_blank")
+  }
+
+  const printReceipt = (payment: Payment) => {
+    const client = payment.loans.clients
+    const printContent = `
+      RECIBO DE PAGO
+      
+      Cliente: ${client.first_name} ${client.last_name}
+      Código: ${client.client_code}
+      Préstamo: ${payment.loans.loan_code}
+      
+      Monto: $${payment.paid_amount}
+      Fecha: ${format(new Date(payment.paid_at), "dd/MM/yyyy HH:mm", { locale: es })}
+      
+      ${payment.note ? `Nota: ${payment.note}` : ""}
+      
+      Cuotas imputadas:
+      ${payment.payment_imputations
+        .map((imp) => `- Cuota ${imp.installments.installment_no}: $${imp.imputed_amount}`)
+        .join("\n")}
+    `
+
+    const printWindow = window.open("", "_blank")
+    if (printWindow) {
+      printWindow.document.write(`<pre>${printContent}</pre>`)
+      printWindow.document.close()
+      printWindow.print()
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+          <p>Cargando recibos...</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
+    <div className="space-y-6">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Gestión de Recibos</h1>
-          <p className="text-muted-foreground">Crear y administrar recibos de pago</p>
+          <h1 className="text-3xl font-bold tracking-tight">Recibos</h1>
+          <p className="text-muted-foreground">Gestiona los recibos de pago de tus clientes</p>
         </div>
         <Button onClick={() => setShowForm(!showForm)} className="gap-2">
           <Plus className="h-4 w-4" />
-          {showForm ? "Cancelar" : "Nuevo Recibo"}
+          Nuevo Recibo
         </Button>
       </div>
 
+      {/* Error Display */}
+      {error && (
+        <Card className="border-destructive">
+          <CardContent className="pt-6">
+            <p className="text-destructive">Error: {error}</p>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setError(null)
+                fetchPayments()
+              }}
+              className="mt-2"
+            >
+              Reintentar
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid gap-4 md:grid-cols-3">
         <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Total Recibos</CardTitle>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Recibos Totales</CardTitle>
+            <Receipt className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{receipts.length}</div>
+            <div className="text-2xl font-bold">{payments.length}</div>
+            <p className="text-xs text-muted-foreground">Total de recibos emitidos</p>
           </CardContent>
         </Card>
+
         <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Total Recaudado</CardTitle>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Recaudación Hoy</CardTitle>
+            <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600">${totalReceived.toLocaleString()}</div>
+            <div className="text-2xl font-bold">${todayTotal.toLocaleString()}</div>
+            <p className="text-xs text-muted-foreground">{todayPayments.length} recibos hoy</p>
           </CardContent>
         </Card>
+
         <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Recibos Hoy</CardTitle>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Recaudación Mensual</CardTitle>
+            <Calendar className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{todayReceipts.length}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Recaudado Hoy</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-blue-600">${todayTotal.toLocaleString()}</div>
+            <div className="text-2xl font-bold">${monthlyTotal.toLocaleString()}</div>
+            <p className="text-xs text-muted-foreground">{monthlyPayments.length} recibos este mes</p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Receipt Form */}
+      {/* New Receipt Form */}
       {showForm && (
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Receipt className="h-5 w-5" />
-              Crear Nuevo Recibo
-            </CardTitle>
-            <CardDescription>Complete los datos del recibo de pago</CardDescription>
+            <CardTitle>Nuevo Recibo</CardTitle>
+            <CardDescription>Crea un nuevo recibo de pago</CardDescription>
           </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="receipt_number">Número de Recibo</Label>
-                  <Input
-                    id="receipt_number"
-                    value={formData.receipt_number}
-                    onChange={(e) => setFormData({ ...formData, receipt_number: e.target.value })}
-                    placeholder="Ej: REC-001"
-                    required
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="receipt_date">Fecha</Label>
-                  <Input
-                    id="receipt_date"
-                    type="date"
-                    value={formData.receipt_date}
-                    onChange={(e) => setFormData({ ...formData, receipt_date: e.target.value })}
-                    required
-                  />
-                </div>
-              </div>
-
-              <div>
+          <CardContent className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
                 <Label htmlFor="client">Cliente</Label>
-                <Select onValueChange={handleClientSelect}>
+                <Select value={formData.client_id} onValueChange={handleClientChange}>
                   <SelectTrigger>
                     <SelectValue placeholder="Seleccionar cliente" />
                   </SelectTrigger>
                   <SelectContent>
                     {clients.map((client) => (
                       <SelectItem key={client.id} value={client.id}>
-                        {client.client_code} - {client.first_name} {client.last_name}
+                        {client.first_name} {client.last_name} ({client.client_code})
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
 
-              {selectedClient && (
-                <>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                      <Label htmlFor="total_amount">Monto Total</Label>
-                      <Input
-                        id="total_amount"
-                        type="number"
-                        step="0.01"
-                        value={formData.total_amount}
-                        onChange={(e) =>
-                          setFormData({ ...formData, total_amount: Number.parseFloat(e.target.value) || 0 })
-                        }
-                        required
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="cash_amount">Efectivo</Label>
-                      <Input
-                        id="cash_amount"
-                        type="number"
-                        step="0.01"
-                        value={formData.cash_amount}
-                        onChange={(e) =>
-                          setFormData({ ...formData, cash_amount: Number.parseFloat(e.target.value) || 0 })
-                        }
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="transfer_amount">Transferencia</Label>
-                      <Input
-                        id="transfer_amount"
-                        type="number"
-                        step="0.01"
-                        value={formData.transfer_amount}
-                        onChange={(e) =>
-                          setFormData({ ...formData, transfer_amount: Number.parseFloat(e.target.value) || 0 })
-                        }
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <Label htmlFor="payment_type">Tipo de Pago</Label>
-                    <Select
-                      value={formData.payment_type}
-                      onValueChange={(value) => setFormData({ ...formData, payment_type: value })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="efectivo">Efectivo</SelectItem>
-                        <SelectItem value="transferencia">Transferencia</SelectItem>
-                        <SelectItem value="mixto">Mixto</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {clientInstallments.length > 0 && (
-                    <div>
-                      <Label>Cuotas a Imputar (Opcional)</Label>
-                      <div className="mt-2 space-y-2 max-h-40 overflow-y-auto border rounded p-2">
-                        {clientInstallments.map((installment) => (
-                          <div key={installment.id} className="flex items-center space-x-2">
-                            <input
-                              type="checkbox"
-                              id={`installment-${installment.id}`}
-                              checked={formData.selected_installments.includes(installment.id)}
-                              onChange={(e) => {
-                                if (e.target.checked) {
-                                  setFormData({
-                                    ...formData,
-                                    selected_installments: [...formData.selected_installments, installment.id],
-                                  })
-                                } else {
-                                  setFormData({
-                                    ...formData,
-                                    selected_installments: formData.selected_installments.filter(
-                                      (id) => id !== installment.id,
-                                    ),
-                                  })
-                                }
-                              }}
-                            />
-                            <label htmlFor={`installment-${installment.id}`} className="text-sm">
-                              Cuota {installment.installment_no} - Vence:{" "}
-                              {format(new Date(installment.due_date), "dd/MM/yyyy")} - Saldo: $
-                              {installment.balance_due.toLocaleString()}
-                            </label>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  <div>
-                    <Label htmlFor="observations">Observaciones</Label>
-                    <Textarea
-                      id="observations"
-                      value={formData.observations}
-                      onChange={(e) => setFormData({ ...formData, observations: e.target.value })}
-                      placeholder="Observaciones adicionales..."
-                    />
-                  </div>
-                </>
-              )}
-
-              <div className="flex gap-2">
-                <Button type="submit" disabled={loading || !selectedClient}>
-                  {loading ? "Creando..." : "Crear Recibo"}
-                </Button>
-                <Button type="button" variant="outline" onClick={() => setShowForm(false)}>
-                  Cancelar
-                </Button>
+              <div className="space-y-2">
+                <Label htmlFor="loan">Préstamo</Label>
+                <Select value={formData.loan_id} onValueChange={handleLoanChange} disabled={!formData.client_id}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar préstamo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {loans.map((loan) => (
+                      <SelectItem key={loan.id} value={loan.id}>
+                        {loan.loan_code}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-            </form>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="payment_type">Tipo de Pago</Label>
+              <Select
+                value={formData.payment_type}
+                onValueChange={(value: any) => setFormData((prev) => ({ ...prev, payment_type: value }))}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="efectivo">Efectivo</SelectItem>
+                  <SelectItem value="transferencia">Transferencia</SelectItem>
+                  <SelectItem value="cheque">Cheque</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Installments Selection */}
+            {installments.length > 0 && (
+              <div className="space-y-2">
+                <Label>Cuotas a Imputar</Label>
+                <div className="border rounded-lg p-4 space-y-2 max-h-40 overflow-y-auto">
+                  {installments.map((installment) => (
+                    <div key={installment.id} className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        id={installment.id}
+                        checked={formData.installment_ids.includes(installment.id)}
+                        onChange={() => handleInstallmentToggle(installment.id, installment.balance_due)}
+                        className="rounded"
+                      />
+                      <label htmlFor={installment.id} className="text-sm flex-1">
+                        Cuota {installment.installment_no} - ${installment.balance_due}
+                        <span className="text-muted-foreground ml-2">
+                          (Vence: {format(new Date(installment.due_date), "dd/MM/yyyy")})
+                        </span>
+                      </label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <Label htmlFor="total_amount">Monto Total</Label>
+              <Input
+                id="total_amount"
+                type="number"
+                value={formData.total_amount}
+                onChange={(e) =>
+                  setFormData((prev) => ({ ...prev, total_amount: Number.parseFloat(e.target.value) || 0 }))
+                }
+                placeholder="0.00"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="note">Nota (Opcional)</Label>
+              <Textarea
+                id="note"
+                value={formData.note}
+                onChange={(e) => setFormData((prev) => ({ ...prev, note: e.target.value }))}
+                placeholder="Observaciones adicionales..."
+              />
+            </div>
+
+            <div className="flex gap-2">
+              <Button
+                onClick={createReceipt}
+                disabled={!formData.client_id || !formData.loan_id || formData.total_amount <= 0}
+              >
+                Crear Recibo
+              </Button>
+              <Button variant="outline" onClick={() => setShowForm(false)}>
+                Cancelar
+              </Button>
+            </div>
           </CardContent>
         </Card>
       )}
 
-      {/* Filters and Search */}
+      {/* Search and Filter */}
       <Card>
-        <CardHeader>
-          <CardTitle>Recibos Registrados</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-col md:flex-row gap-4 mb-4">
+        <CardContent className="pt-6">
+          <div className="flex gap-4 mb-4">
             <div className="flex-1">
               <div className="relative">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Buscar por número, cliente o código..."
+                  placeholder="Buscar por cliente o préstamo..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
+                  className="pl-8"
                 />
               </div>
             </div>
             <Select value={filterType} onValueChange={setFilterType}>
-              <SelectTrigger className="w-full md:w-48">
+              <SelectTrigger className="w-48">
+                <Filter className="h-4 w-4 mr-2" />
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos los tipos</SelectItem>
                 <SelectItem value="efectivo">Efectivo</SelectItem>
                 <SelectItem value="transferencia">Transferencia</SelectItem>
-                <SelectItem value="mixto">Mixto</SelectItem>
+                <SelectItem value="cheque">Cheque</SelectItem>
               </SelectContent>
             </Select>
           </div>
-
-          <div className="space-y-4">
-            {filteredReceipts.map((receipt) => (
-              <Card key={receipt.id} className="border-l-4 border-l-green-500">
-                <CardContent className="p-4">
-                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <Badge variant="outline">{receipt.receipt_number}</Badge>
-                        <Badge
-                          variant={
-                            receipt.payment_type === "efectivo"
-                              ? "default"
-                              : receipt.payment_type === "transferencia"
-                                ? "secondary"
-                                : "outline"
-                          }
-                        >
-                          {receipt.payment_type}
-                        </Badge>
-                      </div>
-                      <p className="font-medium">
-                        {receipt.clients.first_name} {receipt.clients.last_name}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        {format(new Date(receipt.receipt_date), "dd/MM/yyyy", { locale: es })} • Código:{" "}
-                        {receipt.clients.client_code}
-                      </p>
-                      {receipt.observations && (
-                        <p className="text-sm text-muted-foreground italic">{receipt.observations}</p>
-                      )}
-                    </div>
-                    <div className="flex flex-col md:items-end gap-2">
-                      <div className="text-right">
-                        <p className="text-2xl font-bold text-green-600">${receipt.total_amount.toLocaleString()}</p>
-                        {receipt.cash_amount > 0 && (
-                          <p className="text-sm text-muted-foreground">
-                            Efectivo: ${receipt.cash_amount.toLocaleString()}
-                          </p>
-                        )}
-                        {receipt.transfer_amount > 0 && (
-                          <p className="text-sm text-muted-foreground">
-                            Transferencia: ${receipt.transfer_amount.toLocaleString()}
-                          </p>
-                        )}
-                      </div>
-                      <div className="flex gap-2">
-                        <Button size="sm" variant="outline" onClick={() => window.print()}>
-                          <Printer className="h-4 w-4" />
-                        </Button>
-                        <Button size="sm" variant="outline" onClick={() => handleWhatsApp(receipt)}>
-                          <MessageCircle className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-
-          {filteredReceipts.length === 0 && (
-            <div className="text-center py-8 text-muted-foreground">
-              No se encontraron recibos que coincidan con los filtros
-            </div>
-          )}
         </CardContent>
       </Card>
+
+      {/* Receipts List */}
+      <div className="space-y-4">
+        {filteredPayments.length === 0 ? (
+          <Card>
+            <CardContent className="pt-6 text-center">
+              <Receipt className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <p className="text-muted-foreground">No se encontraron recibos</p>
+            </CardContent>
+          </Card>
+        ) : (
+          filteredPayments.map((payment) => (
+            <Card key={payment.id}>
+              <CardContent className="pt-6">
+                <div className="flex items-start justify-between">
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-semibold">
+                        {payment.loans.clients.first_name} {payment.loans.clients.last_name}
+                      </h3>
+                      <Badge variant="outline">{payment.loans.clients.client_code}</Badge>
+                    </div>
+
+                    <div className="text-sm text-muted-foreground space-y-1">
+                      <p>Préstamo: {payment.loans.loan_code}</p>
+                      <p>Fecha: {format(new Date(payment.paid_at), "dd/MM/yyyy HH:mm", { locale: es })}</p>
+                      {payment.note && <p>Nota: {payment.note}</p>}
+                    </div>
+
+                    {payment.payment_imputations.length > 0 && (
+                      <div className="mt-3">
+                        <p className="text-sm font-medium mb-1">Cuotas imputadas:</p>
+                        <div className="space-y-1">
+                          {payment.payment_imputations.map((imp) => (
+                            <div key={imp.id} className="text-xs text-muted-foreground">
+                              Cuota {imp.installments.installment_no}: ${imp.imputed_amount}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="text-right space-y-2">
+                    <div className="text-2xl font-bold text-green-600">${payment.paid_amount.toLocaleString()}</div>
+
+                    <div className="flex gap-2">
+                      <Button size="sm" variant="outline" onClick={() => printReceipt(payment)} className="gap-1">
+                        <Printer className="h-3 w-3" />
+                        Imprimir
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => sendWhatsApp(payment)} className="gap-1">
+                        <MessageCircle className="h-3 w-3" />
+                        WhatsApp
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))
+        )}
+      </div>
     </div>
   )
 }
