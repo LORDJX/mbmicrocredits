@@ -79,7 +79,7 @@ export async function GET(request: NextRequest) {
       query = query.ilike("code", `%${searchQuery}%`)
     }
 
-    const { data: installments, error: installmentsError } = await query.order("due_date", { ascending: false })
+    const { data: installments, error: installmentsError } = await query.order("due_date", { ascending: true })
 
     if (installmentsError) {
       console.error("[v0] Error fetching installments:", installmentsError)
@@ -218,38 +218,42 @@ export async function GET(request: NextRequest) {
     )
     const paidInstallments = processedInstallments.filter((inst) => inst.paid_at)
 
-    const { data: todayReceipts } = await supabase
-      .from("receipts")
+    const { data: todayPayments } = await supabase
+      .from("payments")
       .select(`
         id,
-        total_amount,
-        receipt_date,
-        payment_type,
-        observations,
-        receipt_number,
-        clients!inner(
-          first_name,
-          last_name,
-          phone
+        paid_amount,
+        paid_at,
+        note,
+        loans!inner(
+          loan_code,
+          clients!inner(
+            first_name,
+            last_name,
+            phone
+          )
         )
       `)
-      .eq("receipt_date", todayStr)
-      .order("created_at", { ascending: false })
+      .gte("paid_at", `${todayStr}T00:00:00`)
+      .lt("paid_at", `${todayStr}T23:59:59`)
+      .order("paid_at", { ascending: false })
 
-    const { data: rangeReceipts } = await supabase
-      .from("receipts")
-      .select("total_amount, receipt_date")
-      .gte("receipt_date", startDate)
-      .lte("receipt_date", endDate)
+    const { data: monthPayments } = await supabase
+      .from("payments")
+      .select("paid_amount, paid_at")
+      .gte("paid_at", `${startDate}T00:00:00`)
+      .lte("paid_at", `${endDate}T23:59:59`)
 
-    const totalReceivedToday = todayReceipts?.reduce((sum, r) => sum + (r.total_amount || 0), 0) || 0
-    const totalReceivedRange = rangeReceipts?.reduce((sum, r) => sum + (r.total_amount || 0), 0) || 0
+    const totalReceivedToday = todayPayments?.reduce((sum, p) => sum + (p.paid_amount || 0), 0) || 0
+    const totalReceivedMonth = monthPayments?.reduce((sum, p) => sum + (p.paid_amount || 0), 0) || 0
+
+    console.log("[v0] Today receipts:", todayPayments?.length || 0, "Total:", totalReceivedToday)
 
     const summary = {
-      total_due_today: todayInstallments.reduce((sum, inst) => sum + (inst.amount || 0), 0),
+      total_due_today: todayInstallments.reduce((sum, inst) => sum + inst.amount, 0),
       total_received_today: totalReceivedToday,
-      total_overdue: overdueInstallments.reduce((sum, inst) => sum + (inst.amount || 0), 0),
-      total_received_month: totalReceivedRange,
+      total_overdue: overdueInstallments.reduce((sum, inst) => sum + inst.amount, 0),
+      total_received_month: totalReceivedMonth,
       total_due_month: processedInstallments
         .filter(
           (inst) =>
@@ -257,9 +261,9 @@ export async function GET(request: NextRequest) {
             new Date(inst.due_date) >= new Date(startDate) &&
             new Date(inst.due_date) <= new Date(endDate),
         )
-        .reduce((sum, inst) => sum + (inst.amount || 0), 0),
-      total_upcoming: upcomingInstallments.reduce((sum, inst) => sum + (inst.amount || 0), 0),
-      total_paid: paidInstallments.reduce((sum, inst) => sum + (inst.amount || 0), 0),
+        .reduce((sum, inst) => sum + inst.amount, 0),
+      total_upcoming: upcomingInstallments.reduce((sum, inst) => sum + inst.amount, 0),
+      total_paid: paidInstallments.reduce((sum, inst) => sum + inst.amount, 0),
     }
 
     const statusCounts = {
@@ -276,15 +280,29 @@ export async function GET(request: NextRequest) {
     console.log("[v0] Overdue installments:", overdueInstallments.length)
     console.log("[v0] Upcoming installments:", upcomingInstallments.length)
     console.log("[v0] Paid installments:", paidInstallments.length)
-    console.log("[v0] Today receipts:", todayReceipts?.length || 0, "Total:", totalReceivedToday)
+    console.log("[v0] Today receipts:", todayPayments?.length || 0, "Total:", totalReceivedToday)
 
     return NextResponse.json({
       success: true,
       today: todayInstallments,
       overdue: overdueInstallments,
+      month: processedInstallments.filter((inst) => {
+        const dueDate = new Date(inst.due_date)
+        const isInMonth = dueDate >= new Date(startDate) && dueDate <= new Date(endDate)
+        return isInMonth && !inst.paid_at
+      }),
       upcoming: upcomingInstallments,
       paid: paidInstallments,
-      todayReceipts: todayReceipts || [],
+      todayReceipts:
+        todayPayments?.map((p) => ({
+          id: p.id,
+          total_amount: p.paid_amount,
+          receipt_date: p.paid_at.split("T")[0],
+          payment_type: "payment",
+          observations: p.note,
+          receipt_number: `PAY-${p.id.slice(0, 8)}`,
+          clients: p.loans.clients,
+        })) || [],
       summary,
       debug: {
         total_installments: allInstallments.length,
