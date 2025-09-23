@@ -6,39 +6,56 @@ export const dynamic = "force-dynamic"
 export async function GET() {
   try {
     const supabase = getSupabaseAdmin()
-    const today = new Date().toISOString().split("T")[0]
-    const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split("T")[0]
 
-    // Total de recibos
-    const { count: totalReceipts } = await supabase.from("receipts").select("*", { count: "exact", head: true })
+    // Get today's date in Argentina timezone
+    const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Argentina/Buenos_Aires" })
+    const startOfMonth = today.substring(0, 8) + "01"
 
-    // Recaudación de hoy
-    const { data: todayData } = await supabase.from("receipts").select("total_amount").eq("receipt_date", today)
+    // Get today's receipts
+    const { data: todayReceipts, error: todayError } = await supabase
+      .from("receipts")
+      .select("total_amount")
+      .gte("created_at", `${today}T00:00:00`)
+      .lt("created_at", `${today}T23:59:59`)
 
-    const todayCollection = todayData?.reduce((sum, r) => sum + r.total_amount, 0) || 0
+    if (todayError) {
+      console.error("Error fetching today's receipts:", todayError)
+    }
 
-    // Recaudación del mes
-    const { data: monthData } = await supabase.from("receipts").select("total_amount").gte("receipt_date", startOfMonth)
+    // Get month's receipts
+    const { data: monthReceipts, error: monthError } = await supabase
+      .from("receipts")
+      .select("total_amount")
+      .gte("created_at", `${startOfMonth}T00:00:00`)
 
-    const monthCollection = monthData?.reduce((sum, r) => sum + r.total_amount, 0) || 0
+    if (monthError) {
+      console.error("Error fetching month's receipts:", monthError)
+    }
+
+    // Get total receipts
+    const { data: totalReceipts, error: totalError } = await supabase.from("receipts").select("total_amount")
+
+    if (totalError) {
+      console.error("Error fetching total receipts:", totalError)
+    }
+
+    const todayTotal = (todayReceipts || []).reduce((sum, r) => sum + r.total_amount, 0)
+    const monthTotal = (monthReceipts || []).reduce((sum, r) => sum + r.total_amount, 0)
+    const totalAmount = (totalReceipts || []).reduce((sum, r) => sum + r.total_amount, 0)
 
     return NextResponse.json(
       {
-        total_receipts: totalReceipts || 0,
-        today_collection: todayCollection,
-        month_collection: monthCollection,
+        today_total: todayTotal,
+        today_count: (todayReceipts || []).length,
+        month_total: monthTotal,
+        month_count: (monthReceipts || []).length,
+        total_amount: totalAmount,
+        total_count: (totalReceipts || []).length,
       },
       { status: 200 },
     )
   } catch (e: any) {
-    console.error("Unexpected error in GET /api/receipts/summary:", e)
-    return NextResponse.json(
-      {
-        total_receipts: 0,
-        today_collection: 0,
-        month_collection: 0,
-      },
-      { status: 200 },
-    )
+    console.error("Unexpected error:", e)
+    return NextResponse.json({ detail: `Error inesperado: ${e.message}` }, { status: 500 })
   }
 }
