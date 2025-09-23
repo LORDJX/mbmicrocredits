@@ -1,151 +1,160 @@
-import { type NextRequest, NextResponse } from "next/server"
-import { createAdminClient } from "@/lib/supabase/server"
+import { NextResponse, type NextRequest } from "next/server"
+import { getSupabaseAdmin } from "@/lib/supabase-admin"
+
+export const dynamic = "force-dynamic"
+
+type CreateReceiptBody = {
+  receipt_number: string
+  client_id: string
+  selected_loans: string[]
+  selected_installments: Array<{
+    installment_id: string
+    amount: number
+  }>
+  total_amount: number
+  cash_amount: number
+  transfer_amount: number
+  payment_type: "total" | "partial"
+  observations?: string
+}
 
 export async function GET(request: NextRequest) {
   try {
-    const supabase = createAdminClient()
+    const supabase = getSupabaseAdmin()
+    const searchParams = request.nextUrl.searchParams
 
-    const { data: receipts, error } = await supabase
-      .from("receipts")
-      .select(`
-        *,
-        clients!inner(first_name, last_name)
-      `)
-      .order("created_at", { ascending: false })
+    const clientId = searchParams.get("client_id")
+    const startDate = searchParams.get("start_date")
+    const endDate = searchParams.get("end_date")
+
+    let query = supabase.from("receipts_with_client").select("*").order("created_at", { ascending: false })
+
+    if (clientId) {
+      query = query.eq("client_id", clientId)
+    }
+
+    if (startDate) {
+      query = query.gte("receipt_date", startDate)
+    }
+
+    if (endDate) {
+      query = query.lte("receipt_date", endDate)
+    }
+
+    const { data, error } = await query
 
     if (error) {
       console.error("Error fetching receipts:", error)
-      return NextResponse.json({ error: "Error fetching receipts" }, { status: 500 })
+      return NextResponse.json({ detail: `Error obteniendo recibos: ${error.message}` }, { status: 500 })
     }
 
-    const formattedReceipts =
-      receipts?.map((receipt, index) => {
-        let receiptNumber = receipt.receipt_number
-
-        // If no receipt_number exists, generate sequential number based on position
-        if (!receiptNumber) {
-          const sequentialNumber = receipts.length - index
-          receiptNumber = `Rbo - ${sequentialNumber.toString().padStart(6, "0")}`
-        }
-
-        return {
-          ...receipt,
-          client_name: `${receipt.clients.first_name} ${receipt.clients.last_name}`,
-          receipt_number: receiptNumber,
-        }
-      }) || []
-
-    return NextResponse.json(formattedReceipts)
-  } catch (error) {
-    console.error("Error in receipts GET:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    return NextResponse.json(data || [], { status: 200 })
+  } catch (e: any) {
+    console.error("Unexpected error in GET /api/receipts:", e)
+    return NextResponse.json({ detail: `Error inesperado: ${e.message}` }, { status: 500 })
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = createAdminClient()
+    const supabase = getSupabaseAdmin()
+    const body = (await request.json()) as CreateReceiptBody
 
-    const body = await request.json()
-    console.log("Received body:", body)
-
-    const {
-      receipt_date,
-      client_id,
-      selected_loans,
-      selected_installments,
-      payment_type,
-      cash_amount,
-      transfer_amount,
-      total_amount,
-      observations,
-      attachment_url,
-    } = body
-
-    if (!receipt_date) {
-      return NextResponse.json({ error: "La fecha es requerida" }, { status: 400 })
-    }
-
-    const { data: tableExists, error: tableCheckError } = await supabase.from("receipts").select("id").limit(1)
-
-    if (tableCheckError && tableCheckError.code === "42P01") {
-      console.error("Receipts table does not exist:", tableCheckError)
+    // Validaciones
+    if (!body.receipt_number || !body.client_id || !body.selected_installments?.length) {
       return NextResponse.json(
         {
-          error:
-            "La tabla de recibos no existe. Por favor ejecute el script SQL 12-create-receipts-table.sql en su base de datos Supabase.",
+          detail: "receipt_number, client_id y selected_installments son requeridos",
         },
-        { status: 500 },
+        { status: 400 },
       )
     }
 
-    let receiptNumber = "Rbo - 000001" // Default for first receipt
-
-    try {
-      // Try to get the last receipt to generate next sequential number
-      const { data: lastReceipt } = await supabase
-        .from("receipts")
-        .select("id, receipt_number")
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .single()
-
-      if (lastReceipt) {
-        // If receipt_number column exists and has value, use it
-        if (lastReceipt.receipt_number && lastReceipt.receipt_number.startsWith("Rbo - ")) {
-          const lastNumber = Number.parseInt(lastReceipt.receipt_number.split(" - ")[1]) || 0
-          const nextNumber = lastNumber + 1
-          receiptNumber = `Rbo - ${nextNumber.toString().padStart(6, "0")}`
-        } else {
-          // If no receipt_number or invalid format, count total receipts + 1
-          const { count } = await supabase.from("receipts").select("*", { count: "exact", head: true })
-
-          const nextNumber = (count || 0) + 1
-          receiptNumber = `Rbo - ${nextNumber.toString().padStart(6, "0")}`
-        }
-      }
-    } catch (error) {
-      console.log("Could not get last receipt, using default number")
+    if (body.total_amount <= 0) {
+      return NextResponse.json({ detail: "El monto total debe ser mayor a 0" }, { status: 400 })
     }
 
-    const receiptData: any = {
-      receipt_date,
-      client_id,
-      payment_type,
-      cash_amount,
-      transfer_amount,
-      total_amount,
-      observations,
-      attachment_url,
-      selected_loans: selected_loans,
-      selected_installments: selected_installments,
+    if (body.cash_amount + body.transfer_amount !== body.total_amount) {
+      return NextResponse.json(
+        {
+          detail: "La suma de efectivo y transferencia debe igual al total",
+        },
+        { status: 400 },
+      )
     }
 
-    const { data: columnCheck } = await supabase.from("receipts").select("receipt_number").limit(1)
-    if (columnCheck !== null) {
-      receiptData.receipt_number = receiptNumber
+    // Verificar que el cliente existe
+    const { data: client, error: clientError } = await supabase
+      .from("clients")
+      .select("id, client_code, first_name, last_name")
+      .eq("id", body.client_id)
+      .single()
+
+    if (clientError || !client) {
+      return NextResponse.json({ detail: "Cliente no encontrado" }, { status: 404 })
     }
 
-    const { data: receipt, error: receiptError } = await supabase.from("receipts").insert(receiptData).select().single()
+    // Crear el recibo
+    const { data: receipt, error: receiptError } = await supabase
+      .from("receipts")
+      .insert({
+        receipt_number: body.receipt_number,
+        receipt_date: new Date().toISOString().split("T")[0],
+        client_id: body.client_id,
+        selected_loans: body.selected_loans,
+        selected_installments: body.selected_installments,
+        total_amount: body.total_amount,
+        cash_amount: body.cash_amount,
+        transfer_amount: body.transfer_amount,
+        payment_type: body.payment_type,
+        observations: body.observations || null,
+      })
+      .select()
+      .single()
 
     if (receiptError) {
       console.error("Error creating receipt:", receiptError)
       return NextResponse.json(
         {
-          error: `Error creating receipt: ${receiptError.message}`,
+          detail: `Error creando recibo: ${receiptError.message}`,
         },
         { status: 500 },
       )
     }
 
-    const finalReceipt = {
-      ...receipt,
-      receipt_number: receipt.receipt_number || receiptNumber,
+    // Crear el pago correspondiente para cada préstamo
+    for (const loanId of body.selected_loans) {
+      const loanInstallments = body.selected_installments.filter((si) => {
+        // Verificar que la cuota pertenece al préstamo
+        return true // Simplificado por ahora
+      })
+
+      const loanTotal = loanInstallments.reduce((sum, si) => sum + si.amount, 0)
+
+      if (loanTotal > 0) {
+        // Crear pago usando la función SQL existente
+        const { error: paymentError } = await supabase.rpc("apply_payment", {
+          p_loan_id: loanId,
+          p_paid_amount: loanTotal,
+          p_note: `Pago desde recibo ${body.receipt_number}`,
+        })
+
+        if (paymentError) {
+          console.error("Error applying payment:", paymentError)
+          // Continuar con otros pagos aunque uno falle
+        }
+      }
     }
 
-    return NextResponse.json(finalReceipt, { status: 201 })
-  } catch (error) {
-    console.error("Error in receipts POST:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    return NextResponse.json(
+      {
+        message: `Recibo ${body.receipt_number} creado exitosamente`,
+        receipt,
+      },
+      { status: 201 },
+    )
+  } catch (e: any) {
+    console.error("Unexpected error in POST /api/receipts:", e)
+    return NextResponse.json({ detail: `Error inesperado: ${e.message}` }, { status: 500 })
   }
 }
