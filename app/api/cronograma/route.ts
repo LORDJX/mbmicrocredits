@@ -3,13 +3,10 @@ import { createClient } from "@/lib/supabase/server"
 
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient()
-
-    const { searchParams } = new URL(request.url)
+    const supabase = createClient()
+    const searchParams = request.nextUrl.searchParams
     const viewMode = searchParams.get("view") || "current"
-    const dateRange = searchParams.get("dateRange") || "current_month"
-    const statusFilter = searchParams.get("status") || "all"
-    const searchQuery = searchParams.get("search") || ""
+    const dateRange = searchParams.get("range") || "current_month"
 
     const today = new Date()
     const argentinaTime = new Date(today.toLocaleString("en-US", { timeZone: "America/Argentina/Buenos_Aires" }))
@@ -20,34 +17,25 @@ export async function GET(request: NextRequest) {
     console.log("[v0] Cronograma API - View mode:", viewMode)
     console.log("[v0] Cronograma API - Date range:", dateRange)
 
-    // Calculate date ranges based on parameters
-    let startDate: string, endDate: string
+    let startDate: string
+    let endDate: string
 
     if (dateRange === "current_month") {
       const startOfMonth = new Date(argentinaTime.getFullYear(), argentinaTime.getMonth(), 1)
       const endOfMonth = new Date(argentinaTime.getFullYear(), argentinaTime.getMonth() + 1, 0)
       startDate = startOfMonth.toISOString().split("T")[0]
       endDate = endOfMonth.toISOString().split("T")[0]
-    } else if (dateRange === "last_month") {
-      const startOfLastMonth = new Date(argentinaTime.getFullYear(), argentinaTime.getMonth() - 1, 1)
-      const endOfLastMonth = new Date(argentinaTime.getFullYear(), argentinaTime.getMonth(), 0)
-      startDate = startOfLastMonth.toISOString().split("T")[0]
-      endDate = endOfLastMonth.toISOString().split("T")[0]
-    } else if (dateRange === "custom") {
-      startDate = searchParams.get("startDate") || todayStr
-      endDate = searchParams.get("endDate") || todayStr
     } else {
-      // Default to current month
-      const startOfMonth = new Date(argentinaTime.getFullYear(), argentinaTime.getMonth(), 1)
-      const endOfMonth = new Date(argentinaTime.getFullYear(), argentinaTime.getMonth() + 1, 0)
-      startDate = startOfMonth.toISOString().split("T")[0]
-      endDate = endOfMonth.toISOString().split("T")[0]
+      startDate = todayStr
+      endDate = todayStr
     }
 
     console.log("[v0] Cronograma API - Start date:", startDate)
     console.log("[v0] Cronograma API - End date:", endDate)
 
-    let query = supabase.from("installments_with_status").select(`
+    const { data: installments, error: installmentsError } = await supabase
+      .from("installments_with_status")
+      .select(`
         id,
         loan_id,
         code,
@@ -60,26 +48,7 @@ export async function GET(request: NextRequest) {
         balance_due,
         status
       `)
-
-    // Apply date filtering based on view mode
-    if (viewMode === "current") {
-      query = query.gte("due_date", startDate).lte("due_date", endDate)
-    } else if (viewMode === "historical") {
-      query = query.gte("due_date", startDate).lte("due_date", endDate).not("paid_at", "is", null) // Only show paid installments for historical view
-    }
-    // For "all" mode, no date filtering is applied
-
-    // Apply status filtering
-    if (statusFilter !== "all") {
-      query = query.eq("status", statusFilter)
-    }
-
-    // Apply search query filtering
-    if (searchQuery) {
-      query = query.ilike("code", `%${searchQuery}%`)
-    }
-
-    const { data: installments, error: installmentsError } = await query.order("due_date", { ascending: true })
+      .order("due_date", { ascending: true })
 
     if (installmentsError) {
       console.error("[v0] Error fetching installments:", installmentsError)
@@ -87,10 +56,9 @@ export async function GET(request: NextRequest) {
     }
 
     const allInstallments = installments || []
-    console.log("[v0] Total installments found:", allInstallments.length)
+    console.log("Total installments found:", allInstallments.length)
 
     if (allInstallments.length === 0) {
-      console.log("[v0] No installments found in database")
       return NextResponse.json({
         success: true,
         today: [],
@@ -105,8 +73,6 @@ export async function GET(request: NextRequest) {
           total_overdue: 0,
           total_received_month: 0,
           total_due_month: 0,
-          total_upcoming: 0,
-          total_paid: 0,
         },
         debug: {
           total_installments: 0,
@@ -127,60 +93,34 @@ export async function GET(request: NextRequest) {
 
     const enrichedInstallments = []
     for (const installment of allInstallments) {
-      try {
-        const { data: loan } = await supabase
-          .from("loans")
-          .select(`
-            loan_code,
-            client_id,
-            clients!inner(
-              first_name,
-              last_name
-            )
-          `)
-          .eq("id", installment.loan_id)
-          .single()
+      const { data: loan } = await supabase
+        .from("loans")
+        .select(`
+          loan_code,
+          client_id,
+          clients!inner(
+            first_name,
+            last_name
+          )
+        `)
+        .eq("id", installment.loan_id)
+        .single()
 
-        if (loan && loan.clients) {
-          enrichedInstallments.push({
-            ...installment,
-            loan_code: loan.loan_code || installment.code || "",
-            client_id: loan.client_id,
-            client_name:
-              `${loan.clients.first_name || ""} ${loan.clients.last_name || ""}`.trim() || "Cliente Desconocido",
-            first_name: loan.clients.first_name || "",
-            last_name: loan.clients.last_name || "",
-          })
-        } else {
-          // Include installment even if loan data is missing
-          enrichedInstallments.push({
-            ...installment,
-            loan_code: installment.code || "N/A",
-            client_id: null,
-            client_name: "Cliente Desconocido",
-            first_name: "",
-            last_name: "",
-          })
-        }
-      } catch (error) {
-        console.error("[v0] Error enriching installment:", installment.id, error)
-        // Include installment with minimal data
+      if (loan) {
         enrichedInstallments.push({
           ...installment,
-          loan_code: installment.code || "N/A",
-          client_id: null,
-          client_name: "Error al cargar cliente",
-          first_name: "",
-          last_name: "",
+          loan_code: loan.loan_code,
+          client_id: loan.client_id,
+          client_name: `${loan.clients.first_name} ${loan.clients.last_name}`,
         })
       }
     }
 
-    console.log("[v0] Enriched installments:", enrichedInstallments.length)
+    console.log("Enriched installments:", enrichedInstallments.length)
 
     const processedInstallments = enrichedInstallments.map((installment) => {
       const dueDate = new Date(installment.due_date)
-      const isPaid = (installment.amount_paid || 0) > 0 || installment.paid_at
+      const isPaid = installment.amount_paid > 0 || installment.paid_at
 
       let processedStatus = "pending"
       if (isPaid) {
@@ -196,11 +136,11 @@ export async function GET(request: NextRequest) {
       return {
         id: installment.id,
         loan_id: installment.loan_id,
-        loan_code: installment.loan_code || installment.code || "",
+        loan_code: installment.loan_code || installment.code,
         client_id: installment.client_id,
-        client_name: installment.client_name || "Cliente Desconocido",
-        installment_number: installment.installment_no || 0,
-        total_installments: installment.installments_total || 0,
+        client_name: installment.client_name,
+        installment_number: installment.installment_no,
+        total_installments: installment.installments_total,
         amount: installment.amount_due || 0,
         amount_paid: installment.amount_paid || 0,
         balance_due: installment.balance_due || 0,
@@ -247,7 +187,11 @@ export async function GET(request: NextRequest) {
     const totalReceivedToday = todayPayments?.reduce((sum, p) => sum + (p.paid_amount || 0), 0) || 0
     const totalReceivedMonth = monthPayments?.reduce((sum, p) => sum + (p.paid_amount || 0), 0) || 0
 
-    console.log("[v0] Today receipts:", todayPayments?.length || 0, "Total:", totalReceivedToday)
+    console.log("Today receipts:", todayPayments?.length || 0, "Total:", totalReceivedToday)
+    console.log("Today installments:", todayInstallments.length)
+    console.log("Overdue installments:", overdueInstallments.length)
+    console.log("Upcoming installments:", upcomingInstallments.length)
+    console.log("Paid installments:", paidInstallments.length)
 
     const summary = {
       total_due_today: todayInstallments.reduce((sum, inst) => sum + inst.amount, 0),
@@ -255,15 +199,12 @@ export async function GET(request: NextRequest) {
       total_overdue: overdueInstallments.reduce((sum, inst) => sum + inst.amount, 0),
       total_received_month: totalReceivedMonth,
       total_due_month: processedInstallments
-        .filter(
-          (inst) =>
-            !inst.paid_at &&
-            new Date(inst.due_date) >= new Date(startDate) &&
-            new Date(inst.due_date) <= new Date(endDate),
-        )
+        .filter((inst) => {
+          const dueDate = new Date(inst.due_date)
+          const isInRange = dueDate >= new Date(startDate) && dueDate <= new Date(endDate)
+          return isInRange && !inst.paid_at
+        })
         .reduce((sum, inst) => sum + inst.amount, 0),
-      total_upcoming: upcomingInstallments.reduce((sum, inst) => sum + inst.amount, 0),
-      total_paid: paidInstallments.reduce((sum, inst) => sum + inst.amount, 0),
     }
 
     const statusCounts = {
@@ -276,11 +217,7 @@ export async function GET(request: NextRequest) {
       pagadas_con_mora: paidInstallments.filter((i) => i.original_status === "con_mora").length,
     }
 
-    console.log("[v0] Today installments:", todayInstallments.length)
-    console.log("[v0] Overdue installments:", overdueInstallments.length)
-    console.log("[v0] Upcoming installments:", upcomingInstallments.length)
-    console.log("[v0] Paid installments:", paidInstallments.length)
-    console.log("[v0] Today receipts:", todayPayments?.length || 0, "Total:", totalReceivedToday)
+    console.log("Today receipts:", todayPayments?.length || 0, "Total:", totalReceivedToday)
 
     return NextResponse.json({
       success: true,
@@ -288,21 +225,12 @@ export async function GET(request: NextRequest) {
       overdue: overdueInstallments,
       month: processedInstallments.filter((inst) => {
         const dueDate = new Date(inst.due_date)
-        const isInMonth = dueDate >= new Date(startDate) && dueDate <= new Date(endDate)
-        return isInMonth && !inst.paid_at
+        const isInRange = dueDate >= new Date(startDate) && dueDate <= new Date(endDate)
+        return isInRange && !inst.paid_at
       }),
       upcoming: upcomingInstallments,
       paid: paidInstallments,
-      todayReceipts:
-        todayPayments?.map((p) => ({
-          id: p.id,
-          total_amount: p.paid_amount,
-          receipt_date: p.paid_at.split("T")[0],
-          payment_type: "payment",
-          observations: p.note,
-          receipt_number: `PAY-${p.id.slice(0, 8)}`,
-          clients: p.loans.clients,
-        })) || [],
+      todayReceipts: todayPayments || [],
       summary,
       debug: {
         total_installments: allInstallments.length,

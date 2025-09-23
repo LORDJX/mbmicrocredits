@@ -8,8 +8,8 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
-import { Receipt, Search, Plus, Calendar, DollarSign } from "lucide-react"
-import { toast } from "sonner"
+import { toast } from "@/hooks/use-toast"
+import { Loader2, Receipt, DollarSign, User, Calendar, FileText } from "lucide-react"
 
 interface Client {
   id: string
@@ -25,17 +25,7 @@ interface Loan {
   loan_code: string
   amount: number
   status: string
-}
-
-interface Installment {
-  id: string
-  code: string
-  installment_no: number
-  due_date: string
-  amount_due: number
-  amount_paid: number
-  balance_due: number
-  status: string
+  installments: number
 }
 
 interface Payment {
@@ -66,47 +56,67 @@ interface Payment {
 
 export default function PagosPage() {
   const [clients, setClients] = useState<Client[]>([])
-  const [selectedClient, setSelectedClient] = useState<Client | null>(null)
   const [loans, setLoans] = useState<Loan[]>([])
-  const [selectedLoan, setSelectedLoan] = useState<Loan | null>(null)
-  const [installments, setInstallments] = useState<Installment[]>([])
-  const [selectedInstallments, setSelectedInstallments] = useState<string[]>([])
   const [payments, setPayments] = useState<Payment[]>([])
-  const [loading, setLoading] = useState(false)
-  const [searchTerm, setSearchTerm] = useState("")
+  const [selectedClientId, setSelectedClientId] = useState<string>("")
+  const [selectedLoanId, setSelectedLoanId] = useState<string>("")
+  const [paymentAmount, setPaymentAmount] = useState<string>("")
+  const [paymentNote, setPaymentNote] = useState<string>("")
+  const [isLoading, setIsLoading] = useState(false)
+  const [isLoadingClients, setIsLoadingClients] = useState(true)
+  const [isLoadingPayments, setIsLoadingPayments] = useState(true)
 
-  // Form state
-  const [paymentAmount, setPaymentAmount] = useState("")
-  const [paymentNote, setPaymentNote] = useState("")
-
-  // Fetch clients
   useEffect(() => {
     fetchClients()
     fetchPayments()
   }, [])
 
+  useEffect(() => {
+    if (selectedClientId) {
+      fetchLoans(selectedClientId)
+    } else {
+      setLoans([])
+      setSelectedLoanId("")
+    }
+  }, [selectedClientId])
+
   const fetchClients = async () => {
     try {
       console.log("[v0] Fetching clients...")
       const response = await fetch("/api/clients")
-
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`)
       }
-
-      const contentType = response.headers.get("content-type")
-      if (!contentType || !contentType.includes("application/json")) {
-        const text = await response.text()
-        console.log("[v0] Non-JSON Response:", text.substring(0, 500) + "...")
-        throw new Error("API returned non-JSON response")
-      }
-
       const data = await response.json()
       console.log("[v0] Clients fetched:", data.length)
       setClients(data)
     } catch (error) {
       console.error("[v0] Error fetching clients:", error)
-      toast.error("Error al cargar clientes")
+      toast({
+        title: "Error",
+        description: "No se pudieron cargar los clientes",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoadingClients(false)
+    }
+  }
+
+  const fetchLoans = async (clientId: string) => {
+    try {
+      const response = await fetch(`/api/loans?client_id=${clientId}`)
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+      const data = await response.json()
+      setLoans(data)
+    } catch (error) {
+      console.error("[v0] Error fetching loans:", error)
+      toast({
+        title: "Error",
+        description: "No se pudieron cargar los préstamos",
+        variant: "destructive",
+      })
     }
   }
 
@@ -115,15 +125,14 @@ export default function PagosPage() {
       console.log("[v0] Fetching payments...")
       const response = await fetch("/api/payments")
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
-      }
-
       const contentType = response.headers.get("content-type")
       if (!contentType || !contentType.includes("application/json")) {
-        const text = await response.text()
-        console.log("[v0] Non-JSON Response:", text.substring(0, 500) + "...")
+        console.log("[v0] Non-JSON Response:", await response.text())
         throw new Error("API returned non-JSON response")
+      }
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
       }
 
       const data = await response.json()
@@ -131,69 +140,27 @@ export default function PagosPage() {
       setPayments(data)
     } catch (error) {
       console.error("[v0] Error fetching payments:", error)
-      toast.error("Error al cargar pagos")
-    }
-  }
-
-  const fetchLoans = async (clientId: string) => {
-    try {
-      const response = await fetch(`/api/loans?client_id=${clientId}`)
-      if (!response.ok) throw new Error("Error fetching loans")
-
-      const data = await response.json()
-      console.log("[v0] Loans fetched:", data.length)
-      setLoans(data)
-    } catch (error) {
-      console.error("Error fetching loans:", error)
-      toast.error("Error al cargar préstamos")
-    }
-  }
-
-  const fetchInstallments = async (loanId: string) => {
-    try {
-      const response = await fetch(`/api/installments?loan_id=${loanId}`)
-      if (!response.ok) throw new Error("Error fetching installments")
-
-      const data = await response.json()
-      console.log("[v0] Installments fetched:", data.length)
-      setInstallments(data)
-    } catch (error) {
-      console.error("Error fetching installments:", error)
-      toast.error("Error al cargar cuotas")
-    }
-  }
-
-  const handleClientSelect = (clientId: string) => {
-    const client = clients.find((c) => c.id === clientId)
-    setSelectedClient(client || null)
-    setSelectedLoan(null)
-    setLoans([])
-    setInstallments([])
-    setSelectedInstallments([])
-
-    if (client) {
-      fetchLoans(clientId)
-    }
-  }
-
-  const handleLoanSelect = (loanId: string) => {
-    const loan = loans.find((l) => l.id === loanId)
-    setSelectedLoan(loan || null)
-    setInstallments([])
-    setSelectedInstallments([])
-
-    if (loan) {
-      fetchInstallments(loanId)
+      toast({
+        title: "Error",
+        description: "No se pudieron cargar los pagos",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoadingPayments(false)
     }
   }
 
   const handleCreatePayment = async () => {
-    if (!selectedLoan || !paymentAmount || Number.parseFloat(paymentAmount) <= 0) {
-      toast.error("Seleccione un préstamo y ingrese un monto válido")
+    if (!selectedLoanId || !paymentAmount || Number.parseFloat(paymentAmount) <= 0) {
+      toast({
+        title: "Error",
+        description: "Por favor selecciona un préstamo e ingresa un monto válido",
+        variant: "destructive",
+      })
       return
     }
 
-    setLoading(true)
+    setIsLoading(true)
     try {
       const response = await fetch("/api/payments", {
         method: "POST",
@@ -201,42 +168,42 @@ export default function PagosPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          loan_id: selectedLoan.id,
+          loan_id: selectedLoanId,
           paid_amount: Number.parseFloat(paymentAmount),
           note: paymentNote || undefined,
         }),
       })
 
       if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.detail || "Error creating payment")
+        const errorData = await response.json()
+        throw new Error(errorData.detail || "Error creating payment")
       }
 
       const result = await response.json()
-      toast.success(result.message)
+      toast({
+        title: "Éxito",
+        description: result.message,
+      })
 
       // Reset form
+      setSelectedClientId("")
+      setSelectedLoanId("")
       setPaymentAmount("")
       setPaymentNote("")
 
-      // Refresh data
+      // Refresh payments list
       fetchPayments()
-      if (selectedLoan) {
-        fetchInstallments(selectedLoan.id)
-      }
-    } catch (error: any) {
-      console.error("Error creating payment:", error)
-      toast.error(error.message || "Error al crear el pago")
+    } catch (error) {
+      console.error("[v0] Error creating payment:", error)
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Error inesperado",
+        variant: "destructive",
+      })
     } finally {
-      setLoading(false)
+      setIsLoading(false)
     }
   }
-
-  const filteredClients = clients.filter(
-    (client) =>
-      `${client.first_name} ${client.last_name}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      client.client_code.toLowerCase().includes(searchTerm.toLowerCase()),
-  )
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("es-AR", {
@@ -246,184 +213,180 @@ export default function PagosPage() {
   }
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("es-AR")
+    return new Date(dateString).toLocaleDateString("es-AR", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    })
   }
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Gestión de Pagos</h1>
-          <p className="text-muted-foreground">Registre y gestione los pagos de préstamos</p>
-        </div>
-        <Receipt className="h-8 w-8 text-primary" />
+    <div className="space-y-6">
+      <div className="flex items-center gap-2">
+        <Receipt className="h-6 w-6" />
+        <h1 className="text-3xl font-bold">Gestión de Pagos</h1>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid gap-6 md:grid-cols-2">
         {/* Payment Form */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Plus className="h-5 w-5" />
-              Nuevo Pago
+              <DollarSign className="h-5 w-5" />
+              Registrar Nuevo Pago
             </CardTitle>
-            <CardDescription>Registre un nuevo pago para un préstamo</CardDescription>
+            <CardDescription>Selecciona un cliente y préstamo para registrar un pago</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {/* Client Selection */}
             <div className="space-y-2">
-              <Label htmlFor="client-search">Buscar Cliente</Label>
-              <div className="relative">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                <Input
-                  id="client-search"
-                  placeholder="Buscar por nombre o código..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-              {searchTerm && (
-                <div className="max-h-40 overflow-y-auto border rounded-md">
-                  {filteredClients.map((client) => (
-                    <div
-                      key={client.id}
-                      className="p-2 hover:bg-muted cursor-pointer border-b last:border-b-0"
-                      onClick={() => {
-                        handleClientSelect(client.id)
-                        setSearchTerm(`${client.first_name} ${client.last_name}`)
-                      }}
-                    >
-                      <div className="font-medium">
-                        {client.first_name} {client.last_name}
-                      </div>
-                      <div className="text-sm text-muted-foreground">{client.client_code}</div>
-                    </div>
+              <Label htmlFor="client">Cliente</Label>
+              <Select value={selectedClientId} onValueChange={setSelectedClientId} disabled={isLoadingClients}>
+                <SelectTrigger>
+                  <SelectValue placeholder={isLoadingClients ? "Cargando clientes..." : "Seleccionar cliente"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {clients.map((client) => (
+                    <SelectItem key={client.id} value={client.id}>
+                      {client.client_code} - {client.first_name} {client.last_name}
+                    </SelectItem>
                   ))}
-                </div>
-              )}
+                </SelectContent>
+              </Select>
             </div>
 
-            {/* Loan Selection */}
-            {selectedClient && (
-              <div className="space-y-2">
-                <Label>Préstamo</Label>
-                <Select onValueChange={handleLoanSelect}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Seleccionar préstamo" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {loans.map((loan) => (
-                      <SelectItem key={loan.id} value={loan.id}>
-                        {loan.loan_code} - {formatCurrency(loan.amount)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-
-            {/* Payment Amount */}
-            {selectedLoan && (
-              <>
-                <div className="space-y-2">
-                  <Label htmlFor="amount">Monto del Pago</Label>
-                  <Input
-                    id="amount"
-                    type="number"
-                    step="0.01"
-                    placeholder="0.00"
-                    value={paymentAmount}
-                    onChange={(e) => setPaymentAmount(e.target.value)}
+            <div className="space-y-2">
+              <Label htmlFor="loan">Préstamo</Label>
+              <Select
+                value={selectedLoanId}
+                onValueChange={setSelectedLoanId}
+                disabled={!selectedClientId || loans.length === 0}
+              >
+                <SelectTrigger>
+                  <SelectValue
+                    placeholder={
+                      !selectedClientId
+                        ? "Primero selecciona un cliente"
+                        : loans.length === 0
+                          ? "No hay préstamos disponibles"
+                          : "Seleccionar préstamo"
+                    }
                   />
-                </div>
+                </SelectTrigger>
+                <SelectContent>
+                  {loans.map((loan) => (
+                    <SelectItem key={loan.id} value={loan.id}>
+                      {loan.loan_code} - {formatCurrency(loan.amount)} ({loan.installments} cuotas)
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="note">Observaciones (Opcional)</Label>
-                  <Textarea
-                    id="note"
-                    placeholder="Notas adicionales sobre el pago..."
-                    value={paymentNote}
-                    onChange={(e) => setPaymentNote(e.target.value)}
-                  />
-                </div>
+            <div className="space-y-2">
+              <Label htmlFor="amount">Monto del Pago</Label>
+              <Input
+                id="amount"
+                type="number"
+                step="0.01"
+                min="0"
+                placeholder="0.00"
+                value={paymentAmount}
+                onChange={(e) => setPaymentAmount(e.target.value)}
+              />
+            </div>
 
-                <Button onClick={handleCreatePayment} disabled={loading || !paymentAmount} className="w-full">
-                  {loading ? "Procesando..." : "Registrar Pago"}
-                </Button>
-              </>
-            )}
+            <div className="space-y-2">
+              <Label htmlFor="note">Nota (opcional)</Label>
+              <Textarea
+                id="note"
+                placeholder="Observaciones sobre el pago..."
+                value={paymentNote}
+                onChange={(e) => setPaymentNote(e.target.value)}
+                rows={3}
+              />
+            </div>
+
+            <Button onClick={handleCreatePayment} disabled={isLoading} className="w-full">
+              {isLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Procesando...
+                </>
+              ) : (
+                <>
+                  <DollarSign className="mr-2 h-4 w-4" />
+                  Registrar Pago
+                </>
+              )}
+            </Button>
           </CardContent>
         </Card>
 
-        {/* Installments Preview */}
-        {selectedLoan && installments.length > 0 && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Calendar className="h-5 w-5" />
-                Cuotas del Préstamo
-              </CardTitle>
-              <CardDescription>
-                {selectedLoan.loan_code} - {selectedClient?.first_name} {selectedClient?.last_name}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2 max-h-60 overflow-y-auto">
-                {installments.map((installment) => (
-                  <div key={installment.id} className="flex items-center justify-between p-2 border rounded">
-                    <div>
-                      <div className="font-medium">Cuota {installment.installment_no}</div>
-                      <div className="text-sm text-muted-foreground">Vence: {formatDate(installment.due_date)}</div>
+        {/* Recent Payments */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5" />
+              Pagos Recientes
+            </CardTitle>
+            <CardDescription>Últimos pagos registrados en el sistema</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {isLoadingPayments ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin" />
+                <span className="ml-2">Cargando pagos...</span>
+              </div>
+            ) : payments.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">No hay pagos registrados</div>
+            ) : (
+              <div className="space-y-4 max-h-96 overflow-y-auto">
+                {payments.slice(0, 10).map((payment) => (
+                  <div key={payment.id} className="border rounded-lg p-4 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <User className="h-4 w-4" />
+                        <span className="font-medium">
+                          {payment.loans.clients.first_name} {payment.loans.clients.last_name}
+                        </span>
+                      </div>
+                      <Badge variant="secondary">{payment.loans.loan_code}</Badge>
                     </div>
-                    <div className="text-right">
-                      <div className="font-medium">{formatCurrency(installment.balance_due)}</div>
-                      <Badge variant={installment.status === "paid" ? "default" : "secondary"}>
-                        {installment.status === "paid" ? "Pagada" : "Pendiente"}
-                      </Badge>
+
+                    <div className="flex items-center justify-between">
+                      <span className="text-lg font-semibold text-green-600">
+                        {formatCurrency(payment.paid_amount)}
+                      </span>
+                      <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                        <Calendar className="h-3 w-3" />
+                        {formatDate(payment.paid_at)}
+                      </div>
                     </div>
+
+                    {payment.note && <p className="text-sm text-muted-foreground">{payment.note}</p>}
+
+                    {payment.payment_imputations.length > 0 && (
+                      <div className="pt-2 border-t">
+                        <p className="text-xs text-muted-foreground mb-1">Cuotas imputadas:</p>
+                        <div className="flex flex-wrap gap-1">
+                          {payment.payment_imputations.map((imputation) => (
+                            <Badge key={imputation.id} variant="outline" className="text-xs">
+                              Cuota {imputation.installments.installment_no}:{" "}
+                              {formatCurrency(imputation.imputed_amount)}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
-            </CardContent>
-          </Card>
-        )}
-      </div>
-
-      {/* Recent Payments */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <DollarSign className="h-5 w-5" />
-            Pagos Recientes
-          </CardTitle>
-          <CardDescription>Últimos pagos registrados en el sistema</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {payments.slice(0, 10).map((payment) => (
-              <div key={payment.id} className="flex items-center justify-between p-4 border rounded-lg">
-                <div className="space-y-1">
-                  <div className="font-medium">
-                    {payment.loans.clients.first_name} {payment.loans.clients.last_name}
-                  </div>
-                  <div className="text-sm text-muted-foreground">
-                    {payment.loans.loan_code} • {formatDate(payment.paid_at)}
-                  </div>
-                  {payment.note && <div className="text-sm text-muted-foreground italic">{payment.note}</div>}
-                </div>
-                <div className="text-right">
-                  <div className="font-bold text-green-600">{formatCurrency(payment.paid_amount)}</div>
-                  <div className="text-sm text-muted-foreground">{payment.payment_imputations.length} cuota(s)</div>
-                </div>
-              </div>
-            ))}
-            {payments.length === 0 && (
-              <div className="text-center py-8 text-muted-foreground">No hay pagos registrados</div>
             )}
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   )
 }
