@@ -1,3 +1,5 @@
+// En api/installments/route.ts
+
 import { NextResponse, type NextRequest } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
@@ -19,10 +21,12 @@ export async function GET(request: NextRequest) {
         due_date,
         amount_due,
         amount_paid,
-        status
+        status,
+        loans(loan_code, clients(client_code, first_name, last_name))
       `)
       .eq("loan_id", loanId)
-      .lt("amount_paid", "amount_due") 
+      // Esta es la línea crucial: comparamos las dos columnas de forma correcta
+      .filter("amount_paid", "lt", supabase.raw("amount_due")) 
       .order("due_date", { ascending: true });
 
     if (error) {
