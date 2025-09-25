@@ -1,5 +1,3 @@
-// /api/installments/route.ts
-
 import { NextResponse, type NextRequest } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
@@ -9,12 +7,10 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const loanId = searchParams.get("loan_id");
     
-    // 1. Validar la entrada
     if (!loanId) {
-      return NextResponse.json({ detail: "loan_id es un parámetro requerido." }, { status: 400);
+      return NextResponse.json({ detail: "loan_id es un parámetro requerido." }, { status: 400 });
     }
 
-    // 2. Ejecutar la consulta con la sintaxis correcta
     const { data, error } = await supabase
       .from("installments")
       .select(`
@@ -26,20 +22,16 @@ export async function GET(request: NextRequest) {
         status
       `)
       .eq("loan_id", loanId)
-      // Usamos el método `lt()` y le pasamos el nombre de la columna a comparar directamente
       .lt("amount_paid", "amount_due") 
       .order("due_date", { ascending: true });
 
     if (error) {
       console.error("[v0] Error fetching installments from DB:", error);
-      // El error de base de datos se maneja aquí.
       return NextResponse.json({ detail: `Error al obtener las cuotas: ${error.message}` }, { status: 500 });
     }
 
-    // 3. Devolver los datos
     return NextResponse.json(data || [], { status: 200 });
   } catch (e: any) {
-    // Si hay un error inesperado, se captura aquí
     console.error("[v0] Unexpected error in GET /api/installments:", e);
     return NextResponse.json({ detail: `Error inesperado: ${e.message}` }, { status: 500 });
   }
