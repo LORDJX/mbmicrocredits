@@ -25,7 +25,8 @@ export async function GET(request: NextRequest) {
         loans(loan_code, clients(client_code, first_name, last_name))
       `)
       .eq("loan_id", loanId)
-      // Esta es la línea corregida para filtrar cuotas con saldo pendiente
+      // Esta es la línea corregida para filtrar cuotas con saldo pendiente.
+      // Usa el método raw() directamente en el constructor de consultas.
       .filter("amount_paid", "lt", supabase.raw("amount_due")) 
       .order("due_date", { ascending: true });
 
