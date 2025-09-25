@@ -1,81 +1,241 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+@import "tw-animate-css";
 
-@layer base {
-  :root {
-    --background: 210 40% 4%; /* #0D1117 */
-    --foreground: 210 40% 96%; /* #E6EDF3 */
+@custom-variant dark (&:is(.dark *));
 
-    --card: 210 29% 8%; /* #161B22 */
-    --card-foreground: 210 40% 96%; /* #E6EDF3 */
+:root {
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --destructive-foreground: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  --chart-1: oklch(0.646 0.222 41.116);
+  --chart-2: oklch(0.6 0.118 184.704);
+  --chart-3: oklch(0.398 0.07 227.392);
+  --chart-4: oklch(0.828 0.189 84.429);
+  --chart-5: oklch(0.769 0.188 70.08);
+  --radius: 0.75rem;
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
+}
 
-    --popover: 210 29% 8%; /* #161B22 */
-    --popover-foreground: 210 40% 96%; /* #E6EDF3 */
+.dark {
+  /* Tema oscuro moderno inspirado en Vercel */
+  --background: oklch(0.05 0 0); /* Negro profundo */
+  --foreground: oklch(0.98 0 0); /* Blanco puro */
+  --card: oklch(0.08 0 0); /* Gris muy oscuro para tarjetas */
+  --card-foreground: oklch(0.95 0 0);
+  --popover: oklch(0.06 0 0);
+  --popover-foreground: oklch(0.95 0 0);
+  --primary: oklch(0.6 0.2 250); /* Azul vibrante */
+  --primary-foreground: oklch(0.98 0 0);
+  --secondary: oklch(0.12 0 0); /* Gris oscuro para elementos secundarios */
+  --secondary-foreground: oklch(0.85 0 0);
+  --muted: oklch(0.1 0 0); /* Gris muy sutil */
+  --muted-foreground: oklch(0.6 0 0); /* Gris medio para texto secundario */
+  --accent: oklch(0.15 0 0); /* Gris para acentos */
+  --accent-foreground: oklch(0.9 0 0);
+  --destructive: oklch(0.55 0.25 15); /* Rojo más suave */
+  --destructive-foreground: oklch(0.95 0 0);
+  --border: oklch(0.15 0 0); /* Bordes sutiles */
+  --input: oklch(0.1 0 0); /* Inputs oscuros */
+  --ring: oklch(0.6 0.2 250); /* Ring azul */
+  --chart-1: oklch(0.6 0.2 250); /* Azul */
+  --chart-2: oklch(0.65 0.2 160); /* Verde */
+  --chart-3: oklch(0.7 0.2 60); /* Amarillo */
+  --chart-4: oklch(0.6 0.25 300); /* Púrpura */
+  --chart-5: oklch(0.65 0.2 30); /* Naranja */
+  --sidebar: oklch(0.06 0 0); /* Sidebar muy oscuro */
+  --sidebar-foreground: oklch(0.9 0 0);
+  --sidebar-primary: oklch(0.6 0.2 250);
+  --sidebar-primary-foreground: oklch(0.98 0 0);
+  --sidebar-accent: oklch(0.12 0 0);
+  --sidebar-accent-foreground: oklch(0.85 0 0);
+  --sidebar-border: oklch(0.15 0 0);
+  --sidebar-ring: oklch(0.6 0.2 250);
 
-    --primary: 200 92% 60%; /* #38BDF8 */
-    --primary-foreground: 210 40% 4%; /* #0D1117 */
+  /* Colores adicionales para estados específicos */
+  --success: oklch(0.65 0.2 160); /* Verde para éxito */
+  --success-foreground: oklch(0.98 0 0);
+  --warning: oklch(0.7 0.2 60); /* Amarillo para advertencias */
+  --warning-foreground: oklch(0.1 0 0);
+  --info: oklch(0.6 0.2 200); /* Azul claro para información */
+  --info-foreground: oklch(0.98 0 0);
+}
 
-    --secondary: 210 22% 15%; /* #21262D */
-    --secondary-foreground: 210 40% 96%; /* #E6EDF3 */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
 
-    --muted: 210 22% 15%; /* #21262D */
-    --muted-foreground: 210 22% 45%; /* #8B949E */
-
-    --accent: 210 22% 15%; /* #21262D */
-    --accent-foreground: 210 40% 96%; /* #E6EDF3 */
-
-    --destructive: 0 63% 31%;
-    --destructive-foreground: 210 40% 98%;
-
-    --border: 210 18% 21%; /* #30363D */
-    --input: 210 18% 21%; /* #30363D */
-    --ring: 200 92% 60%; /* #38BDF8 */
-
-    --radius: 0.5rem;
-  }
-
-  .dark {
-    --background: 210 40% 4%;
-    --foreground: 210 40% 96%;
-
-    --card: 210 29% 8%;
-    --card-foreground: 210 40% 96%;
-
-    --popover: 210 29% 8%;
-    --popover-foreground: 210 40% 96%;
-
-    --primary: 200 92% 60%;
-    --primary-foreground: 210 40% 4%;
-
-    --secondary: 210 22% 15%;
-    --secondary-foreground: 210 40% 96%;
-
-    --muted: 210 22% 15%;
-    --muted-foreground: 210 22% 45%;
-
-    --accent: 210 22% 15%;
-    --accent-foreground: 210 40% 96%;
-
-    --destructive: 0 63% 31%;
-    --destructive-foreground: 210 40% 98%;
-
-    --border: 210 18% 21%;
-    --input: 210 18% 21%;
-    --ring: 200 92% 60%;
-  }
+  /* Colores adicionales para estados */
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
 }
 
 @layer base {
   * {
-    @apply border-border;
+    @apply border-border outline-ring/50;
   }
   body {
     @apply bg-background text-foreground;
+    /* Fuente más suave y mejor renderizado */
+    font-feature-settings: "rlig" 1, "calt" 1;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Mejores estilos para elementos interactivos */
+  button,
+  [role="button"] {
+    @apply transition-all duration-200 ease-in-out;
+  }
+
+  /* Estilos mejorados para tarjetas */
+  .card-modern {
+    @apply bg-card/50 backdrop-blur-sm border border-border/50 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300;
+  }
+
+  .card-gradient {
+    background: linear-gradient(135deg, hsl(var(--card)) 0%, hsl(var(--muted)) 100%);
   }
 }
 
-/* Adding print styles for PDF generation */
+/* Scrollbar más elegante */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: hsl(var(--muted));
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground));
+  border-radius: 3px;
+  transition: background 0.2s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--primary));
+}
+
+/* Animaciones suaves para elementos */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.5s ease-out;
+}
+
+.animate-slide-in {
+  animation: slideIn 0.3s ease-out;
+}
+
+/* Estilos para badges modernos */
+.badge-modern {
+  @apply inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200;
+}
+
+.badge-success {
+  @apply bg-green-500/10 text-green-400 border border-green-500/20;
+}
+
+.badge-warning {
+  @apply bg-yellow-500/10 text-yellow-400 border border-yellow-500/20;
+}
+
+.badge-error {
+  @apply bg-red-500/10 text-red-400 border border-red-500/20;
+}
+
+.badge-info {
+  @apply bg-blue-500/10 text-blue-400 border border-blue-500/20;
+}
+
+.badge-neutral {
+  @apply bg-gray-500/10 text-gray-400 border border-gray-500/20;
+}
+
+/* Print styles for reports */
 @media print {
   .no-print {
     display: none !important;
@@ -86,30 +246,6 @@
     color: black !important;
     font-size: 12pt;
     line-height: 1.4;
-  }
-
-  .bg-gray-800,
-  .bg-gray-700,
-  .bg-gray-900 {
-    background: white !important;
-    color: black !important;
-    border: 1px solid #ccc !important;
-  }
-
-  .text-gray-50,
-  .text-gray-100,
-  .text-gray-300,
-  .text-gray-400 {
-    color: black !important;
-  }
-
-  .border-gray-700,
-  .border-gray-600 {
-    border-color: #ccc !important;
-  }
-
-  .shadow-lg {
-    box-shadow: none !important;
   }
 
   @page {
@@ -127,4 +263,22 @@
     page-break-inside: avoid;
     margin-bottom: 1rem;
   }
+}
+
+/* Estilos para filtros modernos */
+.filter-container {
+  @apply bg-card/30 backdrop-blur-sm border border-border/50 rounded-xl p-6;
+}
+
+.filter-grid {
+  @apply grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-4;
+}
+
+/* Efectos hover mejorados */
+.hover-lift {
+  @apply transition-all duration-300 hover:scale-[1.02] hover:shadow-xl;
+}
+
+.hover-glow {
+  @apply transition-all duration-300 hover:shadow-lg hover:shadow-primary/20;
 }

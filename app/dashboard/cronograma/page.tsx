@@ -6,27 +6,15 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
-import {
-  Search,
-  Calendar,
-  AlertCircle,
-  CheckCircle,
-  Clock,
-  Printer,
-  DollarSign,
-  MessageCircle,
-  Filter,
-} from "lucide-react"
-import { AppHeader } from "@/components/app-header"
-import { toast } from "sonner"
+import { Search, Calendar, AlertCircle, CheckCircle, Clock, Printer, Filter, Download, Users } from "lucide-react"
+import { useToast } from "@/hooks/use-toast"
 
 interface CronogramItem {
   id: string
   loan_code: string
   client_name: string
-  client_phone?: string
   installment_number: number
   due_date: string
   amount: number
@@ -35,18 +23,14 @@ interface CronogramItem {
   payment_date?: string
 }
 
-type FilterType = "all" | "overdue" | "due_today" | "upcoming" | "paid"
-
 export default function DashboardCronogramaPage() {
   const [cronogramData, setCronogramData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
-  const [activeFilter, setActiveFilter] = useState<FilterType>("all")
-  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false)
-  const [selectedItem, setSelectedItem] = useState<CronogramItem | null>(null)
-  const [paymentAmount, setPaymentAmount] = useState("")
-  const [paymentNote, setPaymentNote] = useState("")
-  const [isProcessingPayment, setIsProcessingPayment] = useState(false)
+  const [statusFilter, setStatusFilter] = useState("all")
+  const [dateFromFilter, setDateFromFilter] = useState("")
+  const [dateToFilter, setDateToFilter] = useState("")
+  const { toast } = useToast()
 
   useEffect(() => {
     fetchCronogramData()
@@ -63,173 +47,14 @@ export default function DashboardCronogramaPage() {
       setCronogramData(data)
     } catch (error) {
       console.error("Error:", error)
-      toast.error("No se pudo cargar el cronograma")
+      toast({
+        title: "Error",
+        description: "No se pudo cargar el cronograma",
+        variant: "destructive",
+      })
     } finally {
       setLoading(false)
     }
-  }
-
-  const handleCardFilter = (filterType: FilterType) => {
-    setActiveFilter(filterType)
-  }
-
-  const openPaymentModal = (item: CronogramItem) => {
-    if (item.status === "paid") {
-      toast.error("Esta cuota ya está pagada")
-      return
-    }
-    setSelectedItem(item)
-    setPaymentAmount(item.amount.toString())
-    setPaymentNote(`Pago cuota ${item.installment_number} - ${item.loan_code}`)
-    setIsPaymentModalOpen(true)
-  }
-
-  const handleProcessPayment = async () => {
-    if (!selectedItem || isProcessingPayment) return
-
-    try {
-      setIsProcessingPayment(true)
-
-      const loanId = cronogramData?.debug?.loan_mapping?.[selectedItem.loan_code] || selectedItem.id
-
-      const response = await fetch("/api/payments", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          loan_id: loanId,
-          paid_amount: Number.parseFloat(paymentAmount),
-          note: paymentNote,
-        }),
-      })
-
-      const result = await response.json()
-
-      if (response.ok) {
-        toast.success("Pago procesado exitosamente")
-        setIsPaymentModalOpen(false)
-        setSelectedItem(null)
-        setPaymentAmount("")
-        setPaymentNote("")
-        fetchCronogramData() // Refresh data
-      } else {
-        toast.error("Error al procesar pago: " + result.detail)
-      }
-    } catch (error) {
-      console.error("Error processing payment:", error)
-      toast.error("Error de conexión al procesar pago")
-    } finally {
-      setIsProcessingPayment(false)
-    }
-  }
-
-  const handlePrintItem = (item: CronogramItem) => {
-    const printWindow = window.open("", "_blank")
-    if (!printWindow) return
-
-    const printContent = `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>Detalle de Cuota - ${item.loan_code}</title>
-          <style>
-            body { font-family: Arial, sans-serif; margin: 20px; color: #000; }
-            .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #333; padding-bottom: 10px; }
-            .details { margin: 20px 0; }
-            .detail-row { display: flex; justify-content: space-between; margin: 10px 0; }
-            .label { font-weight: bold; }
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <h1>BM MICROCRÉDITOS</h1>
-            <h2>Detalle de Cuota</h2>
-          </div>
-          <div class="details">
-            <div class="detail-row">
-              <span class="label">Préstamo:</span>
-              <span>${item.loan_code}</span>
-            </div>
-            <div class="detail-row">
-              <span class="label">Cliente:</span>
-              <span>${item.client_name}</span>
-            </div>
-            <div class="detail-row">
-              <span class="label">Cuota:</span>
-              <span>${item.installment_number}</span>
-            </div>
-            <div class="detail-row">
-              <span class="label">Fecha Vencimiento:</span>
-              <span>${new Date(item.due_date).toLocaleDateString()}</span>
-            </div>
-            <div class="detail-row">
-              <span class="label">Monto:</span>
-              <span>$${item.amount.toLocaleString()}</span>
-            </div>
-            <div class="detail-row">
-              <span class="label">Estado:</span>
-              <span>${item.status}</span>
-            </div>
-            ${
-              item.paid_at
-                ? `
-            <div class="detail-row">
-              <span class="label">Fecha Pago:</span>
-              <span>${new Date(item.paid_at).toLocaleDateString()}</span>
-            </div>
-            `
-                : ""
-            }
-          </div>
-          <script>window.print(); window.close();</script>
-        </body>
-      </html>
-    `
-
-    printWindow.document.write(printContent)
-    printWindow.document.close()
-  }
-
-  const handleWhatsAppShare = (item: CronogramItem) => {
-    if (!item.client_phone) {
-      toast.error("No se encontró número de teléfono para este cliente")
-      return
-    }
-
-    let message = ""
-
-    if (item.status === "paid" && item.paid_at) {
-      message = `🧾 RECIBO DE PAGO
-
-📋 Recibo N°: Rbo - ${item.id.slice(-6).padStart(6, "0")}
-📅 Fecha: ${new Date(item.paid_at).toLocaleDateString()}
-👤 Cliente: ${item.client_name}
-💰 Total Pagado: $${item.amount.toLocaleString()}
-💵 Efectivo: $${item.amount.toLocaleString()}
-🏦 Transferencia: $0.00
-📝 Tipo: Total
-📋 Observaciones: Pago cuota ${item.installment_number}
-
-¡Gracias por su pago! 🙏
-BM Microcréditos`
-    } else {
-      message = `🧾 Cuota - Pendiente
-
-📋 N° cuota: ${item.installment_number}
-📋 Préstamo: ${item.loan_code}
-📅 Fecha Vto: ${new Date(item.due_date).toLocaleDateString()}
-👤 Cliente: ${item.client_name}
-💰 Monto: $${item.amount.toLocaleString()}
-📋 Observaciones: Pago cuota ${item.installment_number}
-
-¡Gracias por su compromiso! 🙏
-BM Microcréditos`
-    }
-
-    const encodedMessage = encodeURIComponent(message)
-    const phoneNumber = item.client_phone.replace(/\D/g, "") // Remove non-digits
-    const whatsappUrl = `https://web.whatsapp.com/send?phone=${phoneNumber}&text=${encodedMessage}`
-
-    window.open(whatsappUrl, "_blank")
   }
 
   const handlePrintCronogram = () => {
@@ -286,7 +111,7 @@ BM Microcréditos`
               <p>$${(cronogramData?.summary?.total_upcoming || 0).toLocaleString()}</p>
             </div>
             <div class="summary-item">
-              <h3>Pagos Recibidos</h3>
+              <h3>Pagados</h3>
               <p style="font-size: 24px; color: #388e3c;">${cronogramData?.paid?.length || 0}</p>
               <p>$${(cronogramData?.summary?.total_paid || 0).toLocaleString()}</p>
             </div>
@@ -335,28 +160,28 @@ BM Microcréditos`
     switch (status) {
       case "overdue":
         return (
-          <Badge variant="destructive" className="gap-1">
+          <Badge className="badge-modern badge-error">
             <AlertCircle className="h-3 w-3" />
             Vencido
           </Badge>
         )
       case "due_today":
         return (
-          <Badge variant="secondary" className="gap-1">
+          <Badge className="badge-modern badge-warning">
             <Clock className="h-3 w-3" />
             Hoy
           </Badge>
         )
       case "paid":
         return (
-          <Badge variant="default" className="gap-1 bg-green-600">
+          <Badge className="badge-modern badge-success">
             <CheckCircle className="h-3 w-3" />
             Pagado
           </Badge>
         )
       default:
         return (
-          <Badge variant="outline" className="gap-1">
+          <Badge className="badge-modern badge-info">
             <Calendar className="h-3 w-3" />
             Próximo
           </Badge>
@@ -364,13 +189,27 @@ BM Microcréditos`
     }
   }
 
+  const clearFilters = () => {
+    setSearchTerm("")
+    setStatusFilter("all")
+    setDateFromFilter("")
+    setDateToFilter("")
+  }
+
+  const applyFilters = () => {
+    fetchCronogramData()
+  }
+
   if (loading) {
     return (
-      <div className="space-y-6">
-        <AppHeader title="Cronograma de Pagos" />
-        <div className="text-center py-8">
+      <div className="space-y-8 animate-fade-in">
+        <div className="flex flex-col space-y-2">
+          <h1 className="text-3xl font-bold tracking-tight">Cronograma de Pagos</h1>
+          <p className="text-muted-foreground">Gestión y seguimiento de pagos programados</p>
+        </div>
+        <div className="text-center py-12">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-          <p className="mt-2 text-muted-foreground">Cargando cronograma...</p>
+          <p className="mt-4 text-muted-foreground">Cargando cronograma...</p>
         </div>
       </div>
     )
@@ -383,283 +222,234 @@ BM Microcréditos`
     ...(cronogramData?.paid || []).map((item: any) => ({ ...item, status: "paid" })),
   ]
 
-  const getFilteredItems = () => {
-    switch (activeFilter) {
-      case "overdue":
-        return allItems.filter((item) => item.status === "overdue")
-      case "due_today":
-        return allItems.filter((item) => item.status === "due_today")
-      case "upcoming":
-        return allItems.filter((item) => item.status === "pending")
-      case "paid":
-        return allItems.filter((item) => item.status === "paid")
-      default:
-        return allItems
-    }
-  }
-
-  const filteredItems = getFilteredItems().filter(
+  const filteredItems = allItems.filter(
     (item: CronogramItem) =>
       item.loan_code.toLowerCase().includes(searchTerm.toLowerCase()) ||
       item.client_name.toLowerCase().includes(searchTerm.toLowerCase()),
   )
 
-  const paidInstallments = cronogramData?.debug?.installments_by_status?.pagadas || 0
-  console.log("[v0] Paid installments tracked:", paidInstallments)
-  console.log("[v0] Debug info:", cronogramData?.debug)
-
   return (
-    <div className="space-y-6">
-      <AppHeader title="Cronograma de Pagos" />
+    <div className="space-y-8 animate-fade-in">
+      <div className="flex flex-col space-y-2">
+        <h1 className="text-3xl font-bold tracking-tight text-foreground">Cronograma de Pagos</h1>
+        <p className="text-muted-foreground">Gestión y seguimiento de pagos programados</p>
+      </div>
 
-      {/* Resumen */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Card
-          className={`cursor-pointer transition-all hover:shadow-md ${activeFilter === "overdue" ? "ring-2 ring-red-500" : ""}`}
-          onClick={() => handleCardFilter("overdue")}
-        >
+        <Card className="card-modern hover-lift">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pagos Vencidos</CardTitle>
-            <div className="flex items-center gap-2">
-              <AlertCircle className="h-4 w-4 text-destructive" />
-              {activeFilter === "overdue" && <Filter className="h-4 w-4 text-red-500" />}
-            </div>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Pagos Vencidos</CardTitle>
+            <AlertCircle className="h-4 w-4 text-red-400" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-destructive">{cronogramData?.overdue?.length || 0}</div>
-            <p className="text-xs text-muted-foreground">
+            <div className="text-2xl font-bold text-red-400">{cronogramData?.overdue?.length || 0}</div>
+            <p className="text-xs text-muted-foreground mt-1">
               ${(cronogramData?.summary?.total_overdue || 0).toLocaleString()}
             </p>
           </CardContent>
         </Card>
 
-        <Card
-          className={`cursor-pointer transition-all hover:shadow-md ${activeFilter === "due_today" ? "ring-2 ring-orange-500" : ""}`}
-          onClick={() => handleCardFilter("due_today")}
-        >
+        <Card className="card-modern hover-lift">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Vencen Hoy</CardTitle>
-            <div className="flex items-center gap-2">
-              <Clock className="h-4 w-4 text-orange-500" />
-              {activeFilter === "due_today" && <Filter className="h-4 w-4 text-orange-500" />}
-            </div>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Vencen Hoy</CardTitle>
+            <Clock className="h-4 w-4 text-orange-400" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-orange-600">{cronogramData?.today?.length || 0}</div>
-            <p className="text-xs text-muted-foreground">
+            <div className="text-2xl font-bold text-orange-400">{cronogramData?.today?.length || 0}</div>
+            <p className="text-xs text-muted-foreground mt-1">
               ${(cronogramData?.summary?.total_due_today || 0).toLocaleString()}
             </p>
           </CardContent>
         </Card>
 
-        <Card
-          className={`cursor-pointer transition-all hover:shadow-md ${activeFilter === "upcoming" ? "ring-2 ring-blue-500" : ""}`}
-          onClick={() => handleCardFilter("upcoming")}
-        >
+        <Card className="card-modern hover-lift">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Próximos Pagos</CardTitle>
-            <div className="flex items-center gap-2">
-              <Calendar className="h-4 w-4 text-blue-500" />
-              {activeFilter === "upcoming" && <Filter className="h-4 w-4 text-blue-500" />}
-            </div>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Próximos Pagos</CardTitle>
+            <Calendar className="h-4 w-4 text-blue-400" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-blue-600">{cronogramData?.upcoming?.length || 0}</div>
-            <p className="text-xs text-muted-foreground">
+            <div className="text-2xl font-bold text-blue-400">{cronogramData?.upcoming?.length || 0}</div>
+            <p className="text-xs text-muted-foreground mt-1">
               ${(cronogramData?.summary?.total_upcoming || 0).toLocaleString()}
             </p>
           </CardContent>
         </Card>
 
-        <Card
-          className={`cursor-pointer transition-all hover:shadow-md ${activeFilter === "paid" ? "ring-2 ring-green-500" : ""}`}
-          onClick={() => handleCardFilter("paid")}
-        >
+        <Card className="card-modern hover-lift">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pagos Recibidos</CardTitle>
-            <div className="flex items-center gap-2">
-              <CheckCircle className="h-4 w-4 text-green-500" />
-              {activeFilter === "paid" && <Filter className="h-4 w-4 text-green-500" />}
-            </div>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Pagos Realizados</CardTitle>
+            <CheckCircle className="h-4 w-4 text-green-400" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600">{cronogramData?.paid?.length || 0}</div>
-            <p className="text-xs text-muted-foreground">
+            <div className="text-2xl font-bold text-green-400">{cronogramData?.paid?.length || 0}</div>
+            <p className="text-xs text-muted-foreground mt-1">
               ${(cronogramData?.summary?.total_paid || 0).toLocaleString()}
             </p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Tabla de Cronograma */}
-      <Card>
+      <Card className="filter-container">
         <CardHeader>
-          <div className="flex items-center justify-between">
+          <CardTitle className="flex items-center gap-2 text-foreground">
+            <Filter className="h-5 w-5 text-primary" />
+            Filtros de Búsqueda
+          </CardTitle>
+          <CardDescription>Filtra y busca pagos específicos en el cronograma</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="filter-grid">
+            <div className="space-y-2">
+              <Label htmlFor="search" className="text-sm font-medium">
+                Buscar
+              </Label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+                <Input
+                  id="search"
+                  placeholder="Cliente, préstamo..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10 bg-input/50"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="status" className="text-sm font-medium">
+                Estado
+              </Label>
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="bg-input/50">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos los estados</SelectItem>
+                  <SelectItem value="overdue">Vencidos</SelectItem>
+                  <SelectItem value="due_today">Vencen hoy</SelectItem>
+                  <SelectItem value="pending">Próximos</SelectItem>
+                  <SelectItem value="paid">Pagados</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="date-from" className="text-sm font-medium">
+                Desde
+              </Label>
+              <Input
+                id="date-from"
+                type="date"
+                value={dateFromFilter}
+                onChange={(e) => setDateFromFilter(e.target.value)}
+                className="bg-input/50"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="date-to" className="text-sm font-medium">
+                Hasta
+              </Label>
+              <Input
+                id="date-to"
+                type="date"
+                value={dateToFilter}
+                onChange={(e) => setDateToFilter(e.target.value)}
+                className="bg-input/50"
+              />
+            </div>
+
+            <div className="flex items-end gap-2">
+              <Button onClick={applyFilters} className="flex-1 hover-glow">
+                <Search className="h-4 w-4 mr-2" />
+                Buscar
+              </Button>
+              <Button variant="outline" onClick={clearFilters} className="hover-glow bg-transparent">
+                Limpiar
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="card-modern">
+        <CardHeader>
+          <div className="flex justify-between items-center">
             <div>
-              <CardTitle>
-                Cronograma Completo
-                {activeFilter !== "all" && (
-                  <Badge variant="outline" className="ml-2">
-                    Filtrado:{" "}
-                    {activeFilter === "overdue"
-                      ? "Vencidos"
-                      : activeFilter === "due_today"
-                        ? "Vencen Hoy"
-                        : activeFilter === "upcoming"
-                          ? "Próximos"
-                          : "Pagos Recibidos"}
-                  </Badge>
-                )}
-              </CardTitle>
+              <CardTitle className="text-foreground">Cronograma Completo</CardTitle>
               <CardDescription>
-                {activeFilter === "all" ? "Todos los pagos programados y realizados" : "Vista filtrada"}
+                {filteredItems.length} pago{filteredItems.length !== 1 ? "s" : ""} encontrado
+                {filteredItems.length !== 1 ? "s" : ""}
               </CardDescription>
             </div>
             <div className="flex gap-2">
-              {activeFilter !== "all" && (
-                <Button variant="outline" onClick={() => handleCardFilter("all")}>
-                  Mostrar Todos
-                </Button>
-              )}
-              <Button onClick={handlePrintCronogram} variant="outline" className="gap-2 bg-transparent">
+              <Button onClick={handlePrintCronogram} variant="outline" className="gap-2 hover-glow bg-transparent">
                 <Printer className="h-4 w-4" />
-                Imprimir Cronograma
+                Imprimir
+              </Button>
+              <Button variant="outline" className="gap-2 hover-glow bg-transparent">
+                <Download className="h-4 w-4" />
+                Exportar
               </Button>
             </div>
           </div>
         </CardHeader>
         <CardContent>
-          <div className="flex items-center gap-4 mb-6">
-            <div className="relative flex-1 max-w-sm">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-              <Input
-                placeholder="Buscar por préstamo o cliente..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
-              />
-            </div>
-            <div className="text-sm text-muted-foreground">
-              {filteredItems.length} pago{filteredItems.length !== 1 ? "s" : ""} encontrado
-              {filteredItems.length !== 1 ? "s" : ""}
-            </div>
-          </div>
-
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Préstamo</TableHead>
-                <TableHead>Cliente</TableHead>
-                <TableHead>Cuota</TableHead>
-                <TableHead>Fecha Vencimiento</TableHead>
-                <TableHead>Monto</TableHead>
-                <TableHead>Estado</TableHead>
-                <TableHead>Fecha Pago</TableHead>
-                <TableHead>Acciones</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredItems.map((item: CronogramItem) => (
-                <TableRow key={`${item.id}-${item.installment_number}`}>
-                  <TableCell className="font-medium">{item.loan_code}</TableCell>
-                  <TableCell>{item.client_name}</TableCell>
-                  <TableCell>{item.installment_number}</TableCell>
-                  <TableCell>{new Date(item.due_date).toLocaleDateString()}</TableCell>
-                  <TableCell>${item.amount.toLocaleString()}</TableCell>
-                  <TableCell>{getStatusBadge(item.status)}</TableCell>
-                  <TableCell>{item.paid_at ? new Date(item.paid_at).toLocaleDateString() : "-"}</TableCell>
-                  <TableCell>
-                    <div className="flex gap-1">
-                      {item.status !== "paid" && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => openPaymentModal(item)}
-                          title="Imputar Recibo"
-                        >
-                          <DollarSign className="h-4 w-4" />
-                        </Button>
-                      )}
-                      <Button size="sm" variant="outline" onClick={() => handlePrintItem(item)} title="Imprimir">
-                        <Printer className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleWhatsAppShare(item)}
-                        title="Compartir por WhatsApp"
-                      >
-                        <MessageCircle className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </TableCell>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="border-border/50">
+                  <TableHead className="text-muted-foreground">Préstamo</TableHead>
+                  <TableHead className="text-muted-foreground">Cliente</TableHead>
+                  <TableHead className="text-muted-foreground">Cuota</TableHead>
+                  <TableHead className="text-muted-foreground">Fecha Vencimiento</TableHead>
+                  <TableHead className="text-muted-foreground">Monto</TableHead>
+                  <TableHead className="text-muted-foreground">Estado</TableHead>
+                  <TableHead className="text-muted-foreground">Fecha Pago</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {filteredItems.map((item: CronogramItem) => (
+                  <TableRow
+                    key={`${item.id}-${item.installment_number}`}
+                    className="border-border/50 hover:bg-muted/30"
+                  >
+                    <TableCell className="font-mono text-sm font-medium">{item.loan_code}</TableCell>
+                    <TableCell className="font-medium">{item.client_name}</TableCell>
+                    <TableCell>{item.installment_number}</TableCell>
+                    <TableCell>{new Date(item.due_date).toLocaleDateString()}</TableCell>
+                    <TableCell className="font-medium">${item.amount.toLocaleString()}</TableCell>
+                    <TableCell>{getStatusBadge(item.status)}</TableCell>
+                    <TableCell>{item.paid_at ? new Date(item.paid_at).toLocaleDateString() : "-"}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
 
-          {filteredItems.length === 0 && (
-            <div className="text-center py-8">
-              <p className="text-muted-foreground">
-                {cronogramData?.debug?.total_installments === 0
-                  ? "No se encontraron cuotas en la base de datos. Asegúrate de que existan préstamos con cuotas generadas."
-                  : "No se encontraron resultados para la búsqueda."}
-              </p>
-              {cronogramData?.debug && (
-                <div className="mt-4 text-xs text-muted-foreground">
-                  <p>Total de cuotas en BD: {cronogramData.debug.total_installments}</p>
-                  <p>Fecha actual (Argentina): {cronogramData.debug.argentina_time}</p>
-                </div>
-              )}
-            </div>
-          )}
+            {filteredItems.length === 0 && (
+              <div className="text-center py-12">
+                <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                <p className="text-muted-foreground text-lg font-medium">
+                  {cronogramData?.debug?.total_installments === 0
+                    ? "No se encontraron cuotas en la base de datos"
+                    : "No se encontraron resultados para la búsqueda"}
+                </p>
+                <p className="text-muted-foreground text-sm mt-2">
+                  {cronogramData?.debug?.total_installments === 0
+                    ? "Asegúrate de que existan préstamos con cuotas generadas"
+                    : "Intenta ajustar los filtros de búsqueda"}
+                </p>
+                {cronogramData?.debug && (
+                  <div className="mt-6 text-xs text-muted-foreground space-y-1">
+                    <p>Total de cuotas en BD: {cronogramData.debug.total_installments}</p>
+                    <p>Fecha actual (Argentina): {cronogramData.debug.argentina_time}</p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </CardContent>
       </Card>
-
-      <Dialog open={isPaymentModalOpen} onOpenChange={setIsPaymentModalOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Procesar Pago</DialogTitle>
-          </DialogHeader>
-
-          {selectedItem && (
-            <div className="space-y-4">
-              <div className="bg-gray-50 p-3 rounded-lg">
-                <h4 className="font-semibold mb-2">Detalle de la Cuota</h4>
-                <p className="text-sm text-muted-foreground">Cliente: {selectedItem.client_name}</p>
-                <p className="text-sm text-muted-foreground">Préstamo: {selectedItem.loan_code}</p>
-                <p className="text-sm text-muted-foreground">Cuota: {selectedItem.installment_number}</p>
-                <p className="text-sm text-muted-foreground">Monto: ${selectedItem.amount.toLocaleString()}</p>
-              </div>
-
-              <div>
-                <Label htmlFor="payment_amount">Monto a Pagar</Label>
-                <Input
-                  id="payment_amount"
-                  type="number"
-                  step="0.01"
-                  value={paymentAmount}
-                  onChange={(e) => setPaymentAmount(e.target.value)}
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="payment_note">Nota (opcional)</Label>
-                <Input id="payment_note" value={paymentNote} onChange={(e) => setPaymentNote(e.target.value)} />
-              </div>
-
-              <div className="flex justify-end space-x-2 pt-4">
-                <Button variant="outline" onClick={() => setIsPaymentModalOpen(false)} disabled={isProcessingPayment}>
-                  Cancelar
-                </Button>
-                <Button onClick={handleProcessPayment} disabled={isProcessingPayment || !paymentAmount}>
-                  {isProcessingPayment ? "Procesando..." : "Procesar Pago"}
-                </Button>
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }
