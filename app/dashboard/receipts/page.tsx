@@ -9,10 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import { Separator } from "@/components/ui/separator"
 import { toast } from "@/hooks/use-toast"
-import { Loader2, Receipt, DollarSign, User, Calendar, Calculator } from "lucide-react"
+import { Loader2, Receipt, User, Calendar, FileText, Plus } from "lucide-react"
 
 interface Client {
   id: string
@@ -33,81 +31,77 @@ interface Loan {
 
 interface Installment {
   id: string
-  code: string
-  loan_id: string
   installment_no: number
-  installments_total: number
+  due_date: string
   amount_due: number
   amount_paid: number
-  balance_due: number
-  due_date: string
   status: string
-  loans: {
-    loan_code: string
-    client_id: string
-    clients: {
-      client_code: string
-      first_name: string
-      last_name: string
-    }
-  }
 }
 
-interface SelectedInstallment extends Installment {
-  selected: boolean
-  partial_payment?: number
-}
-
-interface ReceiptFormData {
-  client_id: string
-  payment_type: "total" | "partial"
-  cash_amount: string
-  transfer_amount: string
-  observations: string
-  selected_installments: SelectedInstallment[]
+interface ReceiptData {
+  id: string
+  receipt_number: string
+  receipt_date: string
+  total_amount: number
+  cash_amount: number
+  transfer_amount: number
+  payment_type: string
+  observations?: string
+  first_name: string
+  last_name: string
+  client_code: string
+  phone?: string
+  email?: string
 }
 
 export default function ReceiptsPage() {
   const [clients, setClients] = useState<Client[]>([])
   const [loans, setLoans] = useState<Loan[]>([])
   const [installments, setInstallments] = useState<Installment[]>([])
-  const [selectedInstallments, setSelectedInstallments] = useState<SelectedInstallment[]>([])
+  const [receipts, setReceipts] = useState<ReceiptData[]>([])
+  const [selectedClientId, setSelectedClientId] = useState<string>("")
+  const [selectedLoanId, setSelectedLoanId] = useState<string>("")
+  const [selectedInstallments, setSelectedInstallments] = useState<string[]>([])
+  const [cashAmount, setCashAmount] = useState<string>("")
+  const [transferAmount, setTransferAmount] = useState<string>("")
+  const [notes, setNotes] = useState<string>("")
   const [isLoading, setIsLoading] = useState(false)
   const [isLoadingClients, setIsLoadingClients] = useState(true)
-  const [isLoadingInstallments, setIsLoadingInstallments] = useState(false)
-
-  const [formData, setFormData] = useState<ReceiptFormData>({
-    client_id: "",
-    payment_type: "total",
-    cash_amount: "",
-    transfer_amount: "",
-    observations: "",
-    selected_installments: [],
-  })
+  const [isLoadingReceipts, setIsLoadingReceipts] = useState(true)
 
   useEffect(() => {
     fetchClients()
+    fetchReceipts()
   }, [])
 
   useEffect(() => {
-    if (formData.client_id) {
-      fetchPendingInstallments(formData.client_id)
+    if (selectedClientId) {
+      fetchLoans(selectedClientId)
+    } else {
+      setLoans([])
+      setSelectedLoanId("")
+      setInstallments([])
+      setSelectedInstallments([])
+    }
+  }, [selectedClientId])
+
+  useEffect(() => {
+    if (selectedLoanId) {
+      fetchInstallments(selectedLoanId)
     } else {
       setInstallments([])
       setSelectedInstallments([])
     }
-  }, [formData.client_id])
+  }, [selectedLoanId])
 
   const fetchClients = async () => {
     try {
       const response = await fetch("/api/clients")
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
-      }
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
       const data = await response.json()
       setClients(data)
     } catch (error) {
-      console.error("Error fetching clients:", error)
+      console.error("[v0] Error fetching clients:", error)
       toast({
         title: "Error",
         description: "No se pudieron cargar los clientes",
@@ -118,62 +112,145 @@ export default function ReceiptsPage() {
     }
   }
 
-  const fetchPendingInstallments = async (clientId: string) => {
+  const fetchLoans = async (clientId: string) => {
     try {
-      setIsLoadingInstallments(true)
-      const response = await fetch(`/api/installments?client_id=${clientId}`)
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
-      }
+      const response = await fetch(`/api/loans?client_id=${clientId}`)
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
       const data = await response.json()
-
-      const pendingInstallments = data.filter(
-        (inst: Installment) =>
-          inst.balance_due > 0 &&
-          (inst.status === "a_pagar" || inst.status === "a_pagar_hoy" || inst.status === "vencida"),
-      )
-
-      setInstallments(pendingInstallments)
-      setSelectedInstallments([])
+      setLoans(data)
     } catch (error) {
-      console.error("Error fetching installments:", error)
+      console.error("[v0] Error fetching loans:", error)
       toast({
         title: "Error",
-        description: "No se pudieron cargar las cuotas pendientes",
+        description: "No se pudieron cargar los préstamos",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const fetchInstallments = async (loanId: string) => {
+    try {
+      const response = await fetch(`/api/installments?loan_id=${loanId}`)
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
+      const data = await response.json()
+      // Filter only unpaid or partially paid installments
+      const unpaidInstallments = data.filter((inst: Installment) => inst.amount_paid < inst.amount_due)
+      setInstallments(unpaidInstallments)
+    } catch (error) {
+      console.error("[v0] Error fetching installments:", error)
+      toast({
+        title: "Error",
+        description: "No se pudieron cargar las cuotas",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const fetchReceipts = async () => {
+    try {
+      const response = await fetch("/api/receipts")
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
+      const data = await response.json()
+      setReceipts(data)
+    } catch (error) {
+      console.error("[v0] Error fetching receipts:", error)
+      toast({
+        title: "Error",
+        description: "No se pudieron cargar los recibos",
         variant: "destructive",
       })
     } finally {
-      setIsLoadingInstallments(false)
+      setIsLoadingReceipts(false)
     }
   }
 
-  const handleInstallmentSelection = (installment: Installment, selected: boolean) => {
-    if (selected) {
-      const newSelected: SelectedInstallment = {
-        ...installment,
-        selected: true,
-        partial_payment: installment.balance_due,
-      }
-      setSelectedInstallments((prev) => [...prev, newSelected])
-    } else {
-      setSelectedInstallments((prev) => prev.filter((item) => item.id !== installment.id))
-    }
-  }
-
-  const handlePartialPaymentChange = (installmentId: string, amount: string) => {
-    const numAmount = Number.parseFloat(amount) || 0
+  const handleInstallmentToggle = (installmentId: string) => {
     setSelectedInstallments((prev) =>
-      prev.map((item) =>
-        item.id === installmentId ? { ...item, partial_payment: Math.min(numAmount, item.balance_due) } : item,
-      ),
+      prev.includes(installmentId) ? prev.filter((id) => id !== installmentId) : [...prev, installmentId],
     )
   }
 
-  const calculateTotalAmount = () => {
-    if (formData.payment_type === "total") {
-      return selectedInstallments.reduce((sum, item) => sum + item.balance_due, 0)
-    } else {
-      return selectedInstallments.reduce((sum, item) => sum + (item.partial_payment || 0), 0)
+  const getTotalAmount = () => {
+    const cash = Number.parseFloat(cashAmount) || 0
+    const transfer = Number.parseFloat(transferAmount) || 0
+    return cash + transfer
+  }
+
+  const getSelectedInstallmentsTotal = () => {
+    return installments
+      .filter((inst) => selectedInstallments.includes(inst.id))
+      .reduce((sum, inst) => sum + (inst.amount_due - inst.amount_paid), 0)
+  }
+
+  const handleCreateReceipt = async () => {
+    if (!selectedClientId || !selectedLoanId || selectedInstallments.length === 0) {
+      toast({
+        title: "Error",
+        description: "Por favor selecciona un cliente, préstamo y al menos una cuota",
+        variant: "destructive",
+      })
+      return
+    }
+
+    const totalAmount = getTotalAmount()
+    if (totalAmount <= 0) {
+      toast({
+        title: "Error",
+        description: "El monto total debe ser mayor a 0",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setIsLoading(true)
+    try {
+      const response = await fetch("/api/receipts", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          client_id: selectedClientId,
+          loan_id: selectedLoanId,
+          installment_ids: selectedInstallments,
+          payment_type: selectedInstallments.length === installments.length ? "total" : "partial",
+          cash_amount: Number.parseFloat(cashAmount) || 0,
+          transfer_amount: Number.parseFloat(transferAmount) || 0,
+          total_amount: totalAmount,
+          notes: notes || undefined,
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.detail || "Error creating receipt")
+      }
+
+      const result = await response.json()
+      toast({
+        title: "Éxito",
+        description: result.message,
+      })
+
+      // Reset form
+      setSelectedClientId("")
+      setSelectedLoanId("")
+      setSelectedInstallments([])
+      setCashAmount("")
+      setTransferAmount("")
+      setNotes("")
+
+      // Refresh receipts list
+      fetchReceipts()
+    } catch (error) {
+      console.error("[v0] Error creating receipt:", error)
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Error inesperado",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
     }
   }
 
@@ -188,377 +265,219 @@ export default function ReceiptsPage() {
     return new Date(dateString).toLocaleDateString("es-AR")
   }
 
-  const handleCreateReceipt = async () => {
-    if (!formData.client_id || selectedInstallments.length === 0) {
-      toast({
-        title: "Error",
-        description: "Selecciona un cliente y al menos una cuota",
-        variant: "destructive",
-      })
-      return
-    }
-
-    const totalAmount = calculateTotalAmount()
-    const cashAmount = Number.parseFloat(formData.cash_amount) || 0
-    const transferAmount = Number.parseFloat(formData.transfer_amount) || 0
-    const paymentTotal = cashAmount + transferAmount
-
-    if (Math.abs(paymentTotal - totalAmount) > 0.01) {
-      toast({
-        title: "Error",
-        description: "El monto total del pago debe coincidir con el monto de las cuotas seleccionadas",
-        variant: "destructive",
-      })
-      return
-    }
-
-    setIsLoading(true)
-    try {
-      const receiptData = {
-        client_id: formData.client_id,
-        payment_type: formData.payment_type,
-        cash_amount: cashAmount,
-        transfer_amount: transferAmount,
-        total_amount: totalAmount,
-        observations: formData.observations,
-        selected_installments: selectedInstallments.map((item) => ({
-          installment_id: item.id,
-          amount_to_pay: formData.payment_type === "total" ? item.balance_due : item.partial_payment || 0,
-          is_partial: formData.payment_type === "partial" && (item.partial_payment || 0) < item.balance_due,
-        })),
-      }
-
-      const response = await fetch("/api/receipts", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(receiptData),
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.detail || "Error creating receipt")
-      }
-
-      const result = await response.json()
-      toast({
-        title: "Éxito",
-        description: `Recibo ${result.receipt_number} creado exitosamente`,
-      })
-
-      setFormData({
-        client_id: "",
-        payment_type: "total",
-        cash_amount: "",
-        transfer_amount: "",
-        observations: "",
-        selected_installments: [],
-      })
-      setSelectedInstallments([])
-      setInstallments([])
-    } catch (error) {
-      console.error("Error creating receipt:", error)
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Error inesperado",
-        variant: "destructive",
-      })
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  const totalSuggested = calculateTotalAmount()
-  const cashAmount = Number.parseFloat(formData.cash_amount) || 0
-  const transferAmount = Number.parseFloat(formData.transfer_amount) || 0
-  const paymentTotal = cashAmount + transferAmount
-
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-2">
         <Receipt className="h-6 w-6" />
-        <h1 className="text-3xl font-bold">Crear Recibo de Pago</h1>
+        <h1 className="text-3xl font-bold">Gestión de Recibos</h1>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        {/* Formulario Principal */}
-        <div className="lg:col-span-2 space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <User className="h-5 w-5" />
-                Información del Cliente
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="client">Cliente</Label>
-                <Select
-                  value={formData.client_id}
-                  onValueChange={(value) => setFormData((prev) => ({ ...prev, client_id: value }))}
-                  disabled={isLoadingClients}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder={isLoadingClients ? "Cargando clientes..." : "Seleccionar cliente"} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {clients.map((client) => (
-                      <SelectItem key={client.id} value={client.id}>
-                        {client.client_code} - {client.first_name} {client.last_name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </CardContent>
-          </Card>
+      <div className="grid gap-6 lg:grid-cols-2">
+        {/* Receipt Form */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Plus className="h-5 w-5" />
+              Crear Nuevo Recibo
+            </CardTitle>
+            <CardDescription>Selecciona un cliente, préstamo y cuotas para generar un recibo</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="client">Cliente</Label>
+              <Select value={selectedClientId} onValueChange={setSelectedClientId} disabled={isLoadingClients}>
+                <SelectTrigger>
+                  <SelectValue placeholder={isLoadingClients ? "Cargando clientes..." : "Seleccionar cliente"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {clients.map((client) => (
+                    <SelectItem key={client.id} value={client.id}>
+                      {client.client_code} - {client.first_name} {client.last_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-          {/* Cuotas Pendientes */}
-          {formData.client_id && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Calendar className="h-5 w-5" />
-                  Cuotas Pendientes de Pago
-                </CardTitle>
-                <CardDescription>Selecciona las cuotas que deseas incluir en el recibo</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {isLoadingInstallments ? (
-                  <div className="flex items-center justify-center py-8">
-                    <Loader2 className="h-6 w-6 animate-spin" />
-                    <span className="ml-2">Cargando cuotas...</span>
-                  </div>
-                ) : installments.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    No hay cuotas pendientes para este cliente
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {installments.map((installment) => {
-                      const isSelected = selectedInstallments.some((item) => item.id === installment.id)
-                      const selectedItem = selectedInstallments.find((item) => item.id === installment.id)
-
-                      return (
-                        <div key={installment.id} className="border rounded-lg p-4 space-y-3">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center space-x-3">
-                              <Checkbox
-                                checked={isSelected}
-                                onCheckedChange={(checked) =>
-                                  handleInstallmentSelection(installment, checked as boolean)
-                                }
-                              />
-                              <div>
-                                <div className="font-medium">
-                                  Cuota {installment.installment_no}/{installment.installments_total}
-                                </div>
-                                <div className="text-sm text-muted-foreground">
-                                  {installment.code} - Vence: {formatDate(installment.due_date)}
-                                </div>
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <div className="font-semibold">{formatCurrency(installment.balance_due)}</div>
-                              <Badge
-                                variant={installment.status === "vencida" ? "destructive" : "secondary"}
-                                className="text-xs"
-                              >
-                                {installment.status === "vencida"
-                                  ? "Vencida"
-                                  : installment.status === "a_pagar_hoy"
-                                    ? "Vence Hoy"
-                                    : "A Pagar"}
-                              </Badge>
-                            </div>
-                          </div>
-
-                          {isSelected && formData.payment_type === "partial" && (
-                            <div className="pl-6 space-y-2">
-                              <Label htmlFor={`partial-${installment.id}`} className="text-sm">
-                                Monto a pagar (máximo: {formatCurrency(installment.balance_due)})
-                              </Label>
-                              <Input
-                                id={`partial-${installment.id}`}
-                                type="number"
-                                step="0.01"
-                                min="0"
-                                max={installment.balance_due}
-                                value={selectedItem?.partial_payment || ""}
-                                onChange={(e) => handlePartialPaymentChange(installment.id, e.target.value)}
-                                className="w-48"
-                                placeholder="0.00"
-                              />
-                            </div>
-                          )}
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Tipo de Pago */}
-          {selectedInstallments.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Calculator className="h-5 w-5" />
-                  Tipo de Pago
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <RadioGroup
-                  value={formData.payment_type}
-                  onValueChange={(value: "total" | "partial") =>
-                    setFormData((prev) => ({ ...prev, payment_type: value }))
-                  }
-                >
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="total" id="total" />
-                    <Label htmlFor="total">Pago Total - Pagar el saldo completo de las cuotas seleccionadas</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="partial" id="partial" />
-                    <Label htmlFor="partial">Pago Parcial - Especificar monto para cada cuota</Label>
-                  </div>
-                </RadioGroup>
-              </CardContent>
-            </Card>
-          )}
-        </div>
-
-        {/* Resumen y Pago */}
-        <div className="space-y-6">
-          {/* Resumen del Pago */}
-          {selectedInstallments.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <DollarSign className="h-5 w-5" />
-                  Resumen del Pago
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span>Cuotas seleccionadas:</span>
-                    <span>{selectedInstallments.length}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span>Tipo de pago:</span>
-                    <span>{formData.payment_type === "total" ? "Total" : "Parcial"}</span>
-                  </div>
-                  <Separator />
-                  <div className="flex justify-between font-semibold text-lg">
-                    <span>Total sugerido:</span>
-                    <span className="text-green-600">{formatCurrency(totalSuggested)}</span>
-                  </div>
-                </div>
-
-                <div className="space-y-3">
-                  <div className="space-y-2">
-                    <Label htmlFor="cash">$ Efectivo</Label>
-                    <Input
-                      id="cash"
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      placeholder="0.00"
-                      value={formData.cash_amount}
-                      onChange={(e) => setFormData((prev) => ({ ...prev, cash_amount: e.target.value }))}
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="transfer">$ Transferencia</Label>
-                    <Input
-                      id="transfer"
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      placeholder="0.00"
-                      value={formData.transfer_amount}
-                      onChange={(e) => setFormData((prev) => ({ ...prev, transfer_amount: e.target.value }))}
-                    />
-                  </div>
-
-                  <Separator />
-
-                  <div className="flex justify-between font-semibold">
-                    <span>Total pagado:</span>
-                    <span className={paymentTotal === totalSuggested ? "text-green-600" : "text-red-600"}>
-                      {formatCurrency(paymentTotal)}
-                    </span>
-                  </div>
-
-                  {Math.abs(paymentTotal - totalSuggested) > 0.01 && (
-                    <div className="text-sm text-red-600">
-                      Diferencia: {formatCurrency(paymentTotal - totalSuggested)}
-                    </div>
-                  )}
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="observations">Observaciones</Label>
-                  <Textarea
-                    id="observations"
-                    placeholder="Notas adicionales sobre el pago..."
-                    value={formData.observations}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, observations: e.target.value }))}
-                    rows={3}
+            <div className="space-y-2">
+              <Label htmlFor="loan">Préstamo</Label>
+              <Select
+                value={selectedLoanId}
+                onValueChange={setSelectedLoanId}
+                disabled={!selectedClientId || loans.length === 0}
+              >
+                <SelectTrigger>
+                  <SelectValue
+                    placeholder={
+                      !selectedClientId
+                        ? "Primero selecciona un cliente"
+                        : loans.length === 0
+                          ? "No hay préstamos disponibles"
+                          : "Seleccionar préstamo"
+                    }
                   />
-                </div>
+                </SelectTrigger>
+                <SelectContent>
+                  {loans.map((loan) => (
+                    <SelectItem key={loan.id} value={loan.id}>
+                      {loan.loan_code} - {formatCurrency(loan.amount)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-                <Button
-                  onClick={handleCreateReceipt}
-                  disabled={
-                    isLoading || selectedInstallments.length === 0 || Math.abs(paymentTotal - totalSuggested) > 0.01
-                  }
-                  className="w-full"
-                >
-                  {isLoading ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Creando Recibo...
-                    </>
-                  ) : (
-                    <>
-                      <Receipt className="mr-2 h-4 w-4" />
-                      Crear Recibo
-                    </>
-                  )}
-                </Button>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Cuotas Seleccionadas */}
-          {selectedInstallments.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm">Cuotas Seleccionadas</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  {selectedInstallments.map((item) => (
-                    <div key={item.id} className="flex justify-between text-sm">
-                      <span>Cuota {item.installment_no}</span>
-                      <span>
-                        {formData.payment_type === "total"
-                          ? formatCurrency(item.balance_due)
-                          : formatCurrency(item.partial_payment || 0)}
-                      </span>
+            {installments.length > 0 && (
+              <div className="space-y-2">
+                <Label>Cuotas a Pagar</Label>
+                <div className="border rounded-lg p-3 max-h-48 overflow-y-auto space-y-2">
+                  {installments.map((installment) => (
+                    <div key={installment.id} className="flex items-center space-x-2">
+                      <Checkbox
+                        id={installment.id}
+                        checked={selectedInstallments.includes(installment.id)}
+                        onCheckedChange={() => handleInstallmentToggle(installment.id)}
+                      />
+                      <label
+                        htmlFor={installment.id}
+                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex-1"
+                      >
+                        Cuota {installment.installment_no} - {formatDate(installment.due_date)} -{" "}
+                        {formatCurrency(installment.amount_due - installment.amount_paid)}
+                        {installment.status === "overdue" && (
+                          <Badge variant="destructive" className="ml-2">
+                            Vencida
+                          </Badge>
+                        )}
+                      </label>
                     </div>
                   ))}
                 </div>
-              </CardContent>
-            </Card>
-          )}
-        </div>
+                {selectedInstallments.length > 0 && (
+                  <p className="text-sm text-muted-foreground">
+                    Total seleccionado: {formatCurrency(getSelectedInstallmentsTotal())}
+                  </p>
+                )}
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="cash">Efectivo</Label>
+                <Input
+                  id="cash"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  placeholder="0.00"
+                  value={cashAmount}
+                  onChange={(e) => setCashAmount(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="transfer">Transferencia</Label>
+                <Input
+                  id="transfer"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  placeholder="0.00"
+                  value={transferAmount}
+                  onChange={(e) => setTransferAmount(e.target.value)}
+                />
+              </div>
+            </div>
+
+            {(cashAmount || transferAmount) && (
+              <div className="p-3 bg-muted rounded-lg">
+                <p className="text-sm font-medium">Total del Recibo: {formatCurrency(getTotalAmount())}</p>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <Label htmlFor="notes">Observaciones (opcional)</Label>
+              <Textarea
+                id="notes"
+                placeholder="Observaciones sobre el pago..."
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                rows={3}
+              />
+            </div>
+
+            <Button onClick={handleCreateReceipt} disabled={isLoading} className="w-full">
+              {isLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Procesando...
+                </>
+              ) : (
+                <>
+                  <Receipt className="mr-2 h-4 w-4" />
+                  Crear Recibo
+                </>
+              )}
+            </Button>
+          </CardContent>
+        </Card>
+
+        {/* Recent Receipts */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5" />
+              Recibos Recientes
+            </CardTitle>
+            <CardDescription>Últimos recibos generados en el sistema</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {isLoadingReceipts ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin" />
+                <span className="ml-2">Cargando recibos...</span>
+              </div>
+            ) : receipts.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">No hay recibos registrados</div>
+            ) : (
+              <div className="space-y-4 max-h-96 overflow-y-auto">
+                {receipts.slice(0, 10).map((receipt) => (
+                  <div key={receipt.id} className="border rounded-lg p-4 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <User className="h-4 w-4" />
+                        <span className="font-medium">
+                          {receipt.first_name} {receipt.last_name}
+                        </span>
+                      </div>
+                      <Badge variant="secondary">#{receipt.receipt_number}</Badge>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <span className="text-lg font-semibold text-green-600">
+                        {formatCurrency(receipt.total_amount)}
+                      </span>
+                      <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                        <Calendar className="h-3 w-3" />
+                        {formatDate(receipt.receipt_date)}
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2 text-sm">
+                      {receipt.cash_amount > 0 && (
+                        <Badge variant="outline">Efectivo: {formatCurrency(receipt.cash_amount)}</Badge>
+                      )}
+                      {receipt.transfer_amount > 0 && (
+                        <Badge variant="outline">Transferencia: {formatCurrency(receipt.transfer_amount)}</Badge>
+                      )}
+                    </div>
+
+                    {receipt.observations && <p className="text-sm text-muted-foreground">{receipt.observations}</p>}
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </div>
   )

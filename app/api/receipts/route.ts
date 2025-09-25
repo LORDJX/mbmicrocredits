@@ -1,123 +1,26 @@
-import { type NextRequest, NextResponse } from "next/server"
+import { NextResponse, type NextRequest } from "next/server"
 import { getSupabaseAdmin } from "@/lib/supabase-admin"
 
-export async function POST(request: NextRequest) {
-  try {
-    const supabase = getSupabaseAdmin()
+export const dynamic = "force-dynamic"
 
-    const body = await request.json()
-    const { client_id, payment_type, cash_amount, transfer_amount, total_amount, observations, selected_installments } =
-      body
-
-    const receiptNumber = `REC-${Date.now()}`
-
-    const { data: receipt, error: receiptError } = await supabase
-      .from("receipts")
-      .insert({
-        client_id,
-        receipt_number: receiptNumber,
-        payment_type,
-        cash_amount: cash_amount || 0,
-        transfer_amount: transfer_amount || 0,
-        total_amount,
-        observations,
-        selected_installments: selected_installments,
-        receipt_date: new Date().toISOString().split("T")[0],
-      })
-      .select()
-      .single()
-
-    if (receiptError) {
-      console.error("Error creating receipt:", receiptError)
-      return NextResponse.json({ detail: "Error al crear el recibo: " + receiptError.message }, { status: 500 })
-    }
-
-    let loanId = null
-    if (selected_installments.length > 0) {
-      const { data: installmentData } = await supabase
-        .from("installments")
-        .select("loan_id")
-        .eq("id", selected_installments[0].installment_id)
-        .single()
-
-      loanId = installmentData?.loan_id
-    }
-
-    const { data: payment, error: paymentError } = await supabase
-      .from("payments")
-      .insert({
-        loan_id: loanId,
-        paid_amount: total_amount,
-        note: `Recibo ${receiptNumber} - ${observations || "Pago de cuotas"}`,
-      })
-      .select()
-      .single()
-
-    if (paymentError) {
-      console.error("Error creating payment:", paymentError)
-      return NextResponse.json({ detail: "Error al crear el pago: " + paymentError.message }, { status: 500 })
-    }
-
-    for (const installmentData of selected_installments) {
-      const { installment_id, amount_to_pay, is_partial } = installmentData
-
-      // Obtener la cuota actual
-      const { data: currentInstallment, error: installmentError } = await supabase
-        .from("installments")
-        .select("amount_paid, amount_due")
-        .eq("id", installment_id)
-        .single()
-
-      if (installmentError) {
-        console.error("Error fetching installment:", installmentError)
-        continue
-      }
-
-      const newAmountPaid = (currentInstallment.amount_paid || 0) + amount_to_pay
-
-      const { error: updateError } = await supabase
-        .from("installments")
-        .update({
-          amount_paid: newAmountPaid,
-          paid_at: newAmountPaid >= currentInstallment.amount_due ? new Date().toISOString() : null,
-        })
-        .eq("id", installment_id)
-
-      if (updateError) {
-        console.error("Error updating installment:", updateError)
-      }
-
-      const { error: imputationError } = await supabase.from("payment_imputations").insert({
-        payment_id: payment.id,
-        installment_id: installment_id,
-        imputed_amount: amount_to_pay,
-      })
-
-      if (imputationError) {
-        console.error("Error creating payment imputation:", imputationError)
-      }
-    }
-
-    await supabase.from("receipts").update({ payment_id: payment.id }).eq("id", receipt.id)
-
-    return NextResponse.json({
-      message: "Recibo creado exitosamente",
-      receipt_number: receiptNumber,
-      receipt_id: receipt.id,
-      payment_id: payment.id,
-    })
-  } catch (error) {
-    console.error("Error in receipts API:", error)
-    return NextResponse.json({ detail: "Error interno del servidor" }, { status: 500 })
-  }
+type CreateReceiptBody = {
+  client_id: string
+  loan_id: string // Cambio: de `string[]` a `string`
+  installment_ids: string[]
+  payment_type: "total" | "partial"
+  cash_amount: number
+  transfer_amount: number
+  total_amount: number
+  notes?: string
 }
 
 export async function GET(request: NextRequest) {
   try {
     const supabase = getSupabaseAdmin()
+    const searchParams = request.nextUrl.searchParams
 
-    const { searchParams } = new URL(request.url)
     const clientId = searchParams.get("client_id")
+    const loanId = searchParams.get("loan_id")
 
     let query = supabase.from("receipts_with_client").select("*").order("created_at", { ascending: false })
 
@@ -125,16 +28,98 @@ export async function GET(request: NextRequest) {
       query = query.eq("client_id", clientId)
     }
 
-    const { data: receipts, error } = await query
-
-    if (error) {
-      console.error("Error fetching receipts:", error)
-      return NextResponse.json({ detail: "Error al obtener los recibos: " + error.message }, { status: 500 })
+    if (loanId) {
+      query = query.contains("selected_loans", [loanId])
     }
 
-    return NextResponse.json(receipts)
-  } catch (error) {
-    console.error("Error in receipts GET API:", error)
-    return NextResponse.json({ detail: "Error interno del servidor" }, { status: 500 })
+    const { data, error } = await query
+
+    if (error) {
+      console.error("[v0] Error fetching receipts:", error)
+      return NextResponse.json({ detail: `Error obteniendo recibos: ${error.message}` }, { status: 500 })
+    }
+
+    return NextResponse.json(data || [], { status: 200 })
+  } catch (e: any) {
+    console.error("[v0] Receipts API - Unexpected error in GET:", e)
+    return NextResponse.json({ detail: `Error inesperado: ${e.message}` }, { status: 500 })
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    console.log("[v0] Receipts API - Starting POST request...")
+    const supabase = getSupabaseAdmin()
+    const body = (await request.json()) as CreateReceiptBody
+
+    // Validaciones existentes
+    if (!body.client_id || !body.loan_id || !body.installment_ids || body.installment_ids.length === 0) {
+      return NextResponse.json({ detail: "client_id, loan_id y installment_ids son requeridos" }, { status: 400 })
+    }
+
+    if (body.total_amount <= 0) {
+      return NextResponse.json({ detail: "El monto total debe ser mayor a 0" }, { status: 400 })
+    }
+
+    // Obtener el siguiente número de recibo
+    const { data: nextNumberData, error: nextNumberError } = await supabase.rpc("get_next_receipt_number")
+    if (nextNumberError) {
+      console.error("[v0] Error getting next receipt number:", nextNumberError)
+      return NextResponse.json(
+        { detail: `Error obteniendo número de recibo: ${nextNumberError.message}` },
+        { status: 500 },
+      )
+    }
+    const receiptNumber = nextNumberData
+
+    // Crear recibo con los datos del body
+    const { data: receipt, error: receiptError } = await supabase
+      .from("receipts")
+      .insert([
+        {
+          receipt_number: receiptNumber,
+          receipt_date: new Date().toISOString().split("T")[0],
+          client_id: body.client_id,
+          selected_loans: [body.loan_id], // Cambiamos para que sea un array de strings
+          selected_installments: body.installment_ids,
+          total_amount: body.total_amount,
+          cash_amount: body.cash_amount,
+          transfer_amount: body.transfer_amount,
+          payment_type: body.payment_type,
+          observations: body.notes || null,
+        },
+      ])
+      .select()
+      .single()
+
+    if (receiptError) {
+      console.error("[v0] Error creating receipt:", receiptError)
+      return NextResponse.json({ detail: `Error creando recibo: ${receiptError.message}` }, { status: 500 })
+    }
+
+    // Llamar al nuevo procedimiento almacenado para procesar el pago y las imputaciones
+    const { error: processingError } = await supabase.rpc("process_receipt_payment", {
+      p_receipt_id: receipt.id,
+    })
+
+    if (processingError) {
+      console.error("[v0] Recibo creado, pero el procesamiento de pago falló:", processingError)
+      return NextResponse.json(
+        { detail: `Recibo creado, pero el procesamiento de pago falló: ${processingError.message}` },
+        { status: 500 },
+      )
+    }
+
+    console.log("[v0] Recibo y pago procesados exitosamente:", receipt.receipt_number)
+    return NextResponse.json(
+      {
+        message: `Recibo ${receipt.receipt_number} creado y pago procesado exitosamente`,
+        receipt,
+      },
+      { status: 201 },
+    )
+  } catch (e: any) {
+    console.error("[v0] Receipts API - Unexpected error in POST:", e)
+    return NextResponse.json({ detail: `Error inesperado: ${e.message}` }, { status: 500 })
   }
 }
