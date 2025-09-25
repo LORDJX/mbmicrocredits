@@ -7,13 +7,11 @@ export async function GET(request: NextRequest) {
   try {
     const supabase = getSupabaseAdmin();
 
-    // Sumar todos los montos adeudados de las cuotas pendientes
     const { data: totalDue, error: errorDue } = await supabase
       .from("installments")
       .select("amount_due")
       .filter("status", "in", "('a_vencer', 'a_pagar_hoy', 'con_mora')");
       
-    // Sumar todos los montos pagados de las cuotas pagadas
     const { data: totalPaid, error: errorPaid } = await supabase
       .from("installments")
       .select("amount_paid")
@@ -30,7 +28,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       total_due: totalAmountDue,
       total_paid: totalAmountPaid,
-      // Puedes añadir más cálculos aquí
     }, { status: 200 });
 
   } catch (e: any) {
