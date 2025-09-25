@@ -25,7 +25,6 @@ export async function GET(request: NextRequest) {
         loans(loan_code, clients(client_code, first_name, last_name))
       `)
       .eq("loan_id", loanId)
-      // Esta es la línea crucial: comparamos las dos columnas de forma correcta
       .filter("amount_paid", "lt", supabase.raw("amount_due")) 
       .order("due_date", { ascending: true });
 
