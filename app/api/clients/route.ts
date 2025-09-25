@@ -8,10 +8,8 @@ export async function GET(request: NextRequest) {
     const supabase = getSupabaseAdmin()
     const searchParams = request.nextUrl.searchParams
 
-    // Parámetros de filtro
-    const term = searchParams.get("search")?.trim()
+    const search = searchParams.get("search")
     const status = searchParams.get("status")
-    const limit = Number.parseInt(searchParams.get("limit") || "50")
 
     let query = supabase
       .from("clients")
@@ -22,35 +20,30 @@ export async function GET(request: NextRequest) {
         last_name,
         phone,
         email,
-        address,
         status,
         created_at
       `)
+      .is("deleted_at", null)
       .order("created_at", { ascending: false })
-      .limit(limit)
 
-    // Filtro por estado
-    if (status) {
-      query = query.eq("status", status)
+    if (search) {
+      query = query.or(`first_name.ilike.%${search}%,last_name.ilike.%${search}%,client_code.ilike.%${search}%`)
     }
 
-    // Búsqueda por término
-    if (term && term.length > 0) {
-      query = query.or(
-        `first_name.ilike.%${term}%,last_name.ilike.%${term}%,client_code.ilike.%${term}%,phone.ilike.%${term}%`,
-      )
+    if (status) {
+      query = query.eq("status", status)
     }
 
     const { data, error } = await query
 
     if (error) {
-      console.error("Error fetching clients:", error)
+      console.error("[v0] Error fetching clients:", error)
       return NextResponse.json({ detail: `Error obteniendo clientes: ${error.message}` }, { status: 500 })
     }
 
     return NextResponse.json(data || [], { status: 200 })
   } catch (e: any) {
-    console.error("Unexpected error in GET /api/clients:", e)
+    console.error("[v0] Clients API - Unexpected error in GET:", e)
     return NextResponse.json({ detail: `Error inesperado: ${e.message}` }, { status: 500 })
   }
 }
