@@ -1,8 +1,9 @@
-/// En api/installments/[id]/route.ts
+// En api/installments/[id]/route.ts
 
 import { NextResponse, type NextRequest } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
+// Obtener una cuota por ID
 export async function GET(_request: NextRequest, { params }: { params: { id: string } }) {
   try {
     const supabase = getSupabaseAdmin();
@@ -32,6 +33,7 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
   }
 }
 
+// Actualizar una cuota (ejemplo)
 export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     const supabase = getSupabaseAdmin();
@@ -56,6 +58,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   }
 }
 
+// Eliminar una cuota (ejemplo)
 export async function DELETE(_request: NextRequest, { params }: { params: { id: string } }) {
   try {
     const supabase = getSupabaseAdmin();
