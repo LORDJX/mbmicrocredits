@@ -9,12 +9,12 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const loanId = searchParams.get("loan_id");
     
-    // Si no se proporciona un ID de préstamo, devolvemos un error 400
+    // Si no se proporciona un ID de préstamo, devolvemos un error 400.
     if (!loanId) {
       return NextResponse.json({ detail: "loan_id es un parámetro requerido." }, { status: 400 });
     }
 
-    // Consulta las cuotas de un préstamo específico.
+    // Consulta corregida para filtrar las cuotas.
     const { data, error } = await supabase
       .from("installments")
       .select(`
@@ -26,8 +26,9 @@ export async function GET(request: NextRequest) {
         status
       `)
       .eq("loan_id", loanId)
-      // Filtramos las cuotas que no se han pagado completamente
-      .filter("amount_paid", "lt", supabase.raw("amount_due")) 
+      // La solución es pasar el nombre de la columna "amount_due" como una cadena de texto.
+      // El constructor de consultas de Supabase lo interpretará como una columna a comparar.
+      .filter("amount_paid", "lt", "amount_due") 
       .order("due_date", { ascending: true });
 
     if (error) {
@@ -35,10 +36,11 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ detail: `Error al obtener las cuotas: ${error.message}` }, { status: 500 });
     }
 
-    // Devolvemos los datos como JSON, o un array vacío si no se encuentran
     return NextResponse.json(data || [], { status: 200 });
   } catch (e: any) {
     console.error("[v0] Unexpected error in GET /api/installments:", e);
     return NextResponse.json({ detail: `Error inesperado: ${e.message}` }, { status: 500 });
+  }
+}
   }
 }
