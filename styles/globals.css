@@ -8,16 +8,6 @@
   }
 }
 
-@layer components {
-  /*
-  * Este es un ejemplo de la clase que estaba causando el error.
-  * La he corregido añadiendo un espacio entre las utilidades.
-  */
-  .hover-lift {
-    @apply transition-all duration-300 hover:scale-[1.02] hover:shadow-xl;
-  }
-}
-
 @layer base {
   :root {
     --background: 0 0% 100%;
