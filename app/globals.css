@@ -128,3 +128,52 @@
     margin-bottom: 1rem;
   }
 }
+
+/* Print styles for reports */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+
+  body {
+    background: white !important;
+    color: black !important;
+    font-size: 12pt;
+    line-height: 1.4;
+  }
+
+  @page {
+    margin: 1in;
+    size: A4;
+  }
+
+  h1,
+  h2,
+  h3 {
+    page-break-after: avoid;
+  }
+
+  .card {
+    page-break-inside: avoid;
+    margin-bottom: 1rem;
+  }
+}
+
+/* Agregando clases de utilidad personalizadas con sintaxis correcta */
+@layer utilities {
+  .hover-lift {
+    @apply transition-all duration-300 hover:scale-[1.02] hover:shadow-xl;
+  }
+
+  .hover-glow {
+    @apply transition-all duration-300 hover:shadow-lg hover:shadow-primary/20;
+  }
+
+  .card-modern {
+    @apply bg-card border border-border/50 rounded-lg shadow-sm hover:shadow-md transition-all duration-200;
+  }
+
+  .gradient-border {
+    @apply relative before:absolute before:inset-0 before:rounded-lg before:p-[1px] before:bg-gradient-to-r before:from-primary/20 before:to-accent/20 before:-z-10;
+  }
+}
