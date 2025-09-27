@@ -15,13 +15,14 @@ export async function GET(request: NextRequest) {
     const { data: totalPaid, error: errorPaid } = await supabase
       .from("installments")
       .select("amount_paid")
-      .filter("status", "in", "('pagada', 'pagada_anticipada', 'pagada_con_mora')");
+      .filter("status", "in", "('pagada', 'pagada_anticipada', 'pagada_con_mora', 'pago_parcial')"); // Agregamos 'pago_parcial'
 
     if (errorDue || errorPaid) {
       console.error("Error fetching summary data:", errorDue || errorPaid);
       return NextResponse.json({ detail: "Error al obtener el resumen de cuotas" }, { status: 500 });
     }
 
+    // Calculamos los totales
     const totalAmountDue = totalDue.reduce((sum, item) => sum + item.amount_due, 0);
     const totalAmountPaid = totalPaid.reduce((sum, item) => sum + item.amount_paid, 0);
 
