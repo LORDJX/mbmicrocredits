@@ -159,7 +159,7 @@
   }
 }
 
-/* Agregando clases de utilidad personalizadas con sintaxis correcta */
+/* Adding utility classes with correct Tailwind syntax */
 @layer utilities {
   .hover-lift {
     @apply transition-all duration-300 hover:scale-[1.02] hover:shadow-xl;
@@ -173,7 +173,7 @@
     @apply bg-card border border-border/50 rounded-lg shadow-sm hover:shadow-md transition-all duration-200;
   }
 
-  .gradient-border {
-    @apply relative before:absolute before:inset-0 before:rounded-lg before:p-[1px] before:bg-gradient-to-r before:from-primary/20 before:to-accent/20 before:-z-10;
+  .gradient-text {
+    @apply bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent;
   }
 }
