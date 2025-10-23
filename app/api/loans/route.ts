@@ -1,104 +1,158 @@
-import { NextResponse, type NextRequest } from "next/server"
-import { getSupabaseAdmin } from "@/lib/supabase-admin"
+// En /api/loans/route.ts
 
-export const dynamic = "force-dynamic"
+import { type NextRequest, NextResponse } from "next/server"
+import { createClient } from "@/lib/supabase/server"
 
-type CreateLoanBody = {
-  client_id: string
-  amount: number
-  installments: number
-  loan_type?: string | null
-  interest_rate?: number | null
-  start_date?: string | null
-  end_date?: string | null
-  status?: string | null
-}
-
-const loanSelect = `
-  id,
-  loan_code,
-  client_id,
-  amount,
-  installments,
-  loan_type,
-  interest_rate,
-  start_date,
-  end_date,
-  status,
-  created_at,
-  updated_at,
-  deleted_at,
-  clients:client_id (
-    client_code,
-    first_name,
-    last_name
-  )
-`
-
+// --- LÓGICA GET (Lectura) ---
 export async function GET(request: NextRequest) {
-  try {
-    const supabase = getSupabaseAdmin()
-    const term = request.nextUrl.searchParams.get("search")?.trim()
-
-    // Búsqueda por cliente (código o nombre)
-    let clientIds: string[] = []
-    if (term && term.length > 0) {
-      const { data: clientMatches, error: clientErr } = await supabase
-        .from("clients")
-        .select("id, client_code, first_name, last_name")
-        .or(`client_code.ilike.%${term}%,first_name.ilike.%${term}%,last_name.ilike.%${term}%`)
-
-      if (clientErr) {
-        return NextResponse.json({ detail: `Error buscando clientes: ${clientErr.message}` }, { status: 500 })
-      }
-      clientIds = (clientMatches ?? []).map((c) => c.id)
+try {
+    const supabase = await createClient()
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+        return NextResponse.json({ error: "No autorizado" }, { status: 401 })
     }
 
-    let query = supabase.from("loans").select(loanSelect).order("created_at", { ascending: false })
+    const { searchParams } = new URL(request.url)
+    const search = searchParams.get("search")
+    const status = searchParams.get("status")
+    const client_id = searchParams.get("client_id")
 
-    if (term && term.length > 0) {
-      const orParts = [`loan_code.ilike.%${term}%`]
-      if (clientIds.length > 0) {
-        // or=(loan_code.ilike.*term*,client_id.in.(uuid1,uuid2))
-        orParts.push(`client_id.in.(${clientIds.join(",")})`)
-      }
-      query = query.or(orParts.join(","))
+    let query = supabase.from("loans").select(`*, clients!inner(first_name, last_name, client_code)`).order("created_at", { ascending: false })
+
+    if (search) {
+        query = query.or(`loan_code.ilike.%${search}%,clients.first_name.ilike.%${search}%,clients.last_name.ilike.%${search}%`)
+    }
+    if (status) {
+        query = query.eq("status", status)
+    }
+    if (client_id) {
+        query = query.eq("client_id", client_id)
     }
 
-    const { data, error } = await query
+    const { data: loans, error } = await query
+
     if (error) {
-      return NextResponse.json({ detail: `Error listando préstamos: ${error.message}` }, { status: 500 })
+        console.error("Error fetching loans:", error)
+        return NextResponse.json({ error: "Error al obtener préstamos" }, { status: 500 })
     }
-    return NextResponse.json(data ?? [], { status: 200 })
-  } catch (e: any) {
-    return NextResponse.json({ detail: `Fallo inesperado en GET /api/loans: ${e.message}` }, { status: 500 })
-  }
+
+    const mappedLoans = (loans || []).map(loan => ({
+        ...loan,
+        active_clients: loan.clients
+    }))
+
+    return NextResponse.json({ loans: mappedLoans })
+} catch (error) {
+    console.error("Error in GET /api/loans:", error)
+    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 })
+}
 }
 
-export async function POST(request: NextRequest) {
-  try {
-    const supabase = getSupabaseAdmin()
-    const body = (await request.json()) as CreateLoanBody
 
-    const insertPayload = {
-      client_id: body.client_id,
-      amount: body.amount,
-      installments: body.installments,
-      loan_type: body.loan_type ?? null,
-      interest_rate: body.interest_rate ?? null,
-      start_date: body.start_date ?? null,
-      end_date: body.end_date ?? null,
-      status: body.status ?? "activo",
-      // loan_code: se asume que lo genera la BD mediante trigger/función
+// --- LÓGICA POST (Creación de Préstamo y Cuotas) ---
+export async function POST(request: NextRequest) {
+try {
+    const supabase = await createClient()
+
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+        return NextResponse.json({ error: "No autorizado" }, { status: 401 })
     }
 
-    const { data, error } = await supabase.from("loans").insert([insertPayload]).select(loanSelect).single()
+    const body = await request.json()
+    const { client_id, amount, installments, interest_rate, start_date, loan_type = "personal", status = "active", frequency = "monthly" } = body
+
+    if (!client_id || !amount || !installments || !interest_rate || !start_date) {
+        return NextResponse.json({ error: "Faltan campos requeridos" }, { status: 400 })
+    }
+
+    // CÁLCULO DE MONTOS
+    const principal = Number.parseFloat(amount)
+    const rate = Number.parseFloat(interest_rate) / 100
+    const total_installments = Number.parseInt(installments)
+    
+    const amount_to_repay = principal * (1 + rate * total_installments)
+    const installment_amount = amount_to_repay / total_installments
+
+    // Generar código de préstamo
+    const { data: lastLoan } = await supabase.from("loans").select("loan_code").order("created_at", { ascending: false }).limit(1).single()
+
+    let nextNumber = 1
+    if (lastLoan?.loan_code) {
+        const match = lastLoan.loan_code.match(/PR(\d+)/)
+        if (match) { nextNumber = Number.parseInt(match[1]) + 1 }
+    }
+    const loan_code = `PR${nextNumber.toString().padStart(5, "0")}`
+
+    // Calcular fecha de fin
+    const startDateObj = new Date(start_date)
+    const endDateObj = new Date(startDateObj)
+    endDateObj.setMonth(endDateObj.getMonth() + total_installments)
+    const end_date = endDateObj.toISOString().split("T")[0]
+
+
+    // 3. Insertar Préstamo en la DB
+    const { data: newLoan, error } = await supabase
+        .from("loans")
+        .insert({
+            client_id, amount: principal, installments: total_installments, interest_rate: rate * 100,
+            start_date, end_date, loan_type, status, loan_code,
+            amount_to_repay, installment_amount, principal, installments_total: total_installments, frequency
+        })
+        .select(`*, clients!inner(first_name, last_name, client_code)`)
+        .single()
 
     if (error) {
-      return NextResponse.json({ detail: `Error creando préstamo: ${error.message}` }, { status: 500 })
+        console.error("Error creating loan:", error)
+        return NextResponse.json({ error: error.message }, { status: 500 })
     }
-    return NextResponse.json(data, { status: 201 })
-  } catch (e: any) {
-    return NextResponse.json({ detail: `Fallo inesperado en POST /api/loans: ${e.message}` }, { status: 500 })
-  }
+
+    // 4. Generar Cuotas Automáticamente (Lógica mejorada y estable)
+    const installmentsData = []
+    const installmentAmount = amount_to_repay / total_installments
+    
+    let intervalUnit = 'month';
+    let intervalValue = 1;
+    
+    if (frequency === 'weekly') {
+        intervalUnit = 'day';
+        intervalValue = 7;
+    } else if (frequency === 'biweekly') {
+        intervalUnit = 'day';
+        intervalValue = 15;
+    }
+
+    const initialDueDate = new Date(start_date);
+    initialDueDate.setHours(12); // Para evitar problemas de DST
+
+    for (let i = 1; i <= total_installments; i++) {
+        let dueDate = new Date(initialDueDate);
+
+        if (intervalUnit === 'month') {
+            // Cálculo absoluto de meses basado en el índice (i - 1)
+            dueDate.setMonth(initialDueDate.getMonth() + intervalValue * (i - 1));
+        } else {
+            // Cálculo absoluto de días basado en el índice (i - 1)
+            dueDate.setDate(initialDueDate.getDate() + intervalValue * (i - 1));
+        }
+
+        installmentsData.push({
+            loan_id: newLoan.id, installment_no: i, installments_total: total_installments,
+            due_date: dueDate.toISOString().split("T")[0], amount_due: installment_amount,
+            amount_paid: 0, status: "A_PAGAR", // Estado inicial
+            code: `${loan_code}-${i.toString().padStart(2, "0")}`,
+        })
+    }
+
+    const { error: installmentsError } = await supabase.from("installments").insert(installmentsData)
+
+    if (installmentsError) {
+        console.error("Error creating installments:", installmentsError)
+    }
+
+    return NextResponse.json({ loan: newLoan }, { status: 201 })
+} catch (error) {
+    console.error("Error in POST /api/loans:", error)
+    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 })
+}
 }

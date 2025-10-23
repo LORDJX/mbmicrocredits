@@ -1,103 +1,85 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createClient } from "@supabase/supabase-js"
+import { createClient } from "@/lib/supabase/server"
 
-export const dynamic = "force-dynamic"
+export async function GET(_: NextRequest, { params }: { params: { id: string } }) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: "No autorizado" }, { status: 401 })
 
-const SUPABASE_URL = process.env.SUPABASE_URL
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
+  const { data: v, error } = await supabase.from("v_users").select("*").eq("id", params.id).maybeSingle()
+  if (error || !v) return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 })
 
-type UpdateUserBody = {
-  email?: string // actualizar email en Auth (opcional)
-  username?: string
-  full_name?: string
-  is_admin?: boolean
+  return NextResponse.json({
+    user: {
+      id: v.id,
+      first_name: v.first_name,
+      last_name: v.last_name,
+      dni: v.dni,
+      phone: v.phone,
+      address: v.address,
+      is_active: v.is_active,
+      updated_at: v.last_updated,
+      role_id: v.role_id,
+      user_roles: v.role_id ? { id: v.role_id, name: v.role_name, description: v.role_description } : null,
+    },
+  })
 }
 
-export async function PATCH(request: NextRequest, context: { params: { id: string } }) {
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-    console.error("Faltan variables de entorno de Supabase (SUPABASE_URL o SUPABASE_SERVICE_ROLE_KEY).")
-    return NextResponse.json({ detail: "Configuración de Supabase incompleta en el servidor." }, { status: 500 })
-  }
+export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+  const supabase = await createClient()
+  const { data: { user: admin } } = await supabase.auth.getUser()
+  if (!admin) return NextResponse.json({ error: "No autorizado" }, { status: 401 })
 
-  const userId = context.params?.id
-  if (!userId) {
-    return NextResponse.json({ detail: "Falta el parámetro 'id'." }, { status: 400 })
-  }
+  const { data: me } = await supabase.from("profiles").select("is_admin").eq("id", admin.id).maybeSingle()
+  if (!me?.is_admin) return NextResponse.json({ error: "Prohibido" }, { status: 403 })
 
-  let body: UpdateUserBody
-  try {
-    body = await request.json()
-  } catch {
-    return NextResponse.json({ detail: "Cuerpo JSON inválido." }, { status: 400 })
-  }
+  const body = await request.json()
+  const { first_name, last_name, dni, phone, address, role_id, is_active } = body
 
-  const email = body.email?.trim().toLowerCase()
-  const username = body.username?.trim().toLowerCase()
-  const full_name = body.full_name?.trim()
-  const is_admin = body.is_admin
-
-  try {
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-      auth: { persistSession: false },
+  const { data: up, error } = await supabase
+    .from("profiles")
+    .update({
+      first_name, last_name, dni, phone, address,
+      role_id: role_id ?? null,
+      is_active,
+      updated_at: new Date().toISOString(),
     })
+    .eq("id", params.id)
+    .select("*")
+    .maybeSingle()
 
-    // Si se provee email, actualizar también en Auth
-    if (email) {
-      const { error: authUpdateError, status: authStatus } = await supabase.auth.admin.updateUserById(userId, {
-        email,
-      })
-      if (authUpdateError) {
-        console.error("Error updateUserById (email):", authUpdateError)
-        return NextResponse.json(
-          { detail: authUpdateError.message || "No se pudo actualizar el email del usuario." },
-          { status: authStatus || 400 },
-        )
-      }
-    }
+  if (error) return NextResponse.json({ error: "Error al actualizar" }, { status: 500 })
 
-    const updatePayload: Record<string, any> = {}
-    if (typeof username !== "undefined") updatePayload.username = username || null
-    if (typeof full_name !== "undefined") updatePayload.full_name = full_name || null
-    if (typeof is_admin !== "undefined") updatePayload.is_admin = !!is_admin
+  const { data: v } = await supabase.from("v_users").select("*").eq("id", params.id).maybeSingle()
+  return NextResponse.json({
+    user: v ? {
+      id: v.id,
+      first_name: v.first_name,
+      last_name: v.last_name,
+      dni: v.dni,
+      phone: v.phone,
+      address: v.address,
+      is_active: v.is_active,
+      updated_at: v.last_updated,
+      role_id: v.role_id,
+      user_roles: v.role_id ? { id: v.role_id, name: v.role_name, description: v.role_description } : null,
+    } : up,
+  })
+}
 
-    if (Object.keys(updatePayload).length === 0) {
-      // Si no hay cambios en el perfil, retornar el perfil actual
-      const {
-        data: current,
-        error: currentErr,
-        status: currentStatus,
-      } = await supabase
-        .from("profiles")
-        .select("id, username, full_name, is_admin, updated_at")
-        .eq("id", userId)
-        .single()
-      if (currentErr) {
-        return NextResponse.json(
-          { detail: currentErr.message || "No se pudo recuperar el perfil." },
-          { status: currentStatus || 500 },
-        )
-      }
-      return NextResponse.json(current, { status: 200 })
-    }
+export async function DELETE(_: NextRequest, { params }: { params: { id: string } }) {
+  const supabase = await createClient()
+  const { data: { user: admin } } = await supabase.auth.getUser()
+  if (!admin) return NextResponse.json({ error: "No autorizado" }, { status: 401 })
 
-    const { data, error, status } = await supabase
-      .from("profiles")
-      .update(updatePayload)
-      .eq("id", userId)
-      .select("id, username, full_name, is_admin, updated_at")
-      .single()
+  const { data: me } = await supabase.from("profiles").select("is_admin").eq("id", admin.id).maybeSingle()
+  if (!me?.is_admin) return NextResponse.json({ error: "Prohibido" }, { status: 403 })
 
-    if (error) {
-      console.error("Error Supabase (PATCH /api/users/[id]):", error)
-      return NextResponse.json(
-        { detail: error.message || "Error al actualizar el perfil del usuario." },
-        { status: status || 500 },
-      )
-    }
+  const { error } = await supabase
+    .from("profiles")
+    .update({ is_active: false, updated_at: new Date().toISOString() })
+    .eq("id", params.id)
 
-    return NextResponse.json(data, { status: 200 })
-  } catch (err: any) {
-    console.error("Error interno (PATCH /api/users/[id]):", err)
-    return NextResponse.json({ detail: "Error interno del servidor al actualizar el usuario." }, { status: 500 })
-  }
+  if (error) return NextResponse.json({ error: "Error al desactivar" }, { status: 500 })
+  return NextResponse.json({ message: "Usuario desactivado" })
 }

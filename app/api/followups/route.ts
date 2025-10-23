@@ -1,92 +1,98 @@
-import { type NextRequest, NextResponse } from "next/server"
-import { getSupabaseAdmin } from "@/lib/supabase-admin"
+import { createClient } from "@/lib/supabase/server"
+import { NextResponse } from "next/server"
+import type { CreateFollowUpData } from "@/lib/types/followups"
 
-export const dynamic = "force-dynamic"
-
-function jsonError(message: string, status = 500, error?: unknown) {
-  return NextResponse.json({ message, error }, { status })
-}
-
-/**
- * GET /api/followups
- * Query opcional: ?client_id=...
- * Devuelve los seguimientos con el cliente embebido como { client: {...} }
- */
-export async function GET(request: NextRequest) {
+export async function GET(request: Request) {
   try {
-    const supabase = getSupabaseAdmin()
-    const searchParams = request.nextUrl.searchParams
-    const clientId = searchParams.get("client_id") || undefined
+    const supabase = await createClient()
 
-    // Relación basada en FK follow_ups.client_id -> clients.id
-    let query = supabase
-      .from("follow_ups")
-      .select("id, client_id, date, notes, reminder_date, created_at, updated_at, client:clients(*)")
-      .order("created_at", { ascending: false })
+    // Check authentication
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser()
+    if (authError || !user) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 })
+    }
 
+    const { searchParams } = new URL(request.url)
+    const clientId = searchParams.get("client_id")
+    const status = searchParams.get("status")
+    const startDate = searchParams.get("start_date")
+    const endDate = searchParams.get("end_date")
+
+    let query = supabase.from("v_follow_ups").select("*")
+
+    // Apply filters
     if (clientId) {
       query = query.eq("client_id", clientId)
     }
 
-    const { data, error } = await query
-
-    if (error) {
-      return jsonError("Error al obtener seguimientos desde Supabase", 500, {
-        code: error.code,
-        details: error.details,
-        hint: error.hint,
-        message: error.message,
-      })
+    if (status) {
+      query = query.eq("status", status)
     }
 
-    return NextResponse.json(data ?? [])
-  } catch (err: any) {
-    return jsonError("Excepción en GET /api/followups", 500, err?.message ?? String(err))
+    if (startDate) {
+      query = query.gte("date", startDate)
+    }
+
+    if (endDate) {
+      query = query.lte("date", endDate)
+    }
+
+    const { data, error } = await query.order("date", { ascending: false })
+
+    if (error) {
+      console.error("[v0] Error fetching follow-ups:", error)
+      return NextResponse.json({ error: "Error al obtener seguimientos" }, { status: 500 })
+    }
+
+    return NextResponse.json(data)
+  } catch (error) {
+    console.error("[v0] Error in GET /api/followups:", error)
+    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 })
   }
 }
 
-/**
- * POST /api/followups
- * Body: { client_id: uuid, date: string(YYYY-MM-DD), notes?: string, reminder_date?: string | null }
- * En el esquema, date y client_id son NOT NULL
- */
-export async function POST(request: NextRequest) {
+export async function POST(request: Request) {
   try {
-    const supabase = getSupabaseAdmin()
-    const body = await request.json()
+    const supabase = await createClient()
 
-    const client_id = String(body?.client_id ?? "").trim()
-    const date = String(body?.date ?? "").trim()
-    const notes = body?.notes ?? null
-    const reminder_date =
-      body?.reminder_date === "" || body?.reminder_date === undefined ? null : String(body?.reminder_date)
-
-    if (!client_id) {
-      return jsonError("El campo client_id es obligatorio.", 400)
-    }
-    if (!date) {
-      return jsonError("El campo date es obligatorio (YYYY-MM-DD).", 400)
+    // Check authentication
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser()
+    if (authError || !user) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 })
     }
 
-    const insertPayload = { client_id, date, notes, reminder_date }
+    const body: CreateFollowUpData = await request.json()
+
+    // Validate required fields
+    if (!body.client_id || !body.date) {
+      return NextResponse.json({ error: "client_id y date son requeridos" }, { status: 400 })
+    }
 
     const { data, error } = await supabase
       .from("follow_ups")
-      .insert([insertPayload])
-      .select("id, client_id, date, notes, reminder_date, created_at, updated_at")
+      .insert({
+        client_id: body.client_id,
+        date: body.date,
+        reminder_date: body.reminder_date || null,
+        notes: body.notes || null,
+      })
+      .select()
       .single()
 
     if (error) {
-      return jsonError("Error al crear seguimiento en Supabase", 500, {
-        code: error.code,
-        details: error.details,
-        hint: error.hint,
-        message: error.message,
-      })
+      console.error("[v0] Error creating follow-up:", error)
+      return NextResponse.json({ error: "Error al crear seguimiento" }, { status: 500 })
     }
 
     return NextResponse.json(data, { status: 201 })
-  } catch (err: any) {
-    return jsonError("Excepción en POST /api/followups", 500, err?.message ?? String(err))
+  } catch (error) {
+    console.error("[v0] Error in POST /api/followups:", error)
+    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 })
   }
 }

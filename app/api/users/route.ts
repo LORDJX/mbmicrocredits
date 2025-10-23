@@ -1,143 +1,78 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createClient } from "@supabase/supabase-js"
+import { createClient } from "@/lib/supabase/server"
 
-export const dynamic = "force-dynamic"
+export async function GET() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: "No autorizado" }, { status: 401 })
 
-const SUPABASE_URL = process.env.SUPABASE_URL
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
+  const { data, error } = await supabase
+    .from("v_users")
+    .select("*")
+    .order("last_updated", { ascending: false })
 
-type CreateUserBody = {
-  email: string
-  password?: string
-  full_name?: string
-  username?: string
-  is_admin?: boolean
-}
+  if (error) return NextResponse.json({ error: "Error al obtener usuarios" }, { status: 500 })
 
-export async function GET(request: NextRequest) {
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-    console.error("Faltan variables de entorno de Supabase (SUPABASE_URL o SUPABASE_SERVICE_ROLE_KEY).")
-    return NextResponse.json({ detail: "Configuración de Supabase incompleta en el servidor." }, { status: 500 })
-  }
+  const users = (data || []).map((r: any) => ({
+    id: r.id,
+    first_name: r.first_name,
+    last_name: r.last_name,
+    dni: r.dni,
+    phone: r.phone,
+    address: r.address,
+    is_active: r.is_active,
+    updated_at: r.last_updated,
+    role_id: r.role_id,
+    user_roles: r.role_id ? { id: r.role_id, name: r.role_name, description: r.role_description } : null,
+  }))
 
-  try {
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-      auth: { persistSession: false },
-    })
-
-    const search = request.nextUrl.searchParams.get("search")?.trim() ?? ""
-
-    let query = supabase
-      .from("profiles")
-      .select("id, username, full_name, is_admin, updated_at")
-      .order("updated_at", { ascending: false })
-
-    if (search) {
-      query = query.or(`username.ilike.%${search}%,full_name.ilike.%${search}%`)
-    }
-
-    const { data, error, status } = await query
-    if (error) {
-      console.error("Error Supabase (GET /api/users):", error)
-      return NextResponse.json({ detail: error.message || "Error al consultar usuarios." }, { status: status || 500 })
-    }
-
-    return NextResponse.json(data || [], { status: 200 })
-  } catch (err: any) {
-    console.error("Error interno (GET /api/users):", err)
-    return NextResponse.json({ detail: "Error interno del servidor al consultar usuarios." }, { status: 500 })
-  }
+  return NextResponse.json({ users })
 }
 
 export async function POST(request: NextRequest) {
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-    console.error("Faltan variables de entorno de Supabase (SUPABASE_URL o SUPABASE_SERVICE_ROLE_KEY).")
-    return NextResponse.json({ detail: "Configuración de Supabase incompleta en el servidor." }, { status: 500 })
+  const supabase = await createClient()
+  const { data: { user: admin } } = await supabase.auth.getUser()
+  if (!admin) return NextResponse.json({ error: "No autorizado" }, { status: 401 })
+
+  // sólo admin puede crear/editar perfiles
+  const { data: me } = await supabase.from("profiles").select("is_admin").eq("id", admin.id).maybeSingle()
+  if (!me?.is_admin) return NextResponse.json({ error: "Prohibido" }, { status: 403 })
+
+  const body = await request.json()
+  const { id, first_name, last_name, dni, phone, address, role_id, is_active = true } = body
+
+  if (!id) return NextResponse.json({ error: "Debes enviar 'id' (auth.users.id / profiles.id)" }, { status: 400 })
+  if (!first_name || !last_name || !dni) {
+    return NextResponse.json({ error: "Campos requeridos: first_name, last_name, dni" }, { status: 400 })
   }
 
-  let body: CreateUserBody
-  try {
-    body = await request.json()
-  } catch {
-    return NextResponse.json({ detail: "Cuerpo JSON inválido." }, { status: 400 })
-  }
+  const { data: up, error } = await supabase
+    .from("profiles")
+    .upsert({
+      id,
+      first_name, last_name, dni, phone, address,
+      role_id: role_id ?? null,
+      is_active,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "id" })
+    .select("*")
+    .maybeSingle()
 
-  const email = (body.email || "").trim().toLowerCase()
-  const password = body.password?.trim()
-  const full_name = body.full_name?.trim()
-  const username = (body.username || email).trim().toLowerCase()
-  const is_admin = !!body.is_admin
+  if (error) return NextResponse.json({ error: "Error al guardar perfil" }, { status: 500 })
 
-  if (!email) {
-    return NextResponse.json({ detail: "El campo 'email' es requerido." }, { status: 400 })
-  }
+  const { data: v } = await supabase.from("v_users").select("*").eq("id", id).maybeSingle()
+  const userDto = v ? {
+    id: v.id,
+    first_name: v.first_name,
+    last_name: v.last_name,
+    dni: v.dni,
+    phone: v.phone,
+    address: v.address,
+    is_active: v.is_active,
+    updated_at: v.last_updated,
+    role_id: v.role_id,
+    user_roles: v.role_id ? { id: v.role_id, name: v.role_name, description: v.role_description } : null,
+  } : up
 
-  try {
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-      auth: { persistSession: false },
-    })
-
-    // Crear usuario en Supabase Auth (con password o invitación por email)
-    let userId: string | undefined
-
-    if (password && password.length >= 6) {
-      const { data, error } = await supabase.auth.admin.createUser({
-        email,
-        password,
-        email_confirm: true,
-        user_metadata: full_name ? { full_name } : undefined,
-      })
-      if (error) {
-        console.error("Error createUser:", error)
-        return NextResponse.json({ detail: error.message || "No se pudo crear el usuario." }, { status: 400 })
-      }
-      userId = data.user?.id
-    } else {
-      // Si no hay password, enviamos invitación
-      const { data, error } = await supabase.auth.admin.inviteUserByEmail(email, {
-        data: full_name ? { full_name } : undefined,
-      })
-      if (error) {
-        console.error("Error inviteUserByEmail:", error)
-        return NextResponse.json({ detail: error.message || "No se pudo invitar al usuario." }, { status: 400 })
-      }
-      userId = data.user?.id
-    }
-
-    if (!userId) {
-      return NextResponse.json({ detail: "No se obtuvo el ID del nuevo usuario." }, { status: 500 })
-    }
-
-    // Crear/actualizar perfil
-    const {
-      data: profile,
-      error: profileError,
-      status: profileStatus,
-    } = await supabase
-      .from("profiles")
-      .upsert(
-        {
-          id: userId,
-          username,
-          full_name: full_name || null,
-          is_admin,
-        },
-        { onConflict: "id" },
-      )
-      .select("id, username, full_name, is_admin, updated_at")
-      .single()
-
-    if (profileError) {
-      console.error("Error upsert profile:", profileError)
-      return NextResponse.json(
-        { detail: profileError.message || "No se pudo crear el perfil del usuario." },
-        { status: profileStatus || 500 },
-      )
-    }
-
-    return NextResponse.json(profile, { status: 201 })
-  } catch (err: any) {
-    console.error("Error interno (POST /api/users):", err)
-    return NextResponse.json({ detail: "Error interno del servidor al crear usuario." }, { status: 500 })
-  }
+  return NextResponse.json({ user: userDto }, { status: 201 })
 }

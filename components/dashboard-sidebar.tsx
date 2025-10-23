@@ -1,6 +1,7 @@
 "use client"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import { useEffect, useState } from "react"
 import {
   Home,
   Users,
@@ -12,6 +13,10 @@ import {
   LogOut,
   ChevronDown,
   User2,
+  FileText,
+  Receipt,
+  Calendar,
+  Calculator,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -27,28 +32,83 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { supabase } from "@/lib/supabaseClient"
+import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
 
 const navItems = [
-  { title: "Inicio", href: "/dashboard", icon: Home },
-  { title: "Usuarios", href: "/dashboard/users", icon: Users },
-  { title: "Socios", href: "/dashboard/partners", icon: Handshake },
-  { title: "Clientes", href: "/dashboard/clients", icon: User2 },
-  { title: "Préstamos", href: "/dashboard/loans", icon: CreditCard },
-  { title: "Transacciones", href: "/dashboard/transactions", icon: DollarSign },
-  { title: "Seguimientos", href: "/dashboard/followups", icon: CalendarCheck },
-  { title: "Informes", href: "/dashboard/reports", icon: BarChart2 },
+  { title: "Inicio", href: "/dashboard", icon: Home, route: "dashboard" },
+  { title: "Usuarios", href: "/dashboard/users", icon: Users, route: "users" },
+  { title: "Socios", href: "/dashboard/partners", icon: Handshake, route: "partners" },
+  { title: "Clientes", href: "/clientes", icon: User2, route: "clients" },
+  { title: "Préstamos", href: "/prestamos", icon: CreditCard, route: "loans" },
+  { title: "Recibo", href: "/dashboard/receipts", icon: Receipt, route: "receipts" },
+  { title: "Cronograma", href: "/cronogramas", icon: Calendar, route: "cronograma" },
+  { title: "Gastos", href: "/gastos", icon: DollarSign, route: "expenses" },
+  { title: "Seguimientos", href: "/dashboard/followups", icon: CalendarCheck, route: "followups" },
+  { title: "Resumen para Socios", href: "/dashboard/resumen", icon: FileText, route: "reports" },
+  { title: "Informe de situación Financiera", href: "/reportes", icon: BarChart2, route: "reports" },
+  { title: "Fórmulas", href: "/formulas", icon: Calculator, route: "formulas" },
 ]
 
 export function DashboardSidebar() {
   const pathname = usePathname()
   const router = useRouter()
+  const [userPermissions, setUserPermissions] = useState<string[]>([])
+  const [permissionsLoaded, setPermissionsLoaded] = useState(false)
+
+  useEffect(() => {
+    const loadUserPermissions = async () => {
+      try {
+        const supabase = createClient()
+        const {
+          data: { user },
+        } = await supabase.auth.getUser()
+        if (user) {
+          setUserPermissions([
+            "dashboard",
+            "users",
+            "partners",
+            "clients",
+            "loans",
+            "receipts",
+            "cronograma",
+            "expenses",
+            "followups",
+            "reports",
+            "formulas",
+          ])
+        }
+      } catch (error) {
+        console.error("Error loading permissions:", error)
+        setUserPermissions(["dashboard", "users", "clients", "loans", "cronograma", "formulas"])
+      } finally {
+        setPermissionsLoaded(true)
+      }
+    }
+
+    loadUserPermissions()
+  }, [])
+
+  const filteredNavItems = navItems.filter((item) => userPermissions.includes(item.route) || item.route === "dashboard")
 
   const handleLogout = async () => {
+    const supabase = createClient()
     await supabase.auth.signOut()
-    router.push("/login")
+    router.push("/auth/login")
+  }
+
+  if (!permissionsLoaded) {
+    return (
+      <Sidebar className="bg-card border-r border-border">
+        <SidebarHeader className="p-4 border-b border-border">
+          <h1 className="text-2xl font-bold text-foreground">Microcréditos</h1>
+        </SidebarHeader>
+        <SidebarContent className="flex-1 overflow-auto py-4">
+          <div className="p-4 text-center text-muted-foreground">Cargando permisos...</div>
+        </SidebarContent>
+      </Sidebar>
+    )
   }
 
   return (
@@ -58,17 +118,19 @@ export function DashboardSidebar() {
       </SidebarHeader>
       <SidebarContent className="flex-1 overflow-auto py-4">
         <SidebarGroup>
-          <SidebarGroupLabel className="text-muted-foreground">Navegación</SidebarGroupLabel>
+          <SidebarGroupLabel className="text-muted-foreground font-semibold text-sm uppercase tracking-wide">
+            Navegación
+          </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {navItems.map((item) => (
+              {filteredNavItems.map((item) => (
                 <SidebarMenuItem key={item.href}>
                   <Link href={item.href} legacyBehavior passHref>
                     <SidebarMenuButton
                       isActive={pathname === item.href}
                       className={cn(
-                        "hover:bg-primary/10 hover:text-primary",
-                        pathname === item.href && "bg-primary/10 text-primary font-semibold",
+                        "hover:bg-primary/10 hover:text-primary transition-colors duration-200",
+                        pathname === item.href && "bg-primary/15 text-primary font-semibold border-r-2 border-primary",
                       )}
                     >
                       <item.icon className="size-5" />
@@ -81,10 +143,10 @@ export function DashboardSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
-      <SidebarFooter className="p-4 border-t border-border">
+      <SidebarFooter className="p-4 border-t border-border bg-muted/30">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="w-full justify-start text-left">
+            <Button variant="ghost" className="w-full justify-start text-left hover:bg-primary/10">
               <User2 className="mr-2 size-5" />
               <span className="flex-grow">Mi Cuenta</span>
               <ChevronDown className="size-4" />
@@ -93,7 +155,7 @@ export function DashboardSidebar() {
           <DropdownMenuContent
             side="top"
             align="start"
-            className="w-[--radix-popper-anchor-width] bg-popover text-popover-foreground border-border"
+            className="w-(--radix-popper-anchor-width) bg-popover text-popover-foreground border-border"
           >
             <DropdownMenuItem className="cursor-pointer hover:!bg-primary/10">
               <span>Perfil</span>

@@ -1,122 +1,141 @@
-// Rutas: /api/clients (GET, POST)
-// Acceso directo a Supabase desde el servidor para evitar redirecciones (SSO) del backend.
+import { type NextRequest, NextResponse } from "next/server"
+import { createClient } from "@/lib/supabase/server"
 
-import { NextResponse } from "next/server"
-import { createClient } from "@supabase/supabase-js"
-
-export const dynamic = "force-dynamic"
-
-function getAdminClient() {
-  const url = process.env.SUPABASE_URL
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!url || !serviceKey) {
-    throw new Error("Faltan SUPABASE_URL o SUPABASE_SERVICE_ROLE_KEY en el entorno del servidor.")
-  }
-  return createClient(url, serviceKey)
-}
-
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
-    const supabase = getAdminClient()
+    const supabase = await createClient()
+
+    // Verificar autenticación
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser()
+    if (authError || !user) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 })
+    }
+
+    // Obtener parámetros de búsqueda
     const { searchParams } = new URL(request.url)
-    const search = (searchParams.get("search") || "").trim()
+    const search = searchParams.get("search")
+    const status = searchParams.get("status")
 
     let query = supabase
-      .from("clients")
-      .select(
-        `
-        id,
-        client_code,
-        first_name,
-        last_name,
-        dni,
-        address,
-        phone,
-        email,
-        referred_by,
-        status,
-        observations,
-        dni_photo_url,
-        created_at,
-        updated_at,
-        deleted_at
-      `,
-      )
+      .from("active_clients")
+      .select("*")
+      .is("deleted_at", null)
       .order("created_at", { ascending: false })
 
+    // Aplicar filtros
     if (search) {
-      // Busca por nombre, apellido o DNI
-      query = query.or(`first_name.ilike.%${search}%,last_name.ilike.%${search}%,dni.ilike.%${search}%`)
-    }
-
-    const { data, error, status } = await query
-    if (error) {
-      return NextResponse.json(
-        { detail: "Error al obtener clientes desde Supabase", error: { message: error.message, code: error.code } },
-        { status: status || 500 },
+      query = query.or(
+        `first_name.ilike.%${search}%,last_name.ilike.%${search}%,dni.ilike.%${search}%,client_code.ilike.%${search}%`,
       )
     }
 
-    return NextResponse.json(data ?? [], { status: 200 })
-  } catch (err: any) {
-    console.error("❌ Error en GET /api/clients:", err)
-    return NextResponse.json({ detail: String(err) }, { status: 500 })
+    if (status) {
+      query = query.eq("status", status)
+    }
+
+    const { data: clients, error } = await query
+
+    if (error) {
+      console.error("Error fetching clients:", error)
+      return NextResponse.json({ error: "Error al obtener clientes" }, { status: 500 })
+    }
+
+    return NextResponse.json({ clients })
+  } catch (error) {
+    console.error("Error in GET /api/clients:", error)
+    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 })
   }
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
-    const supabase = getAdminClient()
-    const body = await request.json()
+    const supabase = await createClient()
 
-    // Campos permitidos al crear
-    const insertData = {
-      first_name: body.first_name ?? "",
-      last_name: body.last_name ?? "",
-      dni: body.dni ?? null,
-      address: body.address ?? null,
-      phone: body.phone ?? null,
-      email: body.email ?? null,
-      referred_by: body.referred_by ?? null,
-      status: body.status ?? "activo",
-      observations: body.observations ?? null,
-      // client_code: puede ser generado por trigger en la BD si existe.
+    // Verificar autenticación
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser()
+    if (authError || !user) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 })
     }
 
-    const { data, error, status } = await supabase
-      .from("clients")
-      .insert(insertData)
-      .select(
-        `
-        id,
-        client_code,
+    const body = await request.json()
+    const { first_name, last_name, dni, phone, email, address, referred_by, observations, status = "active" } = body
+
+    // Validar campos requeridos
+    if (!first_name || !last_name || !dni) {
+      return NextResponse.json(
+        {
+          error: "Campos requeridos: first_name, last_name, dni",
+        },
+        { status: 400 },
+      )
+    }
+
+    // Verificar si el DNI ya existe
+    const { data: existingClient } = await supabase
+      .from("active_clients")
+      .select("id")
+      .eq("dni", dni)
+      .is("deleted_at", null)
+      .single()
+
+    if (existingClient) {
+      return NextResponse.json(
+        {
+          error: "Ya existe un cliente con este DNI",
+        },
+        { status: 409 },
+      )
+    }
+
+    // Generar código de cliente único
+    const { data: lastClient } = await supabase
+      .from("active_clients")
+      .select("client_code")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .single()
+
+    let nextNumber = 1
+    if (lastClient?.client_code) {
+      const match = lastClient.client_code.match(/CL(\d+)/)
+      if (match) {
+        nextNumber = Number.parseInt(match[1]) + 1
+      }
+    }
+    const client_code = `CL${nextNumber.toString().padStart(4, "0")}`
+
+    // Crear cliente
+    const { data: newClient, error } = await supabase
+      .from("active_clients")
+      .insert({
         first_name,
         last_name,
         dni,
-        address,
         phone,
         email,
+        address,
         referred_by,
-        status,
         observations,
-        dni_photo_url,
-        created_at,
-        updated_at,
-        deleted_at
-      `,
-      )
+        status,
+        client_code,
+      })
+      .select()
       .single()
 
     if (error) {
-      return NextResponse.json(
-        { detail: "Error al crear cliente en Supabase", error: { message: error.message, code: error.code } },
-        { status: status || 500 },
-      )
+      console.error("Error creating client:", error)
+      return NextResponse.json({ error: "Error al crear cliente" }, { status: 500 })
     }
 
-    return NextResponse.json(data, { status: 201 })
-  } catch (err: any) {
-    console.error("❌ Error en POST /api/clients:", err)
-    return NextResponse.json({ detail: String(err) }, { status: 500 })
+    return NextResponse.json({ client: newClient }, { status: 201 })
+  } catch (error) {
+    console.error("Error in POST /api/clients:", error)
+    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 })
   }
 }

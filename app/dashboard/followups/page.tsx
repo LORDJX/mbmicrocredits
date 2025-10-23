@@ -1,489 +1,276 @@
 "use client"
 
-import type React from "react"
-import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { MoreHorizontal, PlusCircle } from "lucide-react"
-import { useToast } from "@/hooks/use-toast"
-
-interface FollowUp {
-  id: string
-  client_id: string
-  date: string // YYYY-MM-DD
-  notes: string | null
-  reminder_date: string | null
-  created_at: string
-  updated_at: string | null
-  client?: {
-    id: string
-    first_name?: string | null
-    last_name?: string | null
-    name?: string | null
-    surname?: string | null
-    nombre?: string | null
-    apellido?: string | null
-  } | null
-}
-
-const initialNewFollowUpState = {
-  client_id: "",
-  date: new Date().toISOString().split("T")[0], // YYYY-MM-DD
-  notes: "",
-  reminder_date: "",
-}
-
-// Convierte una Response en un mensaje de error legible
-async function getResponseError(response: Response, fallback: string) {
-  try {
-    const contentType = response.headers.get("content-type") || ""
-    if (contentType.includes("application/json")) {
-      const data = await response.json().catch(() => ({}) as any)
-      const candidate =
-        data?.message ??
-        data?.error?.message ??
-        (typeof data?.detail === "string" ? data.detail : data?.detail?.message)
-      return candidate ? String(candidate) : fallback
-    }
-    const text = await response.text()
-    return `${fallback}. Respuesta no JSON: ${text.slice(0, 200)}...`
-  } catch {
-    return fallback
-  }
-}
-
-function getClientFullName(client?: FollowUp["client"]) {
-  if (!client) return ""
-  const first = client.first_name ?? client.name ?? client.nombre ?? ""
-  const last = client.last_name ?? client.surname ?? client.apellido ?? ""
-  return [first, last].filter(Boolean).join(" ").trim()
-}
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { Plus, Search, Calendar, AlertCircle, Clock, Pencil, Trash2, Loader2 } from "lucide-react"
+import { format } from "date-fns"
+import { es } from "date-fns/locale"
+import { CreateFollowUpForm } from "@/components/forms/create-followup-form"
+import type { FollowUpWithClient } from "@/lib/types/followups"
+import { PageHeader } from "@/components/page-header"
 
 export default function FollowUpsPage() {
-  const [followUps, setFollowUps] = useState<FollowUp[]>([])
+  const [followups, setFollowups] = useState<FollowUpWithClient[]>([])
+  const [filteredFollowups, setFilteredFollowups] = useState<FollowUpWithClient[]>([])
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
-  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
-  const [currentFollowUp, setCurrentFollowUp] = useState<FollowUp | null>(null)
-  const [newFollowUp, setNewFollowUp] = useState(initialNewFollowUpState)
-  const { toast } = useToast()
-  const router = useRouter()
+  const [searchTerm, setSearchTerm] = useState("")
+  const [statusFilter, setStatusFilter] = useState<string>("all")
+  const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [editingFollowup, setEditingFollowup] = useState<FollowUpWithClient | null>(null)
 
   useEffect(() => {
-    fetchFollowUps()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    fetchFollowups()
   }, [])
 
-  const fetchFollowUps = async () => {
-    setLoading(true)
-    setError(null)
+  useEffect(() => {
+    filterFollowups()
+  }, [followups, searchTerm, statusFilter])
+
+  const fetchFollowups = async () => {
     try {
-      const response = await fetch("/api/followups", { cache: "no-store" })
-      if (!response.ok) {
-        const fallback = `Error al cargar seguimientos: ${response.status} ${response.statusText}`
-        const errorMessage = await getResponseError(response, fallback)
-        throw new Error(errorMessage)
-      }
-      const data: FollowUp[] = await response.json()
-      setFollowUps(data)
-    } catch (err: any) {
-      const msg = err?.message ? String(err.message) : "Error desconocido"
-      console.error("Error al cargar seguimientos:", msg)
-      setError("Error al cargar seguimientos: " + msg)
-      toast({
-        title: "Error",
-        description: `No se pudieron cargar los seguimientos: ${msg}`,
-        variant: "destructive",
-      })
-      if (msg.includes("permisos") || msg.includes("403")) {
-        router.push("/dashboard")
-      }
+      setLoading(true)
+      const response = await fetch("/api/followups")
+      if (!response.ok) throw new Error("Error al cargar seguimientos")
+      const data = await response.json()
+      setFollowups(data)
+    } catch (error) {
+      console.error("[v0] Error fetching follow-ups:", error)
     } finally {
       setLoading(false)
     }
   }
 
-  const toDateInput = (d?: string | null) => (d ? String(d).split("T")[0] : "")
+  const filterFollowups = () => {
+    let filtered = [...followups]
 
-  const handleEditClick = (followUp: FollowUp) => {
-    setCurrentFollowUp({
-      ...followUp,
-      date: toDateInput(followUp.date),
-      reminder_date: toDateInput(followUp.reminder_date),
-    } as FollowUp)
-    setIsEditDialogOpen(true)
+    // Filter by search term
+    if (searchTerm) {
+      filtered = filtered.filter(
+        (f) =>
+          f.client_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          f.client_code.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          f.notes?.toLowerCase().includes(searchTerm.toLowerCase()),
+      )
+    }
+
+    // Filter by status
+    if (statusFilter !== "all") {
+      filtered = filtered.filter((f) => f.status === statusFilter)
+    }
+
+    setFilteredFollowups(filtered)
   }
 
-  const handleSaveFollowUp = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!currentFollowUp) return
-    setLoading(true)
-    setError(null)
+  const handleDelete = async (id: string) => {
+    if (!confirm("¿Estás seguro de que deseas eliminar este seguimiento?")) return
 
     try {
-      const response = await fetch(`/api/followups/${currentFollowUp.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          client_id: currentFollowUp.client_id,
-          date: currentFollowUp.date, // requerido por schema
-          notes: currentFollowUp.notes,
-          reminder_date: currentFollowUp.reminder_date || null,
-        }),
+      const response = await fetch(`/api/followups/${id}`, {
+        method: "DELETE",
       })
 
-      if (!response.ok) {
-        const fallback = `Error al actualizar seguimiento: ${response.status} ${response.statusText}`
-        const errorMessage = await getResponseError(response, fallback)
-        throw new Error(errorMessage)
-      }
+      if (!response.ok) throw new Error("Error al eliminar seguimiento")
 
-      toast({ title: "Éxito", description: "Seguimiento actualizado correctamente." })
-      setIsEditDialogOpen(false)
-      fetchFollowUps()
-    } catch (err: any) {
-      const msg = err?.message ? String(err.message) : "Error desconocido"
-      console.error("Error al guardar seguimiento:", msg)
-      setError("Error al guardar seguimiento: " + msg)
-      toast({
-        title: "Error",
-        description: `No se pudo actualizar el seguimiento: ${msg}`,
-        variant: "destructive",
-      })
-    } finally {
-      setLoading(false)
+      await fetchFollowups()
+    } catch (error) {
+      console.error("[v0] Error deleting follow-up:", error)
+      alert("Error al eliminar seguimiento")
     }
   }
 
-  const handleCreateFollowUp = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setLoading(true)
-    setError(null)
+  const handleEdit = (followup: FollowUpWithClient) => {
+    setEditingFollowup(followup)
+    setIsDialogOpen(true)
+  }
 
-    try {
-      const response = await fetch("/api/followups", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...newFollowUp,
-          reminder_date: newFollowUp.reminder_date || null,
-        }),
-      })
+  const handleDialogClose = () => {
+    setIsDialogOpen(false)
+    setEditingFollowup(null)
+  }
 
-      if (!response.ok) {
-        const fallback = `Error al crear seguimiento: ${response.status} ${response.statusText}`
-        const errorMessage = await getResponseError(response, fallback)
-        throw new Error(errorMessage)
-      }
+  const handleSuccess = async () => {
+    handleDialogClose()
+    await fetchFollowups()
+  }
 
-      toast({ title: "Éxito", description: "Seguimiento creado correctamente." })
-      setIsCreateDialogOpen(false)
-      setNewFollowUp(initialNewFollowUpState)
-      fetchFollowUps()
-    } catch (err: any) {
-      const msg = err?.message ? String(err.message) : "Error desconocido"
-      console.error("Error al crear seguimiento:", msg)
-      setError("Error al crear seguimiento: " + msg)
-      toast({
-        title: "Error",
-        description: `No se pudo crear el seguimiento: ${msg}`,
-        variant: "destructive",
-      })
-    } finally {
-      setLoading(false)
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case "pending":
+        return (
+          <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+            <Clock className="w-3 h-3 mr-1" />
+            Pendiente
+          </Badge>
+        )
+      case "overdue":
+        return (
+          <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
+            <AlertCircle className="w-3 h-3 mr-1" />
+            Vencido
+          </Badge>
+        )
+      default:
+        return <Badge variant="outline">{status}</Badge>
     }
   }
 
-  const handleDeleteFollowUp = async (followUpId: string) => {
-    if (!window.confirm("¿Estás seguro de que quieres eliminar este seguimiento?")) return
-    setLoading(true)
-    setError(null)
-
-    try {
-      const response = await fetch(`/api/followups/${followUpId}`, { method: "DELETE" })
-
-      if (!response.ok) {
-        const fallback = `Error al eliminar seguimiento: ${response.status} ${response.statusText}`
-        const errorMessage = await getResponseError(response, fallback)
-        throw new Error(errorMessage)
-      }
-
-      toast({ title: "Éxito", description: "Seguimiento eliminado correctamente." })
-      fetchFollowUps()
-    } catch (err: any) {
-      const msg = err?.message ? String(err.message) : "Error desconocido"
-      console.error("Error al eliminar seguimiento:", msg)
-      setError("Error al eliminar seguimiento: " + msg)
-      toast({
-        title: "Error",
-        description: `No se pudo eliminar el seguimiento: ${msg}`,
-        variant: "destructive",
-      })
-    } finally {
-      setLoading(false)
-    }
+  const stats = {
+    total: followups.length,
+    pending: followups.filter((f) => f.status === "pending").length,
+    overdue: followups.filter((f) => f.status === "overdue").length,
   }
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-900 text-gray-100">
-        <p>Cargando seguimientos...</p>
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-900 text-red-400">
-        <p>{error}</p>
+      <div className="flex items-center justify-center h-96">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
       </div>
     )
   }
 
   return (
-    <div className="p-4">
-      <Card className="bg-gray-800 text-gray-100 border border-gray-700 shadow-lg">
-        <CardHeader>
-          <div className="flex justify-between items-center">
-            <CardTitle className="text-2xl font-bold text-gray-50">Gestión de Seguimientos</CardTitle>
-            <Button
-              onClick={() => setIsCreateDialogOpen(true)}
-              className="bg-green-600 hover:bg-green-700 text-gray-50 font-semibold"
-            >
-              <PlusCircle className="mr-2 h-4 w-4" />
-              Nuevo Seguimiento
-            </Button>
+    <div className="space-y-6">
+      <PageHeader title="Seguimientos" description="Gestiona los seguimientos de clientes" />
+
+      {/* Stats Cards */}
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Seguimientos</CardTitle>
+            <Calendar className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.total}</div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Pendientes</CardTitle>
+            <Clock className="h-4 w-4 text-blue-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-blue-600">{stats.pending}</div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Vencidos</CardTitle>
+            <AlertCircle className="h-4 w-4 text-red-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-red-600">{stats.overdue}</div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Filters and Actions */}
+      <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+        <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+          <div className="relative flex-1 sm:w-64">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+            <Input
+              placeholder="Buscar por cliente o notas..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-9"
+            />
           </div>
-          <CardDescription className="text-gray-400">
-            Lista de todos los seguimientos de clientes registrados.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-full sm:w-40">
+              <SelectValue placeholder="Estado" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos</SelectItem>
+              <SelectItem value="pending">Pendientes</SelectItem>
+              <SelectItem value="overdue">Vencidos</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <Button onClick={() => setIsDialogOpen(true)}>
+          <Plus className="mr-2 h-4 w-4" />
+          Nuevo Seguimiento
+        </Button>
+      </div>
+
+      {/* Table */}
+      <Card>
+        <CardContent className="p-0">
           <div className="overflow-x-auto">
-            <Table className="min-w-full">
+            <Table>
               <TableHeader>
-                <TableRow className="bg-gray-700 hover:bg-gray-700 border-gray-600">
-                  <TableHead className="text-gray-300">Cliente</TableHead>
-                  <TableHead className="text-gray-300">Fecha Seguimiento</TableHead>
-                  <TableHead className="text-gray-300">Notas</TableHead>
-                  <TableHead className="text-gray-300">Fecha Recordatorio</TableHead>
-                  <TableHead className="text-gray-300">Acciones</TableHead>
+                <TableRow>
+                  <TableHead>Cliente</TableHead>
+                  <TableHead>Fecha</TableHead>
+                  <TableHead>Recordatorio</TableHead>
+                  <TableHead>Estado</TableHead>
+                  <TableHead>Notas</TableHead>
+                  <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {followUps.map((followUp) => (
-                  <TableRow key={followUp.id} className="border-gray-700 hover:bg-gray-700/50">
-                    <TableCell className="font-medium text-gray-200">
-                      {getClientFullName(followUp.client) || followUp.client_id}
-                    </TableCell>
-                    <TableCell className="text-gray-300">{new Date(followUp.date).toLocaleDateString()}</TableCell>
-                    <TableCell className="text-gray-300">{followUp.notes || "N/A"}</TableCell>
-                    <TableCell className="text-gray-300">
-                      {followUp.reminder_date ? new Date(followUp.reminder_date).toLocaleDateString() : "N/A"}
-                    </TableCell>
-                    <TableCell>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" className="h-8 w-8 p-0 text-gray-400 hover:text-gray-50">
-                            <span className="sr-only">Abrir menú</span>
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="bg-gray-700 border border-gray-600 text-gray-100">
-                          <DropdownMenuItem
-                            onClick={() => handleEditClick(followUp)}
-                            className="hover:bg-gray-600 focus:bg-gray-600 cursor-pointer"
-                          >
-                            Editar
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() => handleDeleteFollowUp(followUp.id)}
-                            className="hover:bg-red-700 focus:bg-red-700 text-red-300 hover:text-red-50 focus:text-red-50 cursor-pointer"
-                          >
-                            Eliminar
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                {filteredFollowups.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                      No se encontraron seguimientos
                     </TableCell>
                   </TableRow>
-                ))}
+                ) : (
+                  filteredFollowups.map((followup) => (
+                    <TableRow key={followup.id}>
+                      <TableCell>
+                        <div>
+                          <div className="font-medium">{followup.client_name}</div>
+                          <div className="text-sm text-muted-foreground">{followup.client_code}</div>
+                        </div>
+                      </TableCell>
+                      <TableCell>{format(new Date(followup.date), "dd/MM/yyyy", { locale: es })}</TableCell>
+                      <TableCell>
+                        {followup.reminder_date
+                          ? format(new Date(followup.reminder_date), "dd/MM/yyyy", { locale: es })
+                          : "-"}
+                      </TableCell>
+                      <TableCell>{getStatusBadge(followup.status)}</TableCell>
+                      <TableCell className="max-w-xs truncate">{followup.notes || "-"}</TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-2">
+                          <Button variant="ghost" size="sm" onClick={() => handleEdit(followup)}>
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => handleDelete(followup.id)}>
+                            <Trash2 className="h-4 w-4 text-red-600" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
               </TableBody>
             </Table>
           </div>
         </CardContent>
       </Card>
 
-      {/* Diálogo de Edición */}
-      {currentFollowUp && (
-        <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-          <DialogContent className="sm:max-w-[425px] bg-gray-800 text-gray-100 border border-gray-700 shadow-lg">
-            <DialogHeader>
-              <DialogTitle className="text-gray-50">Editar Seguimiento</DialogTitle>
-              <DialogDescription className="text-gray-400">
-                Realiza cambios en la información del seguimiento aquí.
-              </DialogDescription>
-            </DialogHeader>
-            <form onSubmit={handleSaveFollowUp} className="grid gap-4 py-4">
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="client_id" className="text-right text-gray-300">
-                  ID Cliente
-                </Label>
-                <Input
-                  id="client_id"
-                  value={currentFollowUp.client_id}
-                  onChange={(e) => setCurrentFollowUp({ ...currentFollowUp, client_id: e.target.value })}
-                  className="col-span-3 bg-gray-700 border-gray-600 text-gray-100 placeholder:text-gray-400"
-                  disabled
-                />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="date" className="text-right text-gray-300">
-                  Fecha Seguimiento
-                </Label>
-                <Input
-                  id="date"
-                  type="date"
-                  value={currentFollowUp.date}
-                  onChange={(e) => setCurrentFollowUp({ ...currentFollowUp, date: e.target.value })}
-                  className="col-span-3 bg-gray-700 border-gray-600 text-gray-100 placeholder:text-gray-400"
-                  required
-                />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="notes" className="text-right text-gray-300">
-                  Notas
-                </Label>
-                <Input
-                  id="notes"
-                  value={currentFollowUp.notes || ""}
-                  onChange={(e) => setCurrentFollowUp({ ...currentFollowUp, notes: e.target.value })}
-                  className="col-span-3 bg-gray-700 border-gray-600 text-gray-100 placeholder:text-gray-400"
-                />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="reminder_date" className="text-right text-gray-300">
-                  Fecha Recordatorio
-                </Label>
-                <Input
-                  id="reminder_date"
-                  type="date"
-                  value={currentFollowUp.reminder_date || ""}
-                  onChange={(e) => setCurrentFollowUp({ ...currentFollowUp, reminder_date: e.target.value })}
-                  className="col-span-3 bg-gray-700 border-gray-600 text-gray-100 placeholder:text-gray-400"
-                />
-              </div>
-              <DialogFooter className="mt-4">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setIsEditDialogOpen(false)}
-                  className="bg-gray-700 border-gray-600 text-gray-100 hover:bg-gray-600 hover:text-gray-50"
-                >
-                  Cancelar
-                </Button>
-                <Button
-                  type="submit"
-                  className="bg-gray-600 hover:bg-gray-700 text-gray-50 font-semibold"
-                  disabled={loading}
-                >
-                  {loading ? "Guardando..." : "Guardar cambios"}
-                </Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
-      )}
-
-      {/* Diálogo de Creación */}
-      <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-        <DialogContent className="sm:max-w-[425px] bg-gray-800 text-gray-100 border border-gray-700 shadow-lg">
+      {/* Create/Edit Dialog */}
+      <Dialog open={isDialogOpen} onOpenChange={handleDialogClose}>
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle className="text-gray-50">Crear Nuevo Seguimiento</DialogTitle>
-            <DialogDescription className="text-gray-400">
-              Ingresa los detalles del nuevo seguimiento aquí.
-            </DialogDescription>
+            <DialogTitle>{editingFollowup ? "Editar" : "Nuevo"} Seguimiento</DialogTitle>
           </DialogHeader>
-          <form onSubmit={handleCreateFollowUp} className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="new_client_id" className="text-right text-gray-300">
-                ID Cliente
-              </Label>
-              <Input
-                id="new_client_id"
-                value={newFollowUp.client_id}
-                onChange={(e) => setNewFollowUp({ ...newFollowUp, client_id: e.target.value })}
-                className="col-span-3 bg-gray-700 border-gray-600 text-gray-100 placeholder:text-gray-400"
-                required
-              />
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="new_date" className="text-right text-gray-300">
-                Fecha Seguimiento
-              </Label>
-              <Input
-                id="new_date"
-                type="date"
-                value={newFollowUp.date}
-                onChange={(e) => setNewFollowUp({ ...newFollowUp, date: e.target.value })}
-                className="col-span-3 bg-gray-700 border-gray-600 text-gray-100 placeholder:text-gray-400"
-                required
-              />
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="new_notes" className="text-right text-gray-300">
-                Notas
-              </Label>
-              <Input
-                id="new_notes"
-                value={newFollowUp.notes}
-                onChange={(e) => setNewFollowUp({ ...newFollowUp, notes: e.target.value })}
-                className="col-span-3 bg-gray-700 border-gray-600 text-gray-100 placeholder:text-gray-400"
-              />
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="new_reminder_date" className="text-right text-gray-300">
-                Fecha Recordatorio
-              </Label>
-              <Input
-                id="new_reminder_date"
-                type="date"
-                value={newFollowUp.reminder_date}
-                onChange={(e) => setNewFollowUp({ ...newFollowUp, reminder_date: e.target.value })}
-                className="col-span-3 bg-gray-700 border-gray-600 text-gray-100 placeholder:text-gray-400"
-              />
-            </div>
-            <DialogFooter className="mt-4">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setIsCreateDialogOpen(false)}
-                className="bg-gray-700 border-gray-600 text-gray-100 hover:bg-gray-600 hover:text-gray-50"
-              >
-                Cancelar
-              </Button>
-              <Button
-                type="submit"
-                className="bg-green-600 hover:bg-green-700 text-gray-50 font-semibold"
-                disabled={loading}
-              >
-                {loading ? "Creando..." : "Crear Seguimiento"}
-              </Button>
-            </DialogFooter>
-          </form>
+          <CreateFollowUpForm
+            followup={editingFollowup || undefined}
+            onSuccess={handleSuccess}
+            onCancel={handleDialogClose}
+          />
         </DialogContent>
       </Dialog>
     </div>
