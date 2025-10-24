@@ -5,9 +5,6 @@ export async function updateSession(request: NextRequest) {
   const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL
   const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
-  console.log("[v0] Middleware - Supabase URL available:", !!supabaseUrl)
-  console.log("[v0] Middleware - Supabase Key available:", !!supabaseAnonKey)
-
   if (!supabaseUrl || !supabaseAnonKey) {
     console.error("[v0] Middleware - Missing Supabase credentials")
     // Si no hay credenciales, permitir el acceso sin autenticación
@@ -73,7 +70,6 @@ export async function updateSession(request: NextRequest) {
       !request.nextUrl.pathname.startsWith("/login") &&
       !request.nextUrl.pathname.startsWith("/auth")
     ) {
-      // no user, potentially respond by redirecting the user to the login page
       const url = request.nextUrl.clone()
       url.pathname = "/auth/login"
       return NextResponse.redirect(url)
