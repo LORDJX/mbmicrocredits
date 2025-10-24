@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { CreditCard, Plus, Search, DollarSign, Eye, CheckCircle } from "lucide-react"
+import { CreditCard, Plus, Search, DollarSign, CheckCircle } from "lucide-react"
 import { PageHeader } from "@/components/page-header"
 import { StatsCard } from "@/components/stats-card"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
@@ -69,9 +69,9 @@ async function getLoansWithBalance() {
         const totalDue = installments?.reduce((sum, inst) => sum + Number(inst.amount_due || 0), 0) || 0
         const totalPaid = installments?.reduce((sum, inst) => sum + Number(inst.amount_paid || 0), 0) || 0
         const balance = totalDue - totalPaid
-        
+
         // Verificar si tiene cuotas pendientes (sin pagar)
-        const hasPendingInstallments = installments?.some(inst => !inst.paid_at) || false
+        const hasPendingInstallments = installments?.some((inst) => !inst.paid_at) || false
 
         return {
           ...loan,
@@ -106,10 +106,10 @@ export default async function PrestamosPage() {
   // --- CÁLCULO DE ESTADÍSTICAS CORREGIDO ---
   const totalAmount = loans.reduce((sum, loan) => sum + (Number.parseFloat(loan.amount || "0") || 0), 0)
   const totalRepayAmount = loans.reduce((sum, loan) => sum + (Number.parseFloat(loan.amount_to_repay || "0") || 0), 0)
-  
+
   // Préstamos activos = tienen cuotas pendientes
   const activeLoansCount = loans.filter((loan) => loan.has_pending_installments).length
-  
+
   // Préstamos completados = NO tienen cuotas pendientes
   const completedLoansCount = loans.filter((loan) => !loan.has_pending_installments).length
 
@@ -245,14 +245,9 @@ export default async function PrestamosPage() {
                         ${loan.balance.toLocaleString()}
                       </div>
                     </TableCell>
-                    <TableCell>
-                      {getStatusBadge(loan)}
-                    </TableCell>
+                    <TableCell>{getStatusBadge(loan)}</TableCell>
                     <TableCell>
                       <div className="flex gap-2">
-                        <Button variant="outline" size="icon" className="border-border bg-transparent">
-                          <Eye className="h-4 w-4" />
-                        </Button>
                         <LoanActionsMenu loan={loan} onSuccess={() => window.location.reload()} />
                       </div>
                     </TableCell>

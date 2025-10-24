@@ -22,9 +22,8 @@ export function LoanPrintView({ loanId, onClose }: LoanPrintViewProps) {
       if (response.ok) {
         const data = await response.json()
         setLoan(data.loan)
-        // Esperar a que se cargue el contenido antes de imprimir
         setTimeout(() => {
-          window.print()
+          generateAndPrint(data.loan)
           onClose()
         }, 500)
       }
@@ -36,6 +35,163 @@ export function LoanPrintView({ loanId, onClose }: LoanPrintViewProps) {
     }
   }
 
+  const generateAndPrint = (loanData: any) => {
+    const printWindow = window.open("", "_blank")
+    if (!printWindow) return
+
+    const installmentAmount = Number(loanData.amount_to_repay) / loanData.installments
+    const frequencyMap: Record<string, string> = {
+      monthly: "Mensual",
+      biweekly: "Quincenal",
+      weekly: "Semanal",
+    }
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <title>Resumen de Crédito - ${loanData.loan_code}</title>
+          <style>
+            @page { margin: 2cm; }
+            body { 
+              font-family: Arial, sans-serif; 
+              line-height: 1.6;
+              color: #333;
+            }
+            .header { 
+              text-align: center; 
+              border-bottom: 2px solid #333; 
+              padding-bottom: 20px; 
+              margin-bottom: 30px; 
+            }
+            .header h1 { 
+              margin: 0; 
+              color: #333; 
+              font-size: 28px;
+            }
+            .header p {
+              margin: 5px 0;
+              color: #666;
+            }
+            .info-section { 
+              margin-bottom: 30px; 
+            }
+            .info-section h2 {
+              color: #444;
+              border-bottom: 1px solid #ddd;
+              padding-bottom: 10px;
+              margin-bottom: 15px;
+            }
+            .info-row { 
+              display: flex; 
+              justify-content: space-between; 
+              padding: 10px 0; 
+              border-bottom: 1px solid #eee; 
+            }
+            .label { 
+              font-weight: bold; 
+              color: #666; 
+            }
+            .value { 
+              color: #333; 
+              font-weight: 600;
+            }
+            .highlight {
+              background-color: #f0f9ff;
+              padding: 15px;
+              border-radius: 8px;
+              margin: 20px 0;
+            }
+            .footer { 
+              margin-top: 50px; 
+              padding-top: 20px;
+              border-top: 1px solid #ddd;
+              text-align: center; 
+              font-size: 12px; 
+              color: #999; 
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>RESUMEN DE CRÉDITO OTORGADO</h1>
+            <p>Código: ${loanData.loan_code}</p>
+            <p>Fecha de emisión: ${new Date().toLocaleDateString("es-AR")}</p>
+          </div>
+          
+          <div class="info-section">
+            <h2>Datos del Cliente</h2>
+            <div class="info-row">
+              <span class="label">Nombre:</span>
+              <span class="value">${loanData.clients?.first_name || ""} ${loanData.clients?.last_name || ""}</span>
+            </div>
+            <div class="info-row">
+              <span class="label">Código Cliente:</span>
+              <span class="value">${loanData.clients?.client_code || "N/A"}</span>
+            </div>
+            ${
+              loanData.clients?.phone
+                ? `
+            <div class="info-row">
+              <span class="label">Teléfono:</span>
+              <span class="value">${loanData.clients.phone}</span>
+            </div>
+            `
+                : ""
+            }
+          </div>
+
+          <div class="info-section">
+            <h2>Detalles del Crédito</h2>
+            <div class="info-row">
+              <span class="label">Fecha de Inicio:</span>
+              <span class="value">${new Date(loanData.start_date).toLocaleDateString("es-AR")}</span>
+            </div>
+            <div class="info-row">
+              <span class="label">Monto del Crédito:</span>
+              <span class="value">${formatCurrency(loanData.amount)}</span>
+            </div>
+            <div class="info-row">
+              <span class="label">Tasa de Interés:</span>
+              <span class="value">${loanData.interest_rate}%</span>
+            </div>
+            <div class="info-row">
+              <span class="label">Cantidad de Cuotas:</span>
+              <span class="value">${loanData.installments} cuotas</span>
+            </div>
+            <div class="info-row">
+              <span class="label">Monto por Cuota:</span>
+              <span class="value">${formatCurrency(installmentAmount)}</span>
+            </div>
+            <div class="info-row">
+              <span class="label">Frecuencia:</span>
+              <span class="value">${frequencyMap[loanData.frequency] || "Mensual"}</span>
+            </div>
+          </div>
+
+          <div class="highlight">
+            <div class="info-row" style="border: none;">
+              <span class="label" style="font-size: 18px;">TOTAL A DEVOLVER:</span>
+              <span class="value" style="font-size: 24px; color: #2563eb;">${formatCurrency(loanData.amount_to_repay)}</span>
+            </div>
+          </div>
+
+          <div class="footer">
+            <p>Documento generado automáticamente - ${new Date().toLocaleDateString("es-AR")} ${new Date().toLocaleTimeString("es-AR")}</p>
+            <p>Este documento es un resumen del crédito otorgado y no incluye información de pagos realizados.</p>
+          </div>
+        </body>
+      </html>
+    `)
+
+    printWindow.document.close()
+    printWindow.focus()
+    setTimeout(() => {
+      printWindow.print()
+    }, 250)
+  }
+
   if (loading || !loan) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -44,101 +200,5 @@ export function LoanPrintView({ loanId, onClose }: LoanPrintViewProps) {
     )
   }
 
-  const installmentAmount = loan.amount / loan.installments
-  const frequencyMap: Record<string, string> = {
-    monthly: "Mensual",
-    biweekly: "Quincenal",
-    weekly: "Semanal",
-  }
-
-  return (
-    <>
-      <style jsx global>{`
-        @media print {
-          body * {
-            visibility: hidden;
-          }
-          #print-content,
-          #print-content * {
-            visibility: visible;
-          }
-          #print-content {
-            position: absolute;
-            left: 0;
-            top: 0;
-            width: 100%;
-          }
-          @page {
-            size: A4;
-            margin: 2cm;
-          }
-        }
-      `}</style>
-
-      <div id="print-content" className="max-w-4xl mx-auto p-8 bg-white">
-        {/* Header */}
-        <div className="text-center mb-8 border-b-2 border-gray-300 pb-4">
-          <h1 className="text-3xl font-bold text-gray-800">SISTEMA DE PRÉSTAMOS</h1>
-          <p className="text-sm text-gray-600 mt-2">Documento de Crédito Otorgado</p>
-        </div>
-
-        {/* Título */}
-        <div className="text-center mb-6">
-          <h2 className="text-2xl font-semibold text-gray-700">RESUMEN DE CRÉDITO OTORGADO</h2>
-          <p className="text-sm text-gray-500 mt-2">Fecha de emisión: {new Date().toLocaleDateString("es-AR")}</p>
-        </div>
-
-        {/* Información del Préstamo */}
-        <div className="space-y-6 mb-8">
-          <div className="grid grid-cols-2 gap-6">
-            <div className="border-l-4 border-blue-600 pl-4">
-              <p className="text-sm text-gray-600 font-medium">Código del Préstamo</p>
-              <p className="text-xl font-bold text-gray-800">{loan.loan_code}</p>
-            </div>
-            <div className="border-l-4 border-blue-600 pl-4">
-              <p className="text-sm text-gray-600 font-medium">Cliente</p>
-              <p className="text-xl font-bold text-gray-800">
-                {loan.active_clients?.first_name} {loan.active_clients?.last_name}
-              </p>
-              {loan.active_clients?.dni && <p className="text-sm text-gray-600">DNI: {loan.active_clients.dni}</p>}
-            </div>
-          </div>
-
-          <div className="bg-gray-50 p-6 rounded-lg border border-gray-200">
-            <div className="grid grid-cols-2 gap-6">
-              <div>
-                <p className="text-sm text-gray-600 font-medium mb-1">Fecha de Inicio del Préstamo</p>
-                <p className="text-lg font-semibold text-gray-800">
-                  {new Date(loan.start_date).toLocaleDateString("es-AR")}
-                </p>
-              </div>
-              <div>
-                <p className="text-sm text-gray-600 font-medium mb-1">Monto del Crédito</p>
-                <p className="text-2xl font-bold text-blue-600">{formatCurrency(loan.amount)}</p>
-              </div>
-              <div>
-                <p className="text-sm text-gray-600 font-medium mb-1">Cantidad de Cuotas</p>
-                <p className="text-lg font-semibold text-gray-800">{loan.installments} cuotas</p>
-              </div>
-              <div>
-                <p className="text-sm text-gray-600 font-medium mb-1">Monto de Cada Cuota</p>
-                <p className="text-2xl font-bold text-green-600">{formatCurrency(installmentAmount)}</p>
-              </div>
-              <div className="col-span-2">
-                <p className="text-sm text-gray-600 font-medium mb-1">Frecuencia de Pago</p>
-                <p className="text-lg font-semibold text-gray-800">{frequencyMap[loan.frequency] || "Mensual"}</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="mt-12 pt-6 border-t-2 border-gray-300">
-          <p className="text-xs text-gray-500 text-center">
-            Este documento es un resumen del crédito otorgado. Para más información, contacte con nuestro equipo.
-          </p>
-        </div>
-      </div>
-    </>
-  )
+  return null
 }

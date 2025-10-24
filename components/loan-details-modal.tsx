@@ -1,11 +1,12 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Loader2, DollarSign, Calendar, CreditCard, CheckCircle2, AlertCircle } from "lucide-react"
+import { Loader2, DollarSign, Calendar, CreditCard, CheckCircle2, AlertCircle, Printer } from "lucide-react"
 import { formatCurrency } from "@/lib/utils"
 
 interface LoanDetailsModalProps {
@@ -37,6 +38,48 @@ export function LoanDetailsModal({ loanId, open, onOpenChange }: LoanDetailsModa
     } finally {
       setLoading(false)
     }
+  }
+
+  const handlePrint = () => {
+    const printContent = document.getElementById("modal-print-content")
+    if (!printContent) return
+
+    const printWindow = window.open("", "_blank")
+    if (!printWindow) return
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <title>Detalle del Préstamo</title>
+          <style>
+            @page { margin: 2cm; }
+            body { font-family: Arial, sans-serif; line-height: 1.6; }
+            h1, h2 { color: #333; }
+            table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+            th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+            th { background-color: #f4f4f4; }
+            .badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 12px; }
+            .badge-default { background-color: #22c55e; color: white; }
+            .badge-secondary { background-color: #f59e0b; color: white; }
+            .badge-destructive { background-color: #ef4444; color: white; }
+            .section { margin-bottom: 30px; }
+            .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+          </style>
+        </head>
+        <body>
+          ${printContent.innerHTML}
+        </body>
+      </html>
+    `)
+
+    printWindow.document.close()
+    printWindow.focus()
+    setTimeout(() => {
+      printWindow.print()
+      printWindow.close()
+    }, 250)
   }
 
   const getStatusBadge = (status: string) => {
@@ -79,7 +122,7 @@ export function LoanDetailsModal({ loanId, open, onOpenChange }: LoanDetailsModa
           <DialogTitle className="text-2xl">Detalle del Préstamo</DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-6">
+        <div id="modal-print-content" className="space-y-6">
           {/* Sección 1: Información del Préstamo */}
           <Card>
             <CardHeader>
@@ -198,6 +241,14 @@ export function LoanDetailsModal({ loanId, open, onOpenChange }: LoanDetailsModa
             </CardContent>
           </Card>
         </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={handlePrint}>
+            <Printer className="h-4 w-4 mr-2" />
+            Imprimir
+          </Button>
+          <Button onClick={() => onOpenChange(false)}>Cerrar</Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   )
