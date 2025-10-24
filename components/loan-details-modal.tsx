@@ -148,7 +148,7 @@ export function LoanDetailsModal({ loanId, open, onOpenChange }: LoanDetailsModa
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Interés Aplicado</p>
-                <p className="font-semibold">{loan.interest_rate}%</p>
+                <p className="font-semibold">{Math.round(loan.interest_rate)}%</p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Monto Total a Devolver</p>

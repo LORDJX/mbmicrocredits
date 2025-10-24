@@ -24,13 +24,13 @@ export function LoanActionsMenu({ loan, onSuccess }: LoanActionsMenuProps) {
   const [showEdit, setShowEdit] = useState(false)
 
   const handleWhatsApp = () => {
-    const phone = loan.active_clients?.phone?.replace(/\D/g, "") // Solo números
+    const phone = loan.active_clients?.phone?.replace(/\D/g, "")
     if (!phone) {
       alert("El cliente no tiene teléfono registrado")
       return
     }
 
-    const cuotaAmount = (Number(loan.amount_to_repay) / loan.installments).toFixed(2)
+    const cuotaAmount = Number(loan.amount) / loan.installments
     const frequencyMap: Record<string, string> = {
       monthly: "Mensual",
       biweekly: "Quincenal",
@@ -40,14 +40,15 @@ export function LoanActionsMenu({ loan, onSuccess }: LoanActionsMenuProps) {
 
     const message = `Hola ${loan.active_clients.first_name},
 
-Te envío el resumen de tu préstamo ${loan.loan_code}:
+Te envío el resumen de tu préstamo:
 
+📋 Código: ${loan.loan_code}
+👤 Cliente: ${loan.active_clients.first_name} ${loan.active_clients.last_name}
+📅 Fecha de inicio: ${new Date(loan.start_date).toLocaleDateString("es-AR")}
 💰 Monto prestado: ${formatCurrency(loan.amount)}
-📅 Inicio: ${new Date(loan.start_date).toLocaleDateString("es-AR")}
-📋 Cuotas: ${loan.installments} cuotas de ${formatCurrency(cuotaAmount)}
-📆 Frecuencia: ${frequency}
-💵 Total a devolver: ${formatCurrency(loan.amount_to_repay)}
-${loan.balance > 0 ? `⚠️ Saldo pendiente: ${formatCurrency(loan.balance)}` : "✅ Préstamo completado"}
+📊 Cantidad de cuotas: ${loan.installments}
+💵 Valor de la cuota: ${formatCurrency(cuotaAmount)}
+📆 Tipo de préstamo: ${frequency}
 
 Si tenés dudas, contactame.
 
@@ -62,56 +63,68 @@ Saludos!`
       const response = await fetch(`/api/loans/${loan.id}/summary`)
       if (!response.ok) throw new Error("Error al obtener datos")
 
-      const { summary, installments } = await response.json()
+      const { installments } = await response.json()
 
-      const doc = new jsPDF()
+      const doc = new jsPDF({
+        format: [80, 297],
+      })
 
-      // Header
-      doc.setFontSize(18)
-      doc.text("CRONOGRAMA DE CUOTAS", 105, 20, { align: "center" })
+      doc.setFontSize(14)
+      doc.setFont("helvetica", "bold")
+      doc.text("CRONOGRAMA DE CUOTAS", 40, 15, { align: "center" })
 
-      doc.setFontSize(12)
-      doc.text(`Préstamo: ${loan.loan_code}`, 20, 35)
-      doc.text(`Cliente: ${loan.active_clients.first_name} ${loan.active_clients.last_name}`, 20, 42)
-      doc.text(`Generado: ${new Date().toLocaleDateString("es-AR")}`, 20, 49)
+      doc.setFontSize(9)
+      doc.setFont("helvetica", "normal")
+      doc.text(`Prestamo: ${loan.loan_code}`, 40, 25, { align: "center" })
+      doc.text(`Cliente: ${loan.active_clients.first_name} ${loan.active_clients.last_name}`, 40, 31, {
+        align: "center",
+      })
+      doc.text(`${new Date().toLocaleDateString("es-AR")} ${new Date().toLocaleTimeString("es-AR")}`, 40, 37, {
+        align: "center",
+      })
 
-      // Línea separadora
-      doc.line(20, 55, 190, 55)
+      doc.setLineWidth(0.5)
+      doc.line(5, 42, 75, 42)
 
-      // Cuotas
-      let y = 65
-      doc.setFontSize(10)
+      let y = 50
+      doc.setFontSize(8)
 
-      installments?.forEach((inst: any, index: number) => {
+      installments?.forEach((inst: any) => {
         const statusMap: Record<string, string> = {
-          PAGADA_EN_FECHA: "Pagada",
-          PAGADA_CON_MORA: "Pagada con mora",
-          PAGO_ANTICIPADO: "Pago anticipado",
-          A_PAGAR: "Pendiente",
-          A_PAGAR_HOY: "Vence hoy",
-          VENCIDA: "Vencida",
+          PAGADA_EN_FECHA: "✓ Pagada",
+          PAGADA_CON_MORA: "✓ Mora",
+          PAGO_ANTICIPADO: "✓ Anticip",
+          A_PAGAR: "○ Pend",
+          A_PAGAR_HOY: "! Hoy",
+          VENCIDA: "✗ Venc",
         }
         const status = statusMap[inst.status] || inst.status
 
-        const text = `Cuota ${inst.installment_no}/${inst.installments_total} - Vence: ${new Date(inst.due_date).toLocaleDateString("es-AR")} - ${formatCurrency(inst.amount_due)} - ${status}`
-        doc.text(text, 20, y)
-        y += 7
+        doc.setFont("helvetica", "bold")
+        doc.text(`Cuota ${inst.installment_no}/${inst.installments_total}`, 8, y)
 
-        // Nueva página si es necesario
+        doc.setFont("helvetica", "normal")
+        doc.text(`${new Date(inst.due_date).toLocaleDateString("es-AR")}`, 8, y + 5)
+        doc.text(`${formatCurrency(inst.amount_due)}`, 50, y + 5, { align: "right" })
+        doc.text(status, 72, y + 5, { align: "right" })
+
+        doc.setLineDash([1, 1])
+        doc.line(8, y + 8, 72, y + 8)
+        doc.setLineDash([])
+
+        y += 13
+
         if (y > 280) {
           doc.addPage()
           y = 20
         }
       })
 
-      // Footer
-      doc.line(20, y + 5, 190, y + 5)
-      doc.setFontSize(12)
-      doc.text(`Total: ${formatCurrency(summary.total_due)} en ${loan.installments} cuotas`, 20, y + 15)
-      doc.text(`Pagado: ${formatCurrency(summary.total_paid)}`, 20, y + 22)
-      doc.text(`Saldo: ${formatCurrency(summary.balance)}`, 20, y + 29)
+      doc.setLineWidth(0.5)
+      doc.line(5, y + 2, 75, y + 2)
+      doc.setFontSize(7)
+      doc.text("Gracias por su confianza", 40, y + 8, { align: "center" })
 
-      // Descargar
       doc.save(`cronograma-${loan.loan_code}.pdf`)
     } catch (error) {
       console.error("Error downloading schedule:", error)
@@ -142,7 +155,7 @@ Saludos!`
           </DropdownMenuItem>
           <DropdownMenuItem onClick={handleDownloadSchedule}>
             <Download className="h-4 w-4 mr-2" />
-            Descargar Cronograma
+            Cronograma
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => setShowEdit(true)}>
             <Edit className="h-4 w-4 mr-2" />
@@ -151,10 +164,8 @@ Saludos!`
         </DropdownMenuContent>
       </DropdownMenu>
 
-      {/* Modal de Detalles */}
       <LoanDetailsModal loanId={loan.id} open={showDetails} onOpenChange={setShowDetails} />
 
-      {/* Vista de Impresión */}
       {showPrint && <LoanPrintView loanId={loan.id} onClose={() => setShowPrint(false)} />}
 
       <Dialog open={showEdit} onOpenChange={setShowEdit}>
@@ -163,9 +174,7 @@ Saludos!`
             <DialogTitle>Editar Préstamo {loan.loan_code}</DialogTitle>
           </DialogHeader>
 
-          {/* Layout de 2 columnas */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Columna izquierda: Formulario (2/3) */}
             <div className="lg:col-span-2">
               <CreateLoanForm
                 initialData={loan}
@@ -176,7 +185,6 @@ Saludos!`
               />
             </div>
 
-            {/* Columna derecha: Resumen (1/3) */}
             <div className="lg:col-span-1 space-y-4">
               <Card>
                 <CardHeader>
@@ -191,21 +199,7 @@ Saludos!`
                     <span className="text-muted-foreground">Cuotas:</span>
                     <span className="font-semibold">{loan.installments}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Interés:</span>
-                    <span className="font-semibold">{loan.interest_rate}%</span>
-                  </div>
                   <Separator />
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Total a devolver:</span>
-                    <span className="font-semibold text-primary">{formatCurrency(loan.amount_to_repay)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Saldo pendiente:</span>
-                    <span className={`font-semibold ${loan.balance > 0 ? "text-red-600" : "text-green-600"}`}>
-                      {formatCurrency(loan.balance)}
-                    </span>
-                  </div>
                 </CardContent>
               </Card>
 

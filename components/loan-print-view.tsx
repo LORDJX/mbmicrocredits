@@ -39,7 +39,7 @@ export function LoanPrintView({ loanId, onClose }: LoanPrintViewProps) {
     const printWindow = window.open("", "_blank")
     if (!printWindow) return
 
-    const installmentAmount = Number(loanData.amount_to_repay) / loanData.installments
+    const installmentAmount = Number(loanData.amount) / loanData.installments
     const frequencyMap: Record<string, string> = {
       monthly: "Mensual",
       biweekly: "Quincenal",
@@ -97,12 +97,6 @@ export function LoanPrintView({ loanId, onClose }: LoanPrintViewProps) {
               color: #333; 
               font-weight: 600;
             }
-            .highlight {
-              background-color: #f0f9ff;
-              padding: 15px;
-              border-radius: 8px;
-              margin: 20px 0;
-            }
             .footer { 
               margin-top: 50px; 
               padding-top: 20px;
@@ -145,41 +139,34 @@ export function LoanPrintView({ loanId, onClose }: LoanPrintViewProps) {
           <div class="info-section">
             <h2>Detalles del Crédito</h2>
             <div class="info-row">
+              <span class="label">Código del Préstamo:</span>
+              <span class="value">${loanData.loan_code}</span>
+            </div>
+            <div class="info-row">
               <span class="label">Fecha de Inicio:</span>
               <span class="value">${new Date(loanData.start_date).toLocaleDateString("es-AR")}</span>
             </div>
             <div class="info-row">
-              <span class="label">Monto del Crédito:</span>
-              <span class="value">${formatCurrency(loanData.amount)}</span>
-            </div>
-            <div class="info-row">
-              <span class="label">Tasa de Interés:</span>
-              <span class="value">${loanData.interest_rate}%</span>
+              <span class="label">Monto Prestado:</span>
+              <span class="value" style="font-size: 18px; color: #2563eb;">${formatCurrency(loanData.amount)}</span>
             </div>
             <div class="info-row">
               <span class="label">Cantidad de Cuotas:</span>
               <span class="value">${loanData.installments} cuotas</span>
             </div>
             <div class="info-row">
-              <span class="label">Monto por Cuota:</span>
-              <span class="value">${formatCurrency(installmentAmount)}</span>
+              <span class="label">Valor de la Cuota:</span>
+              <span class="value" style="font-size: 16px;">${formatCurrency(installmentAmount)}</span>
             </div>
             <div class="info-row">
-              <span class="label">Frecuencia:</span>
+              <span class="label">Tipo de Préstamo:</span>
               <span class="value">${frequencyMap[loanData.frequency] || "Mensual"}</span>
-            </div>
-          </div>
-
-          <div class="highlight">
-            <div class="info-row" style="border: none;">
-              <span class="label" style="font-size: 18px;">TOTAL A DEVOLVER:</span>
-              <span class="value" style="font-size: 24px; color: #2563eb;">${formatCurrency(loanData.amount_to_repay)}</span>
             </div>
           </div>
 
           <div class="footer">
             <p>Documento generado automáticamente - ${new Date().toLocaleDateString("es-AR")} ${new Date().toLocaleTimeString("es-AR")}</p>
-            <p>Este documento es un resumen del crédito otorgado y no incluye información de pagos realizados.</p>
+            <p>Este documento es un resumen del crédito otorgado.</p>
           </div>
         </body>
       </html>
