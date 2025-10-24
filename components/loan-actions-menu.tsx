@@ -134,6 +134,22 @@ Saludos!`
 
   return (
     <>
+      <style jsx>{`
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 12px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: #1a1a1a;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: #ffffff;
+          border-radius: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background: #e0e0e0;
+        }
+      `}</style>
+
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" size="icon">
@@ -169,52 +185,54 @@ Saludos!`
       {showPrint && <LoanPrintView loanId={loan.id} onClose={() => setShowPrint(false)} />}
 
       <Dialog open={showEdit} onOpenChange={setShowEdit}>
-        <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Editar Préstamo {loan.loan_code}</DialogTitle>
-          </DialogHeader>
+        <DialogContent className="!max-w-none w-[95vw] max-h-[95vh] h-[95vh] p-0 gap-0">
+          <div className="custom-scrollbar overflow-y-auto h-full p-6">
+            <DialogHeader className="mb-4">
+              <DialogTitle>Editar Préstamo {loan.loan_code}</DialogTitle>
+            </DialogHeader>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2">
-              <CreateLoanForm
-                initialData={loan}
-                onSuccess={() => {
-                  setShowEdit(false)
-                  onSuccess?.()
-                }}
-              />
-            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div className="lg:col-span-2">
+                <CreateLoanForm
+                  initialData={loan}
+                  onSuccess={() => {
+                    setShowEdit(false)
+                    onSuccess?.()
+                  }}
+                />
+              </div>
 
-            <div className="lg:col-span-1 space-y-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-sm">Resumen Actual</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Monto:</span>
-                    <span className="font-semibold">{formatCurrency(loan.amount)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Cuotas:</span>
-                    <span className="font-semibold">{loan.installments}</span>
-                  </div>
-                  <Separator />
-                </CardContent>
-              </Card>
+              <div className="lg:col-span-1 space-y-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-sm">Resumen Actual</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Monto:</span>
+                      <span className="font-semibold">{formatCurrency(loan.amount)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Cuotas:</span>
+                      <span className="font-semibold">{loan.installments}</span>
+                    </div>
+                    <Separator />
+                  </CardContent>
+                </Card>
 
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-sm">Cliente</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-1 text-sm">
-                  <p className="font-medium">
-                    {loan.active_clients.first_name} {loan.active_clients.last_name}
-                  </p>
-                  <p className="text-muted-foreground">{loan.active_clients.client_code}</p>
-                  {loan.active_clients.phone && <p className="text-muted-foreground">{loan.active_clients.phone}</p>}
-                </CardContent>
-              </Card>
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-sm">Cliente</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-1 text-sm">
+                    <p className="font-medium">
+                      {loan.active_clients.first_name} {loan.active_clients.last_name}
+                    </p>
+                    <p className="text-muted-foreground">{loan.active_clients.client_code}</p>
+                    {loan.active_clients.phone && <p className="text-muted-foreground">{loan.active_clients.phone}</p>}
+                  </CardContent>
+                </Card>
+              </div>
             </div>
           </div>
         </DialogContent>

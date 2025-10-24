@@ -1,3 +1,5 @@
+"use client"
+
 // app/prestamos/page.tsx
 
 import { redirect } from "next/navigation"
@@ -146,11 +148,28 @@ export default async function PrestamosPage() {
               Nuevo Préstamo
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Crear Nuevo Préstamo</DialogTitle>
-            </DialogHeader>
-            <CreateLoanForm onSuccess={() => window.location.reload()} />
+          <DialogContent className="!max-w-none w-[95vw] max-h-[95vh] h-[95vh] p-0 gap-0">
+            <style jsx>{`
+              .custom-scrollbar::-webkit-scrollbar {
+                width: 12px;
+              }
+              .custom-scrollbar::-webkit-scrollbar-track {
+                background: #1a1a1a;
+              }
+              .custom-scrollbar::-webkit-scrollbar-thumb {
+                background: #ffffff;
+                border-radius: 6px;
+              }
+              .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+                background: #e0e0e0;
+              }
+            `}</style>
+            <div className="custom-scrollbar overflow-y-auto h-full p-6">
+              <DialogHeader className="mb-4">
+                <DialogTitle>Crear Nuevo Préstamo</DialogTitle>
+              </DialogHeader>
+              <CreateLoanForm onSuccess={() => window.location.reload()} />
+            </div>
           </DialogContent>
         </Dialog>
       </PageHeader>

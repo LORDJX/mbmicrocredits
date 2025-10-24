@@ -5,8 +5,7 @@ import { createClient } from "@/lib/supabase/client"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
-import { Button } from "@/components/ui/button"
-import { Users, CreditCard, DollarSign, AlertTriangle, Calendar, CheckCircle, Clock } from "lucide-react"
+import { Users, CreditCard, DollarSign, AlertTriangle, Calendar, CheckCircle } from "lucide-react"
 import { PageHeader } from "@/components/page-header"
 import { StatsCard } from "@/components/stats-card"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
@@ -42,11 +41,11 @@ export default function DashboardPage() {
   })
   const [userEmail, setUserEmail] = useState("")
   const [loading, setLoading] = useState(true)
-  
+
   const [clientDialogOpen, setClientDialogOpen] = useState(false)
   const [loanDialogOpen, setLoanDialogOpen] = useState(false)
   const [receiptDialogOpen, setReceiptDialogOpen] = useState(false)
-  
+
   const [summaryData, setSummaryData] = useState({
     client: null,
     loans: [],
@@ -75,17 +74,12 @@ export default function DashboardPage() {
       const { data: clients } = await supabase.from("clients").select("id").is("deleted_at", null)
 
       // Get all loans
-      const { data: loans } = await supabase
-        .from("loans")
-        .select("id, principal, status")
-        .is("deleted_at", null)
+      const { data: loans } = await supabase.from("loans").select("id, principal, status").is("deleted_at", null)
 
       // Count active loans (status puede ser 'ACTIVO', 'activo', 'active', etc.)
       const activeLoans =
         loans?.filter(
-          (loan) =>
-            loan.status &&
-            (loan.status.toLowerCase() === "activo" || loan.status.toLowerCase() === "active")
+          (loan) => loan.status && (loan.status.toLowerCase() === "activo" || loan.status.toLowerCase() === "active"),
         ).length || 0
 
       // Calculate total loaned amount (sum of all principals)
@@ -95,18 +89,14 @@ export default function DashboardPage() {
       const { data: allInstallments } = await supabase.from("installments").select("amount_paid")
 
       // Calculate total paid amount
-      const totalPaidAmount =
-        allInstallments?.reduce((sum, inst) => sum + (Number(inst.amount_paid) || 0), 0) || 0
+      const totalPaidAmount = allInstallments?.reduce((sum, inst) => sum + (Number(inst.amount_paid) || 0), 0) || 0
 
       // Calculate total owed (loaned - paid)
       const totalOwedAmount = totalLoanedAmount - totalPaidAmount
 
       // Get receipts for today
       const today = new Date().toISOString().split("T")[0]
-      const { data: todayReceipts } = await supabase
-        .from("receipts")
-        .select("total_amount")
-        .eq("receipt_date", today)
+      const { data: todayReceipts } = await supabase.from("receipts").select("total_amount").eq("receipt_date", today)
 
       // Sum today's receipts
       const todayPaymentsAmount =
@@ -305,7 +295,6 @@ export default function DashboardPage() {
         </CardHeader>
         <CardContent>
           <div className="grid gap-4 md:grid-cols-3">
-            {/* Nuevo Cliente */}
             <Dialog open={clientDialogOpen} onOpenChange={setClientDialogOpen}>
               <DialogTrigger asChild>
                 <Card className="p-4 hover:bg-muted/50 transition-colors cursor-pointer border-border">
@@ -318,15 +307,16 @@ export default function DashboardPage() {
                   </div>
                 </Card>
               </DialogTrigger>
-              <DialogContent className="max-w-2xl">
-                <DialogHeader>
-                  <DialogTitle>Crear Nuevo Cliente</DialogTitle>
-                </DialogHeader>
-                <CreateClientForm onSuccess={() => setClientDialogOpen(false)} />
+              <DialogContent className="!max-w-none w-[95vw] max-h-[95vh] h-[95vh] p-0 gap-0">
+                <div className="custom-scrollbar overflow-y-auto h-full p-6">
+                  <DialogHeader className="mb-4">
+                    <DialogTitle>Crear Nuevo Cliente</DialogTitle>
+                  </DialogHeader>
+                  <CreateClientForm onSuccess={() => setClientDialogOpen(false)} />
+                </div>
               </DialogContent>
             </Dialog>
 
-            {/* Nuevo Préstamo */}
             <Dialog open={loanDialogOpen} onOpenChange={setLoanDialogOpen}>
               <DialogTrigger asChild>
                 <Card className="p-4 hover:bg-muted/50 transition-colors cursor-pointer border-border">
@@ -339,11 +329,13 @@ export default function DashboardPage() {
                   </div>
                 </Card>
               </DialogTrigger>
-              <DialogContent className="max-w-2xl">
-                <DialogHeader>
-                  <DialogTitle>Crear Nuevo Préstamo</DialogTitle>
-                </DialogHeader>
-                <CreateLoanForm onSuccess={() => setLoanDialogOpen(false)} />
+              <DialogContent className="!max-w-none w-[95vw] max-h-[95vh] h-[95vh] p-0 gap-0">
+                <div className="custom-scrollbar overflow-y-auto h-full p-6">
+                  <DialogHeader className="mb-4">
+                    <DialogTitle>Crear Nuevo Préstamo</DialogTitle>
+                  </DialogHeader>
+                  <CreateLoanForm onSuccess={() => setLoanDialogOpen(false)} />
+                </div>
               </DialogContent>
             </Dialog>
 
@@ -407,7 +399,9 @@ export default function DashboardPage() {
                             {summaryData.loans.map((loan: any) => (
                               <div key={loan.id} className="flex justify-between items-center text-sm">
                                 <span className="font-medium">{loan.loan_code}</span>
-                                <span className="text-muted-foreground">${Number(loan.principal).toLocaleString()}</span>
+                                <span className="text-muted-foreground">
+                                  ${Number(loan.principal).toLocaleString()}
+                                </span>
                               </div>
                             ))}
                             <div className="pt-2 border-t">

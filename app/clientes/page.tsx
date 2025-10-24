@@ -110,24 +110,38 @@ export default async function ClientesPage() {
               </Button>
             </DialogTrigger>
             <DialogContent
-              className="max-w-2xl max-h-[90vh] overflow-y-auto"
+              className="!max-w-none w-[95vw] max-h-[95vh] h-[95vh] p-0 gap-0"
               aria-describedby="create-client-description"
             >
-              <DialogHeader>
-                <DialogTitle>Crear Nuevo Cliente</DialogTitle>
-              </DialogHeader>
-              <div id="create-client-description" className="sr-only">
-                Formulario para crear un nuevo cliente en el sistema
+              <style jsx>{`
+                .custom-scrollbar::-webkit-scrollbar {
+                  width: 12px;
+                }
+                .custom-scrollbar::-webkit-scrollbar-track {
+                  background: #1a1a1a;
+                }
+                .custom-scrollbar::-webkit-scrollbar-thumb {
+                  background: #ffffff;
+                  border-radius: 6px;
+                }
+                .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+                  background: #e0e0e0;
+                }
+              `}</style>
+              <div className="custom-scrollbar overflow-y-auto h-full p-6">
+                <DialogHeader className="mb-4">
+                  <DialogTitle>Crear Nuevo Cliente</DialogTitle>
+                </DialogHeader>
+                <div id="create-client-description" className="sr-only">
+                  Formulario para crear un nuevo cliente en el sistema
+                </div>
+                <CreateClientForm
+                  onSuccess={() => {
+                    window.location.reload()
+                  }}
+                  onCancel={() => {}}
+                />
               </div>
-              <CreateClientForm
-                onSuccess={() => {
-                  // Forzar la recarga de la página para ver el nuevo cliente
-                  window.location.reload()
-                }}
-                onCancel={() => {
-                  /* Lógica para cerrar el diálogo si fuera un cliente component */
-                }}
-              />
             </DialogContent>
           </Dialog>
         </div>
@@ -229,15 +243,32 @@ export default async function ClientesPage() {
                                 Editar
                               </Button>
                             </DialogTrigger>
-                            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-                              <DialogHeader>
-                                <DialogTitle>Editar Cliente</DialogTitle>
-                              </DialogHeader>
-                              <CreateClientForm
-                                initialData={client}
-                                onSuccess={() => window.location.reload()}
-                                onCancel={() => {}}
-                              />
+                            <DialogContent className="!max-w-none w-[95vw] max-h-[95vh] h-[95vh] p-0 gap-0">
+                              <style jsx>{`
+                                .custom-scrollbar::-webkit-scrollbar {
+                                  width: 12px;
+                                }
+                                .custom-scrollbar::-webkit-scrollbar-track {
+                                  background: #1a1a1a;
+                                }
+                                .custom-scrollbar::-webkit-scrollbar-thumb {
+                                  background: #ffffff;
+                                  border-radius: 6px;
+                                }
+                                .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+                                  background: #e0e0e0;
+                                }
+                              `}</style>
+                              <div className="custom-scrollbar overflow-y-auto h-full p-6">
+                                <DialogHeader className="mb-4">
+                                  <DialogTitle>Editar Cliente</DialogTitle>
+                                </DialogHeader>
+                                <CreateClientForm
+                                  initialData={client}
+                                  onSuccess={() => window.location.reload()}
+                                  onCancel={() => {}}
+                                />
+                              </div>
                             </DialogContent>
                           </Dialog>
                           <ClientCardPrint client={client} />
