@@ -7,8 +7,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { CreateLoanForm } from "@/components/forms/create-loan-form"
 import { LoanDetailsModal } from "@/components/loan-details-modal"
 import { LoanPrintView } from "@/components/loan-print-view"
-import { Edit, MessageCircle, MoreHorizontal, Printer, Eye, Download } from "lucide-react"
-import { formatArgentineDate } from "@/lib/utils/date-utils"
+import { Download, Edit, Eye, MessageCircle, MoreHorizontal, Printer } from "lucide-react"
+import { formatArgentinaDate } from "@/lib/utils/date-utils"
 
 interface LoanActionsMenuProps {
   loan: any
@@ -27,22 +27,18 @@ export function LoanActionsMenu({ loan, onSuccess }: LoanActionsMenuProps) {
       return
     }
 
-    const installmentAmount = Number(loan.amount) / Number(loan.installments)
-    const frequencyLabels: Record<string, string> = {
-      monthly: "Mensual",
-      biweekly: "Quincenal",
-      weekly: "Semanal",
-    }
-    const frequency = frequencyLabels[loan.frequency || "monthly"]
+    const installmentAmount = Number(loan.amount_to_repay) / Number(loan.installments)
+    const frequencyLabel =
+      loan.frequency === "monthly" ? "Mensual" : loan.frequency === "biweekly" ? "Quincenal" : "Semanal"
 
     const message = `Hola ${loan.active_clients.first_name},
 
 Te envío el resumen de tu préstamo ${loan.loan_code}:
 
 💰 Monto prestado: $${Number(loan.amount).toLocaleString("es-AR")}
-📅 Inicio: ${formatArgentineDate(loan.start_date)}
+📅 Inicio: ${formatArgentinaDate(loan.start_date)}
 📋 Cuotas: ${loan.installments} cuotas de $${installmentAmount.toLocaleString("es-AR")}
-📆 Frecuencia: ${frequency}
+📆 Frecuencia: ${frequencyLabel}
 
 Si tenés dudas, contactame.
 
@@ -53,39 +49,47 @@ Saludos!`
 
   const handleDownloadSchedule = async () => {
     try {
-      const response = await fetch(`/api/loans/${loan.id}/schedule`)
+      const response = await fetch(`/api/loans/${loan.id}/summary`)
       const data = await response.json()
 
-      if (!data.installments) {
-        alert("No se pudieron cargar las cuotas")
-        return
-      }
-
-      const installmentAmount = Number(loan.amount) / Number(loan.installments)
-      const totalAmount = installmentAmount * Number(loan.installments)
+      const installmentAmount = Number(loan.amount_to_repay) / Number(loan.installments)
+      const frequencyLabel =
+        loan.frequency === "monthly" ? "Mensual" : loan.frequency === "biweekly" ? "Quincenal" : "Semanal"
 
       let content = `CRONOGRAMA DE CUOTAS\n`
       content += `Préstamo: ${loan.loan_code}\n`
-      content += `Cliente: ${loan.active_clients?.first_name} ${loan.active_clients?.last_name}\n`
-      content += `Generado: ${formatArgentineDate(new Date().toISOString())}\n\n`
+      content += `Cliente: ${loan.active_clients.first_name} ${loan.active_clients.last_name}\n`
+      content += `Generado: ${formatArgentinaDate(new Date().toISOString())}\n\n`
       content += `-----------------------------------\n`
 
-      data.installments.forEach((inst: any) => {
-        content += `Cuota ${inst.installment_no} - Vence: ${formatArgentineDate(inst.due_date)} - $${Number(inst.amount_due).toLocaleString("es-AR")}\n`
-      })
+      // Generar todas las cuotas
+      const startDate = new Date(loan.start_date)
+      for (let i = 1; i <= loan.installments; i++) {
+        const dueDate = new Date(startDate)
+        if (loan.frequency === "monthly") {
+          dueDate.setMonth(dueDate.getMonth() + (i - 1))
+        } else if (loan.frequency === "biweekly") {
+          dueDate.setDate(dueDate.getDate() + (i - 1) * 15)
+        } else {
+          dueDate.setDate(dueDate.getDate() + (i - 1) * 7)
+        }
+        content += `Cuota ${i} - Vence: ${formatArgentinaDate(dueDate.toISOString())} - $${installmentAmount.toLocaleString("es-AR")}\n`
+      }
 
       content += `-----------------------------------\n\n`
-      content += `Total: $${totalAmount.toLocaleString("es-AR")} en ${loan.installments} cuotas\n`
+      content += `Total: $${Number(loan.amount_to_repay).toLocaleString("es-AR")} en ${loan.installments} cuotas\n`
+      content += `Frecuencia: ${frequencyLabel}\n`
 
-      const blob = new Blob([content], { type: "text/plain" })
-      const url = window.URL.createObjectURL(blob)
+      // Crear y descargar archivo
+      const blob = new Blob([content], { type: "text/plain;charset=utf-8" })
+      const url = URL.createObjectURL(blob)
       const a = document.createElement("a")
       a.href = url
-      a.download = `cronograma-${loan.loan_code}.txt`
+      a.download = `cronograma_${loan.loan_code}.txt`
       document.body.appendChild(a)
       a.click()
       document.body.removeChild(a)
-      window.URL.revokeObjectURL(url)
+      URL.revokeObjectURL(url)
     } catch (error) {
       console.error("Error downloading schedule:", error)
       alert("Error al descargar el cronograma")
@@ -103,7 +107,7 @@ Saludos!`
         <DropdownMenuContent align="end">
           <DropdownMenuItem onClick={() => setShowDetails(true)}>
             <Eye className="h-4 w-4 mr-2" />
-            Ver Detalles
+            Ver Detalle
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => setShowPrint(true)}>
             <Printer className="h-4 w-4 mr-2" />

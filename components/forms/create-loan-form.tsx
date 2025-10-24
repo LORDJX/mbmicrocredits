@@ -19,21 +19,18 @@ interface CreateLoanFormProps {
   onSuccess?: (loan: any) => void
   onCancel?: () => void
   preselectedClientId?: string
-  initialData?: any // Agregado para soportar edición
+  initialData?: any // Agregado para modo edición
 }
 
 export function CreateLoanForm({ onSuccess, onCancel, preselectedClientId, initialData }: CreateLoanFormProps) {
-  const isEditMode = !!initialData
-
   const [isLoading, setIsLoading] = useState(false)
   const [clients, setClients] = useState<any[]>([])
   const [loadingClients, setLoadingClients] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
-
   const [formData, setFormData] = useState({
-    client_id: initialData?.client_id || preselectedClientId || "",
-    amount: initialData?.amount?.toString() || "",
-    installment_amount: initialData ? (Number(initialData.amount) / Number(initialData.installments)).toString() : "",
+    client_id: preselectedClientId || initialData?.client_id || "",
+    amount: initialData?.amount || "", // Monto Principal
+    installment_amount: initialData?.installment_amount || "", // Monto de Cuota
     installments: initialData?.installments?.toString() || "",
     interest_rate: initialData?.interest_rate?.toString() || "0",
     start_date: initialData?.start_date || "",
@@ -41,8 +38,15 @@ export function CreateLoanForm({ onSuccess, onCancel, preselectedClientId, initi
     frequency: initialData?.frequency || "monthly",
     status: initialData?.status || "active",
   })
-
   const { toast } = useToast()
+
+  // Lógica para filtrar clientes
+  const filteredClients = clients.filter(
+    (client) =>
+      client.first_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      client.last_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      client.client_code.toLowerCase().includes(searchTerm.toLowerCase()),
+  )
 
   useEffect(() => {
     fetchClients()
@@ -108,6 +112,8 @@ export function CreateLoanForm({ onSuccess, onCancel, preselectedClientId, initi
   const calculatedInstallmentAmount = totalRepay / Number.parseInt(formData.installments || "1")
   const calculatedInterest = totalRepay - Number.parseFloat(formData.amount || "0")
 
+  const isEditMode = !!initialData
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
@@ -132,14 +138,14 @@ export function CreateLoanForm({ onSuccess, onCancel, preselectedClientId, initi
       return
     }
 
-    const method = isEditMode ? "PUT" : "POST"
     const url = isEditMode ? `/api/loans/${initialData.id}` : "/api/loans"
+    const method = isEditMode ? "PUT" : "POST"
 
     const payload = {
       ...formData,
       amount: Number.parseFloat(formData.amount).toFixed(2),
       installment_amount: Number.isNaN(calculatedInstallmentAmount) ? "0" : calculatedInstallmentAmount.toFixed(2),
-      interest_rate: "0",
+      interest_rate: "0", // Se envía como 0 por requisito
     }
 
     try {
@@ -185,7 +191,7 @@ export function CreateLoanForm({ onSuccess, onCancel, preselectedClientId, initi
         </CardTitle>
                {" "}
         <CardDescription>
-                    {isEditMode ? "Modifica los datos del préstamo" : "Registra un nuevo préstamo en el sistema"}       {" "}
+          {isEditMode ? "Actualiza los datos del préstamo" : "Registra un nuevo préstamo en el sistema"}
         </CardDescription>
              {" "}
       </CardHeader>
@@ -227,19 +233,12 @@ export function CreateLoanForm({ onSuccess, onCancel, preselectedClientId, initi
                                {" "}
                 <SelectContent>
                                    {" "}
-                  {clients
-                    .filter(
-                      (client) =>
-                        client.first_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                        client.last_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                        client.client_code.toLowerCase().includes(searchTerm.toLowerCase()),
-                    )
-                    .map((client) => (
-                      <SelectItem key={client.id} value={client.id}>
-                                              {client.first_name} {client.last_name} - {client.client_code}             
-                             {" "}
-                      </SelectItem>
-                    ))}
+                  {filteredClients.map((client) => (
+                    <SelectItem key={client.id} value={client.id}>
+                                            {client.first_name} {client.last_name} - {client.client_code}               
+                         {" "}
+                    </SelectItem>
+                  ))}
                                  {" "}
                 </SelectContent>
                              {" "}

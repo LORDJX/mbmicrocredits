@@ -110,8 +110,19 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     }
 
     const body = await request.json()
-    const { amount, installments, interest_rate, start_date, end_date, loan_type, status, frequency } = body
+    const {
+      amount,
+      installments,
+      interest_rate,
+      start_date,
+      end_date,
+      loan_type,
+      status,
+      frequency,
+      installment_amount,
+    } = body
 
+    // Construir objeto de actualización solo con campos definidos
     const updateData: any = {
       updated_at: new Date().toISOString(),
     }
@@ -119,19 +130,21 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     if (amount !== undefined) updateData.amount = Number.parseFloat(amount)
     if (installments !== undefined) updateData.installments = Number.parseInt(installments)
     if (interest_rate !== undefined) updateData.interest_rate = Number.parseFloat(interest_rate)
-    if (start_date) updateData.start_date = start_date
-    if (end_date) updateData.end_date = end_date
-    if (loan_type) updateData.loan_type = loan_type
-    if (status) updateData.status = status
-    if (frequency) updateData.frequency = frequency
+    if (start_date !== undefined) updateData.start_date = start_date
+    if (end_date !== undefined) updateData.end_date = end_date
+    if (loan_type !== undefined) updateData.loan_type = loan_type
+    if (status !== undefined) updateData.status = status
+    if (frequency !== undefined) updateData.frequency = frequency
+    if (installment_amount !== undefined) updateData.installment_amount = Number.parseFloat(installment_amount)
 
+    // Actualizar préstamo
     const { data: updatedLoan, error } = await supabase
       .from("loans")
       .update(updateData)
       .eq("id", params.id)
       .select(`
         *,
-        active_clients!inner(first_name, last_name, client_code, phone, email)
+        clients!inner(first_name, last_name, client_code, phone, email)
       `)
       .single()
 
