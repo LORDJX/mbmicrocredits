@@ -123,8 +123,18 @@
   }
 }
 
+/* Base styles using vanilla CSS */
+* {
+  border-color: var(--border);
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-feature-settings: "rlig" 1, "calt" 1;
+}
+
 /* Implementing consistent white minimalist scrollbar across all pages and forms */
-/* Webkit browsers (Chrome, Safari, Edge) */
 ::-webkit-scrollbar {
   width: 10px;
   height: 10px;
@@ -149,13 +159,11 @@
   background: #a3a3a3;
 }
 
-/* Firefox */
 * {
   scrollbar-width: thin;
   scrollbar-color: #e5e5e5 #ffffff;
 }
 
-/* Dark mode scrollbar adjustments */
 .dark ::-webkit-scrollbar-track {
   background: #1a1a1a;
   border-left: 1px solid #2a2a2a;
@@ -178,14 +186,12 @@
   scrollbar-color: #3a3a3a #1a1a1a;
 }
 
-/* Ensure scrollbar appears on overflow */
 html,
 body {
   overflow-y: auto;
   overflow-x: hidden;
 }
 
-/* Apply to all scrollable containers */
 .overflow-auto,
 .overflow-y-auto,
 .overflow-x-auto,
@@ -201,7 +207,6 @@ body {
   scrollbar-color: #3a3a3a #1a1a1a;
 }
 
-/* Adding scrollbar styles specifically for forms and dialogs */
 form,
 [role="dialog"],
 .dialog-content,
@@ -272,7 +277,6 @@ form::-webkit-scrollbar-thumb:hover,
   background: #4a4a4a;
 }
 
-/* Print styles for reports */
 @media print {
   .no-print {
     display: none !important;
