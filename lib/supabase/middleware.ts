@@ -2,11 +2,25 @@ import { createServerClient } from "@supabase/ssr"
 import { NextResponse, type NextRequest } from "next/server"
 
 export async function updateSession(request: NextRequest) {
-  const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL
-  const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  console.log(
+    "[v0] Middleware - NEXT_PUBLIC_SUPABASE_URL:",
+    process.env.NEXT_PUBLIC_SUPABASE_URL ? "available" : "missing",
+  )
+  console.log(
+    "[v0] Middleware - NEXT_PUBLIC_SUPABASE_ANON_KEY:",
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? "available" : "missing",
+  )
+  console.log("[v0] Middleware - SUPABASE_URL:", process.env.SUPABASE_URL ? "available" : "missing")
+  console.log("[v0] Middleware - SUPABASE_ANON_KEY:", process.env.SUPABASE_ANON_KEY ? "available" : "missing")
+
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY
+
+  console.log("[v0] Middleware - Final URL:", supabaseUrl ? "available" : "missing")
+  console.log("[v0] Middleware - Final Key:", supabaseAnonKey ? "available" : "missing")
 
   if (!supabaseUrl || !supabaseAnonKey) {
-    console.error("[v0] Middleware - Missing Supabase credentials")
+    console.error("[v0] Middleware - Missing Supabase credentials, allowing request to continue")
     // Si no hay credenciales, permitir el acceso sin autenticación
     return NextResponse.next({ request })
   }
