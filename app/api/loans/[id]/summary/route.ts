@@ -5,6 +5,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
   try {
     const supabase = await createClient() // ✅ AGREGADO await
     
+    // Verificar autenticación
     const {
       data: { user },
       error: authError,
@@ -16,6 +17,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 
     const loanId = params.id
 
+    // Obtener préstamo
     const { data: loan, error: loanError } = await supabase
       .from("loans")
       .select("*, clients(*)")
@@ -26,6 +28,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       return NextResponse.json({ error: "Préstamo no encontrado" }, { status: 404 })
     }
 
+    // Obtener cuotas con estado
     const { data: installments, error: installmentsError } = await supabase
       .from("installments_with_status")
       .select("*")
@@ -37,6 +40,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       return NextResponse.json({ error: "Error al obtener cuotas" }, { status: 500 })
     }
 
+    // Calcular totales
     const totalDue = installments?.reduce((sum, inst) => sum + Number(inst.amount_due || 0), 0) || 0
     const totalPaid = installments?.reduce((sum, inst) => sum + Number(inst.amount_paid || 0), 0) || 0
     const balance = totalDue - totalPaid
