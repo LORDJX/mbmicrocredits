@@ -96,6 +96,59 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   }
 }
 
+export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
+  try {
+    const supabase = await createClient()
+
+    // Verificar autenticación
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser()
+    if (authError || !user) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 })
+    }
+
+    const body = await request.json()
+    const { amount, installments, interest_rate, start_date, end_date, loan_type, status, frequency } = body
+
+    // Construir objeto de actualización solo con campos definidos
+    const updateData: any = {
+      updated_at: new Date().toISOString(),
+    }
+
+    if (amount !== undefined) updateData.amount = Number.parseFloat(amount)
+    if (installments !== undefined) updateData.installments = Number.parseInt(installments)
+    if (interest_rate !== undefined) updateData.interest_rate = Number.parseFloat(interest_rate)
+    if (start_date) updateData.start_date = start_date
+    if (end_date) updateData.end_date = end_date
+    if (loan_type) updateData.loan_type = loan_type
+    if (status) updateData.status = status
+    if (frequency) updateData.frequency = frequency
+
+    // Actualizar préstamo
+    const { data: updatedLoan, error } = await supabase
+      .from("active_loans")
+      .update(updateData)
+      .eq("id", params.id)
+      .select(`
+        *,
+        active_clients!inner(first_name, last_name, client_code, phone, email)
+      `)
+      .single()
+
+    if (error) {
+      console.error("Error updating loan:", error)
+      return NextResponse.json({ error: "Error al actualizar préstamo" }, { status: 500 })
+    }
+
+    return NextResponse.json({ loan: updatedLoan })
+  } catch (error) {
+    console.error("Error in PUT /api/loans/[id]:", error)
+    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 })
+  }
+}
+
 export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     const supabase = await createClient()
