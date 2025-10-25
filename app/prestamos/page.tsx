@@ -1,6 +1,5 @@
-"use client"
-
 // app/prestamos/page.tsx
+// ✅ SIN "use client" - Este es un Server Component
 
 import { redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
@@ -149,22 +148,7 @@ export default async function PrestamosPage() {
             </Button>
           </DialogTrigger>
           <DialogContent className="!max-w-none w-[95vw] max-h-[95vh] h-[95vh] p-0 gap-0">
-            <style jsx>{`
-              .custom-scrollbar::-webkit-scrollbar {
-                width: 12px;
-              }
-              .custom-scrollbar::-webkit-scrollbar-track {
-                background: #1a1a1a;
-              }
-              .custom-scrollbar::-webkit-scrollbar-thumb {
-                background: #ffffff;
-                border-radius: 6px;
-              }
-              .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-                background: #e0e0e0;
-              }
-            `}</style>
-            <div className="custom-scrollbar overflow-y-auto h-full p-6">
+            <div className="overflow-y-auto h-full p-6">
               <DialogHeader className="mb-4">
                 <DialogTitle>Crear Nuevo Préstamo</DialogTitle>
               </DialogHeader>
