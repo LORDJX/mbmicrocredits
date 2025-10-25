@@ -1,78 +1,131 @@
-import { type NextRequest, NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/server"
+import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
+import { cookies } from 'next/headers'
+import { NextResponse } from 'next/server'
 
+// GET - Obtener todos los usuarios
 export async function GET() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: "No autorizado" }, { status: 401 })
+  try {
+    const cookieStore = await cookies()
+    const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
 
-  const { data, error } = await supabase
-    .from("v_users")
-    .select("*")
-    .order("last_updated", { ascending: false })
+    // Verificar autenticación
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) {
+      return NextResponse.json(
+        { error: 'No autorizado' },
+        { status: 401 }
+      )
+    }
 
-  if (error) return NextResponse.json({ error: "Error al obtener usuarios" }, { status: 500 })
+    // Obtener usuarios de la tabla users
+    const { data: users, error } = await supabase
+      .from('users')
+      .select('*')
+      .order('created_at', { ascending: false })
 
-  const users = (data || []).map((r: any) => ({
-    id: r.id,
-    first_name: r.first_name,
-    last_name: r.last_name,
-    dni: r.dni,
-    phone: r.phone,
-    address: r.address,
-    is_active: r.is_active,
-    updated_at: r.last_updated,
-    role_id: r.role_id,
-    user_roles: r.role_id ? { id: r.role_id, name: r.role_name, description: r.role_description } : null,
-  }))
+    if (error) {
+      console.error('Error al obtener usuarios:', error)
+      return NextResponse.json(
+        { error: 'Error al obtener usuarios', details: error.message },
+        { status: 500 }
+      )
+    }
 
-  return NextResponse.json({ users })
+    return NextResponse.json(users)
+  } catch (error) {
+    console.error('Error en GET /api/users:', error)
+    return NextResponse.json(
+      { error: 'Error interno del servidor' },
+      { status: 500 }
+    )
+  }
 }
 
-export async function POST(request: NextRequest) {
-  const supabase = await createClient()
-  const { data: { user: admin } } = await supabase.auth.getUser()
-  if (!admin) return NextResponse.json({ error: "No autorizado" }, { status: 401 })
+// POST - Crear nuevo usuario
+export async function POST(request: Request) {
+  try {
+    const cookieStore = await cookies()
+    const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
 
-  // sólo admin puede crear/editar perfiles
-  const { data: me } = await supabase.from("profiles").select("is_admin").eq("id", admin.id).maybeSingle()
-  if (!me?.is_admin) return NextResponse.json({ error: "Prohibido" }, { status: 403 })
+    // Verificar autenticación
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) {
+      return NextResponse.json(
+        { error: 'No autorizado' },
+        { status: 401 }
+      )
+    }
 
-  const body = await request.json()
-  const { id, first_name, last_name, dni, phone, address, role_id, is_active = true } = body
+    // Verificar que el usuario sea admin
+    const { data: currentUser } = await supabase
+      .from('users')
+      .select('role')
+      .eq('id', session.user.id)
+      .single()
 
-  if (!id) return NextResponse.json({ error: "Debes enviar 'id' (auth.users.id / profiles.id)" }, { status: 400 })
-  if (!first_name || !last_name || !dni) {
-    return NextResponse.json({ error: "Campos requeridos: first_name, last_name, dni" }, { status: 400 })
+    if (currentUser?.role !== 'admin') {
+      return NextResponse.json(
+        { error: 'No tienes permisos para crear usuarios' },
+        { status: 403 }
+      )
+    }
+
+    const body = await request.json()
+    const { email, password, name, role } = body
+
+    // Validar campos requeridos
+    if (!email || !password || !name) {
+      return NextResponse.json(
+        { error: 'Email, contraseña y nombre son requeridos' },
+        { status: 400 }
+      )
+    }
+
+    // Crear usuario en Supabase Auth
+    const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+    })
+
+    if (authError) {
+      console.error('Error al crear usuario en Auth:', authError)
+      return NextResponse.json(
+        { error: 'Error al crear usuario', details: authError.message },
+        { status: 400 }
+      )
+    }
+
+    // Insertar en la tabla users
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .insert([
+        {
+          id: authData.user.id,
+          email,
+          name,
+          role: role || 'user',
+        }
+      ])
+      .select()
+      .single()
+
+    if (userError) {
+      console.error('Error al insertar usuario en tabla:', userError)
+      // Intentar eliminar el usuario de Auth si falla la inserción
+      await supabase.auth.admin.deleteUser(authData.user.id)
+      return NextResponse.json(
+        { error: 'Error al crear usuario', details: userError.message },
+        { status: 500 }
+      )
+    }
+
+    return NextResponse.json(userData, { status: 201 })
+  } catch (error) {
+    console.error('Error en POST /api/users:', error)
+    return NextResponse.json(
+      { error: 'Error interno del servidor' },
+      { status: 500 }
+    )
   }
-
-  const { data: up, error } = await supabase
-    .from("profiles")
-    .upsert({
-      id,
-      first_name, last_name, dni, phone, address,
-      role_id: role_id ?? null,
-      is_active,
-      updated_at: new Date().toISOString(),
-    }, { onConflict: "id" })
-    .select("*")
-    .maybeSingle()
-
-  if (error) return NextResponse.json({ error: "Error al guardar perfil" }, { status: 500 })
-
-  const { data: v } = await supabase.from("v_users").select("*").eq("id", id).maybeSingle()
-  const userDto = v ? {
-    id: v.id,
-    first_name: v.first_name,
-    last_name: v.last_name,
-    dni: v.dni,
-    phone: v.phone,
-    address: v.address,
-    is_active: v.is_active,
-    updated_at: v.last_updated,
-    role_id: v.role_id,
-    user_roles: v.role_id ? { id: v.role_id, name: v.role_name, description: v.role_description } : null,
-  } : up
-
-  return NextResponse.json({ user: userDto }, { status: 201 })
 }
