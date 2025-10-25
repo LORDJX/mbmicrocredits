@@ -1,294 +1,234 @@
-// app/usuarios/page.tsx
+"use client"
 
-import { redirect } from "next/navigation"
-import { createClient } from "@/lib/supabase/server"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Input } from "@/components/ui/input"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Users, Plus, Search, Shield, Edit, Key } from "lucide-react"
-import { PageHeader } from "@/components/page-header"
-import { StatsCard } from "@/components/stats-card"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { CreateUserForm } from "@/components/forms/create-user-form"
-import { UserPermissionsManager } from "@/components/user-permissions-manager"
-
-interface UserRole {
-  id: string
-  name: string
-  description: string | null
-}
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import { Plus, Pencil, Trash2, Loader2 } from "lucide-react"
+import { useToast } from "@/hooks/use-toast"
+import CreateUserForm from "@/components/forms/create-user-form"
+import EditUserForm from "@/components/forms/edit-user-form"
 
 interface User {
   id: string
-  first_name: string
-  last_name: string
-  dni: string
-  phone: string | null
-  address: string | null
-  is_active: boolean
-  updated_at: string
-  role_id: string | null
-  user_roles: UserRole | null
+  email: string
+  name: string
+  role: string
+  created_at: string
 }
 
-async function getUsers() {
-  try {
-    const supabase = await createClient()
-    
-    const response = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/api/users`, {
-      headers: {
-        'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
+export default function UsuariosPage() {
+  const [users, setUsers] = useState<User[]>([])
+  const [loading, setLoading] = useState(true)
+  const [isCreateOpen, setIsCreateOpen] = useState(false)
+  const [isEditOpen, setIsEditOpen] = useState(false)
+  const [selectedUser, setSelectedUser] = useState<User | null>(null)
+  const { toast } = useToast()
+
+  // Función para cargar usuarios
+  const loadUsers = async () => {
+    try {
+      setLoading(true)
+      // ✅ CORRECCIÓN: Usar la API route de Next.js en lugar de Supabase directo
+      const response = await fetch('/api/users', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error(`Error ${response.status}: ${response.statusText}`)
       }
-    })
-    
-    if (!response.ok) return []
-    
-    const data = await response.json()
-    return data.users || []
-  } catch (e) {
-    console.error("Error fetching users:", e)
-    return []
-  }
-}
 
-async function getRoles() {
-  try {
-    const supabase = await createClient()
-    const { data, error } = await supabase
-      .from("user_roles")
-      .select("*")
-      .order("name")
-    
-    if (error) {
-      console.error("Error fetching roles:", error)
-      return []
+      const data = await response.json()
+      setUsers(data)
+    } catch (error) {
+      console.error('Error al cargar usuarios:', error)
+      toast({
+        title: "Error",
+        description: "No se pudieron cargar los usuarios",
+        variant: "destructive",
+      })
+    } finally {
+      setLoading(false)
     }
-    
-    return data || []
-  } catch (e) {
-    console.error("Error fetching roles:", e)
-    return []
-  }
-}
-
-export default async function UsuariosPage() {
-  const supabase = await createClient()
-
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser()
-
-  if (error || !user) {
-    redirect("/auth/login")
   }
 
-  // Verificar que sea admin
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("is_admin")
-    .eq("id", user.id)
-    .single()
+  // Cargar usuarios al montar el componente
+  useEffect(() => {
+    loadUsers()
+  }, [])
 
-  if (!profile?.is_admin) {
-    redirect("/dashboard")
-  }
+  // Función para eliminar usuario
+  const handleDelete = async (userId: string) => {
+    if (!confirm('¿Estás seguro de eliminar este usuario?')) return
 
-  const users = await getUsers()
-  const roles = await getRoles()
+    try {
+      const response = await fetch(`/api/users/${userId}`, {
+        method: 'DELETE',
+      })
 
-  const activeUsersCount = users.filter((u: User) => u.is_active).length
-  const inactiveUsersCount = users.filter((u: User) => !u.is_active).length
-  const adminsCount = users.filter((u: User) => u.user_roles?.name === 'Admin').length
+      if (!response.ok) {
+        throw new Error('Error al eliminar usuario')
+      }
 
-  const getStatusBadge = (isActive: boolean) => {
-    if (isActive) {
-      return (
-        <Badge variant="default" className="bg-green-600 text-white hover:bg-green-700">
-          Activo
-        </Badge>
-      )
-    } else {
-      return (
-        <Badge variant="destructive">
-          Inactivo
-        </Badge>
-      )
+      toast({
+        title: "Éxito",
+        description: "Usuario eliminado correctamente",
+      })
+
+      // Recargar la lista
+      loadUsers()
+    } catch (error) {
+      console.error('Error al eliminar usuario:', error)
+      toast({
+        title: "Error",
+        description: "No se pudo eliminar el usuario",
+        variant: "destructive",
+      })
     }
+  }
+
+  // Función para abrir el diálogo de edición
+  const handleEdit = (user: User) => {
+    setSelectedUser(user)
+    setIsEditOpen(true)
+  }
+
+  // Callback cuando se crea/edita un usuario exitosamente
+  const handleSuccess = () => {
+    setIsCreateOpen(false)
+    setIsEditOpen(false)
+    setSelectedUser(null)
+    loadUsers()
+  }
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="flex flex-col items-center gap-2">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <p className="text-muted-foreground">Cargando usuarios...</p>
+        </div>
+      </div>
+    )
   }
 
   return (
-    <div className="space-y-6">
-      <PageHeader title="Gestión de Usuarios" description="Administra usuarios y sus permisos">
-        <Dialog>
+    <div className="container mx-auto py-6">
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-3xl font-bold">Gestión de Usuarios</h1>
+          <p className="text-muted-foreground">
+            Administra los usuarios del sistema
+          </p>
+        </div>
+        <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
           <DialogTrigger asChild>
-            <Button className="bg-primary hover:bg-primary/90 text-primary-foreground">
-              <Plus className="h-4 w-4 mr-2" />
+            <Button>
+              <Plus className="mr-2 h-4 w-4" />
               Nuevo Usuario
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-w-md">
             <DialogHeader>
               <DialogTitle>Crear Nuevo Usuario</DialogTitle>
+              <DialogDescription>
+                Completa los datos para crear un nuevo usuario
+              </DialogDescription>
             </DialogHeader>
-            <CreateUserForm 
-              roles={roles}
-              onSuccess={() => window.location.reload()} 
-            />
+            <CreateUserForm onSuccess={handleSuccess} />
           </DialogContent>
         </Dialog>
-      </PageHeader>
-
-      {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-4">
-        <StatsCard 
-          title="Total Usuarios" 
-          value={users.length} 
-          description="Registrados" 
-          icon={Users} 
-        />
-        <StatsCard 
-          title="Usuarios Activos" 
-          value={activeUsersCount} 
-          description="En el sistema" 
-          icon={Users} 
-        />
-        <StatsCard
-          title="Inactivos"
-          value={inactiveUsersCount}
-          description="Deshabilitados"
-          icon={Users}
-        />
-        <StatsCard
-          title="Administradores"
-          value={adminsCount}
-          description="Con permisos totales"
-          icon={Shield}
-        />
       </div>
 
-      {/* Search and Filters */}
-      <Card className="border-border bg-card">
-        <CardHeader>
-          <CardTitle className="text-card-foreground font-work-sans">Buscar Usuarios</CardTitle>
-          <CardDescription>Encuentra usuarios por nombre, DNI o rol</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex gap-4">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Buscar por nombre, DNI..."
-                className="pl-10 bg-input border-border"
-              />
-            </div>
-            <Button variant="outline" className="border-border bg-transparent">
-              Filtros
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Users Table */}
-      <Card className="border-border bg-card">
-        <CardHeader>
-          <CardTitle className="text-card-foreground font-work-sans">Lista de Usuarios</CardTitle>
-          <CardDescription>Todos los usuarios del sistema</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="rounded-md border border-border">
-            <Table>
-              <TableHeader>
-                <TableRow className="border-border">
-                  <TableHead className="text-card-foreground">Nombre</TableHead>
-                  <TableHead className="text-card-foreground">DNI</TableHead>
-                  <TableHead className="text-card-foreground">Teléfono</TableHead>
-                  <TableHead className="text-card-foreground">Rol</TableHead>
-                  <TableHead className="text-card-foreground">Estado</TableHead>
-                  <TableHead className="text-card-foreground">Acciones</TableHead>
+      <div className="rounded-md border">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Nombre</TableHead>
+              <TableHead>Email</TableHead>
+              <TableHead>Rol</TableHead>
+              <TableHead>Fecha de Creación</TableHead>
+              <TableHead className="text-right">Acciones</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {users.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={5} className="text-center py-8">
+                  <p className="text-muted-foreground">
+                    No hay usuarios registrados
+                  </p>
+                </TableCell>
+              </TableRow>
+            ) : (
+              users.map((user) => (
+                <TableRow key={user.id}>
+                  <TableCell className="font-medium">{user.name}</TableCell>
+                  <TableCell>{user.email}</TableCell>
+                  <TableCell>
+                    <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-primary/10 text-primary">
+                      {user.role}
+                    </span>
+                  </TableCell>
+                  <TableCell>
+                    {new Date(user.created_at).toLocaleDateString('es-ES')}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <div className="flex justify-end gap-2">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleEdit(user)}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleDelete(user.id)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </TableCell>
                 </TableRow>
-              </TableHeader>
-              <TableBody>
-                {users.map((user: User) => (
-                  <TableRow key={user.id} className="border-border">
-                    <TableCell>
-                      <div>
-                        <div className="font-medium text-card-foreground">
-                          {user.first_name} {user.last_name}
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          ID: {user.id.substring(0, 8)}...
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell className="font-mono text-sm">{user.dni}</TableCell>
-                    <TableCell className="text-sm">{user.phone || "-"}</TableCell>
-                    <TableCell>
-                      {user.user_roles ? (
-                        <Badge variant="outline" className="font-normal">
-                          {user.user_roles.name}
-                        </Badge>
-                      ) : (
-                        <span className="text-muted-foreground text-sm">Sin rol</span>
-                      )}
-                    </TableCell>
-                    <TableCell>{getStatusBadge(user.is_active)}</TableCell>
-                    <TableCell>
-                      <div className="flex gap-2">
-                        <Dialog>
-                          <DialogTrigger asChild>
-                            <Button variant="outline" size="icon">
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                          </DialogTrigger>
-                          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-                            <DialogHeader>
-                              <DialogTitle>Editar Usuario</DialogTitle>
-                            </DialogHeader>
-                            <CreateUserForm 
-                              user={user}
-                              roles={roles}
-                              onSuccess={() => window.location.reload()} 
-                            />
-                          </DialogContent>
-                        </Dialog>
-                        
-                        <Dialog>
-                          <DialogTrigger asChild>
-                            <Button variant="outline" size="icon">
-                              <Key className="h-4 w-4" />
-                            </Button>
-                          </DialogTrigger>
-                          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-                            <DialogHeader>
-                              <DialogTitle>
-                                Permisos de {user.first_name} {user.last_name}
-                              </DialogTitle>
-                            </DialogHeader>
-                            <UserPermissionsManager 
-                              userId={user.id}
-                              userName={`${user.first_name} ${user.last_name}`}
-                            />
-                          </DialogContent>
-                        </Dialog>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-          {users.length === 0 && (
-            <div className="text-center py-8">
-              <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-lg font-semibold text-card-foreground">No hay usuarios</h3>
-              <p className="text-muted-foreground">Comienza creando tu primer usuario</p>
-            </div>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </div>
+
+      {/* Diálogo de edición */}
+      <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Editar Usuario</DialogTitle>
+            <DialogDescription>
+              Modifica los datos del usuario
+            </DialogDescription>
+          </DialogHeader>
+          {selectedUser && (
+            <EditUserForm user={selectedUser} onSuccess={handleSuccess} />
           )}
-        </CardContent>
-      </Card>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
