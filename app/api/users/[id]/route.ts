@@ -1,85 +1,210 @@
-import { type NextRequest, NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/server"
+import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
+import { cookies } from 'next/headers'
+import { NextResponse } from 'next/server'
 
-export async function GET(_: NextRequest, { params }: { params: { id: string } }) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: "No autorizado" }, { status: 401 })
+// PUT - Actualizar usuario
+export async function PUT(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params
+    const cookieStore = await cookies()
+    const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
 
-  const { data: v, error } = await supabase.from("v_users").select("*").eq("id", params.id).maybeSingle()
-  if (error || !v) return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 })
+    // Verificar autenticación
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) {
+      return NextResponse.json(
+        { error: 'No autorizado' },
+        { status: 401 }
+      )
+    }
 
-  return NextResponse.json({
-    user: {
-      id: v.id,
-      first_name: v.first_name,
-      last_name: v.last_name,
-      dni: v.dni,
-      phone: v.phone,
-      address: v.address,
-      is_active: v.is_active,
-      updated_at: v.last_updated,
-      role_id: v.role_id,
-      user_roles: v.role_id ? { id: v.role_id, name: v.role_name, description: v.role_description } : null,
-    },
-  })
+    // Verificar permisos (admin o el mismo usuario)
+    const { data: currentUser } = await supabase
+      .from('users')
+      .select('role')
+      .eq('id', session.user.id)
+      .single()
+
+    if (currentUser?.role !== 'admin' && session.user.id !== id) {
+      return NextResponse.json(
+        { error: 'No tienes permisos para actualizar este usuario' },
+        { status: 403 }
+      )
+    }
+
+    const body = await request.json()
+    const { name, email, role, password } = body
+
+    // Actualizar en la tabla users
+    const updateData: any = {}
+    if (name) updateData.name = name
+    if (email) updateData.email = email
+    if (role && currentUser?.role === 'admin') updateData.role = role
+
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .update(updateData)
+      .eq('id', id)
+      .select()
+      .single()
+
+    if (userError) {
+      console.error('Error al actualizar usuario:', userError)
+      return NextResponse.json(
+        { error: 'Error al actualizar usuario', details: userError.message },
+        { status: 500 }
+      )
+    }
+
+    // Si se proporcionó una nueva contraseña, actualizarla en Auth
+    if (password && currentUser?.role === 'admin') {
+      const { error: passwordError } = await supabase.auth.admin.updateUserById(
+        id,
+        { password }
+      )
+
+      if (passwordError) {
+        console.error('Error al actualizar contraseña:', passwordError)
+        return NextResponse.json(
+          { error: 'Usuario actualizado pero error al cambiar contraseña', details: passwordError.message },
+          { status: 500 }
+        )
+      }
+    }
+
+    return NextResponse.json(userData)
+  } catch (error) {
+    console.error('Error en PUT /api/users/[id]:', error)
+    return NextResponse.json(
+      { error: 'Error interno del servidor' },
+      { status: 500 }
+    )
+  }
 }
 
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
-  const supabase = await createClient()
-  const { data: { user: admin } } = await supabase.auth.getUser()
-  if (!admin) return NextResponse.json({ error: "No autorizado" }, { status: 401 })
+// DELETE - Eliminar usuario
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params
+    const cookieStore = await cookies()
+    const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
 
-  const { data: me } = await supabase.from("profiles").select("is_admin").eq("id", admin.id).maybeSingle()
-  if (!me?.is_admin) return NextResponse.json({ error: "Prohibido" }, { status: 403 })
+    // Verificar autenticación
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) {
+      return NextResponse.json(
+        { error: 'No autorizado' },
+        { status: 401 }
+      )
+    }
 
-  const body = await request.json()
-  const { first_name, last_name, dni, phone, address, role_id, is_active } = body
+    // Verificar que el usuario sea admin
+    const { data: currentUser } = await supabase
+      .from('users')
+      .select('role')
+      .eq('id', session.user.id)
+      .single()
 
-  const { data: up, error } = await supabase
-    .from("profiles")
-    .update({
-      first_name, last_name, dni, phone, address,
-      role_id: role_id ?? null,
-      is_active,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", params.id)
-    .select("*")
-    .maybeSingle()
+    if (currentUser?.role !== 'admin') {
+      return NextResponse.json(
+        { error: 'No tienes permisos para eliminar usuarios' },
+        { status: 403 }
+      )
+    }
 
-  if (error) return NextResponse.json({ error: "Error al actualizar" }, { status: 500 })
+    // No permitir que un admin se elimine a sí mismo
+    if (session.user.id === id) {
+      return NextResponse.json(
+        { error: 'No puedes eliminar tu propio usuario' },
+        { status: 400 }
+      )
+    }
 
-  const { data: v } = await supabase.from("v_users").select("*").eq("id", params.id).maybeSingle()
-  return NextResponse.json({
-    user: v ? {
-      id: v.id,
-      first_name: v.first_name,
-      last_name: v.last_name,
-      dni: v.dni,
-      phone: v.phone,
-      address: v.address,
-      is_active: v.is_active,
-      updated_at: v.last_updated,
-      role_id: v.role_id,
-      user_roles: v.role_id ? { id: v.role_id, name: v.role_name, description: v.role_description } : null,
-    } : up,
-  })
+    // Eliminar de la tabla users
+    const { error: userError } = await supabase
+      .from('users')
+      .delete()
+      .eq('id', id)
+
+    if (userError) {
+      console.error('Error al eliminar usuario de tabla:', userError)
+      return NextResponse.json(
+        { error: 'Error al eliminar usuario', details: userError.message },
+        { status: 500 }
+      )
+    }
+
+    // Eliminar de Supabase Auth
+    const { error: authError } = await supabase.auth.admin.deleteUser(id)
+
+    if (authError) {
+      console.error('Error al eliminar usuario de Auth:', authError)
+      // El usuario ya fue eliminado de la tabla, reportar pero continuar
+      return NextResponse.json(
+        { 
+          success: true, 
+          warning: 'Usuario eliminado de la tabla pero error al eliminar de Auth',
+          details: authError.message 
+        }
+      )
+    }
+
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error('Error en DELETE /api/users/[id]:', error)
+    return NextResponse.json(
+      { error: 'Error interno del servidor' },
+      { status: 500 }
+    )
+  }
 }
 
-export async function DELETE(_: NextRequest, { params }: { params: { id: string } }) {
-  const supabase = await createClient()
-  const { data: { user: admin } } = await supabase.auth.getUser()
-  if (!admin) return NextResponse.json({ error: "No autorizado" }, { status: 401 })
+// GET - Obtener un usuario específico
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params
+    const cookieStore = await cookies()
+    const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
 
-  const { data: me } = await supabase.from("profiles").select("is_admin").eq("id", admin.id).maybeSingle()
-  if (!me?.is_admin) return NextResponse.json({ error: "Prohibido" }, { status: 403 })
+    // Verificar autenticación
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) {
+      return NextResponse.json(
+        { error: 'No autorizado' },
+        { status: 401 }
+      )
+    }
 
-  const { error } = await supabase
-    .from("profiles")
-    .update({ is_active: false, updated_at: new Date().toISOString() })
-    .eq("id", params.id)
+    // Obtener usuario
+    const { data: user, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', id)
+      .single()
 
-  if (error) return NextResponse.json({ error: "Error al desactivar" }, { status: 500 })
-  return NextResponse.json({ message: "Usuario desactivado" })
+    if (error) {
+      console.error('Error al obtener usuario:', error)
+      return NextResponse.json(
+        { error: 'Usuario no encontrado', details: error.message },
+        { status: 404 }
+      )
+    }
+
+    return NextResponse.json(user)
+  } catch (error) {
+    console.error('Error en GET /api/users/[id]:', error)
+    return NextResponse.json(
+      { error: 'Error interno del servidor' },
+      { status: 500 }
+    )
+  }
 }
