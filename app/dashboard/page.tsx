@@ -12,6 +12,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { CreateClientForm } from "@/components/forms/create-client-form"
 import { CreateLoanForm } from "@/components/forms/create-loan-form"
 import { CreateReceiptForm } from "@/components/forms/create-receipt-form"
+import { CurrentDateTimeHeader } from "@/components/current-datetime-header"
+import { UpcomingFollowupsCard } from "@/components/upcoming-followups-card"
 
 interface DashboardData {
   totalClients: number
@@ -234,7 +236,8 @@ export default function DashboardPage() {
         description={`Bienvenido de vuelta, ${userEmail}. Aquí tienes un resumen de tu sistema de microcréditos.`}
       />
 
-      {/* Stats Grid */}
+      <CurrentDateTimeHeader />
+
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {stats.map((stat) => (
           <StatsCard
@@ -247,7 +250,8 @@ export default function DashboardPage() {
         ))}
       </div>
 
-      {/* Alerts Section */}
+      <UpcomingFollowupsCard />
+
       <div className="grid gap-4 md:grid-cols-2">
         {alerts.map((alert) => (
           <Card
@@ -287,7 +291,6 @@ export default function DashboardPage() {
         ))}
       </div>
 
-      {/* Quick Actions */}
       <Card className="border-border bg-card">
         <CardHeader>
           <CardTitle className="text-card-foreground font-work-sans">Acciones Rápidas</CardTitle>
@@ -339,7 +342,6 @@ export default function DashboardPage() {
               </DialogContent>
             </Dialog>
 
-            {/* Registrar Pago */}
             <Dialog open={receiptDialogOpen} onOpenChange={setReceiptDialogOpen}>
               <DialogTrigger asChild>
                 <Card className="p-4 hover:bg-muted/50 transition-colors cursor-pointer border-border">
@@ -364,7 +366,6 @@ export default function DashboardPage() {
                   <div className="w-[40%] h-full overflow-y-auto bg-muted/30 p-6 custom-scrollbar">
                     <h3 className="text-lg font-semibold mb-4">Resumen del Recibo</h3>
 
-                    {/* Cliente */}
                     {summaryData.client ? (
                       <Card className="mb-4">
                         <CardHeader className="pb-3">
@@ -388,7 +389,6 @@ export default function DashboardPage() {
                       </Card>
                     )}
 
-                    {/* Préstamos */}
                     <Card className="mb-4">
                       <CardHeader className="pb-3">
                         <CardTitle className="text-sm font-medium">Préstamos Seleccionados</CardTitle>
@@ -414,7 +414,6 @@ export default function DashboardPage() {
                       </CardContent>
                     </Card>
 
-                    {/* Cuotas */}
                     <Card className="mb-4">
                       <CardHeader className="pb-3">
                         <CardTitle className="text-sm font-medium">Cuotas a Pagar</CardTitle>
@@ -437,7 +436,6 @@ export default function DashboardPage() {
                       </CardContent>
                     </Card>
 
-                    {/* Montos */}
                     <Card>
                       <CardHeader className="pb-3">
                         <CardTitle className="text-sm font-medium">Detalle de Pago</CardTitle>
@@ -481,7 +479,6 @@ export default function DashboardPage() {
         </CardContent>
       </Card>
 
-      {/* Performance Overview */}
       <Card className="border-border bg-card">
         <CardHeader>
           <CardTitle className="text-card-foreground font-work-sans">Rendimiento del Mes</CardTitle>
