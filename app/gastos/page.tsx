@@ -497,21 +497,21 @@ export default function GastosPage() {
               Esta acción no se puede deshacer. El gasto será marcado como eliminado y no aparecerá en los listados.
               {expenseToDelete && (
                 <div className="mt-4 p-4 bg-muted rounded-lg space-y-2">
-                  <p className="font-semibold">Detalles del gasto:</p>
-                  <p className="text-sm">
+                  <div className="font-semibold">Detalles del gasto:</div>
+                  <div className="text-sm">
                     <span className="font-medium">Código:</span> {expenseToDelete.expense_code}
-                  </p>
-                  <p className="text-sm">
+                  </div>
+                  <div className="text-sm">
                     <span className="font-medium">Descripción:</span> {expenseToDelete.description}
-                  </p>
-                  <p className="text-sm">
+                  </div>
+                  <div className="text-sm">
                     <span className="font-medium">Monto:</span> $
                     {Number(expenseToDelete.amount).toLocaleString("es-AR", { minimumFractionDigits: 2 })}
-                  </p>
-                  <p className="text-sm">
+                  </div>
+                  <div className="text-sm">
                     <span className="font-medium">Fecha:</span>{" "}
                     {format(new Date(expenseToDelete.expense_date), "dd/MM/yyyy", { locale: es })}
-                  </p>
+                  </div>
                 </div>
               )}
             </AlertDialogDescription>
