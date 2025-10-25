@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Plus, Search, Filter, DollarSign, Calendar, FileText, Edit2 } from "lucide-react"
+import { Plus, Search, Filter, DollarSign, Calendar, FileText, Edit2, Trash2 } from "lucide-react"
 import { CreateExpenseForm } from "@/components/forms/create-expense-form"
 import { ManageCategoriesDialog } from "@/components/manage-categories-dialog"
 import { format } from "date-fns"
@@ -16,6 +16,16 @@ import { es } from "date-fns/locale"
 import { useToast } from "@/hooks/use-toast"
 import type { ExpenseWithDetails, ExpenseCategory, CategoryExpenseStats } from "@/lib/types/expenses"
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from "recharts"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 
 export default function GastosPage() {
   const { toast } = useToast()
@@ -27,6 +37,8 @@ export default function GastosPage() {
   const [selectedCategory, setSelectedCategory] = useState<string>("all")
   const [selectedStatus, setSelectedStatus] = useState<string>("all")
   const [editingExpense, setEditingExpense] = useState<ExpenseWithDetails | null>(null)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [expenseToDelete, setExpenseToDelete] = useState<ExpenseWithDetails | null>(null)
 
   useEffect(() => {
     loadData()
@@ -162,6 +174,39 @@ export default function GastosPage() {
   const handleCloseDialog = () => {
     setDialogOpen(false)
     setEditingExpense(null)
+  }
+
+  const handleDeleteExpense = async () => {
+    if (!expenseToDelete) return
+
+    try {
+      const response = await fetch(`/api/expenses/${expenseToDelete.id}`, {
+        method: "DELETE",
+      })
+
+      if (!response.ok) throw new Error("Error al eliminar gasto")
+
+      toast({
+        title: "Gasto eliminado",
+        description: "El gasto ha sido eliminado correctamente",
+      })
+
+      setDeleteDialogOpen(false)
+      setExpenseToDelete(null)
+      loadData()
+    } catch (error) {
+      console.error("[v0] Error deleting expense:", error)
+      toast({
+        title: "Error",
+        description: "No se pudo eliminar el gasto",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const confirmDeleteExpense = (expense: ExpenseWithDetails) => {
+    setExpenseToDelete(expense)
+    setDeleteDialogOpen(true)
   }
 
   const getStatusBadge = (status: string) => {
@@ -420,9 +465,19 @@ export default function GastosPage() {
                         </Select>
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button variant="ghost" size="sm" onClick={() => handleEditExpense(expense)}>
-                          <Edit2 className="h-4 w-4" />
-                        </Button>
+                        <div className="flex items-center justify-end gap-1">
+                          <Button variant="ghost" size="sm" onClick={() => handleEditExpense(expense)}>
+                            <Edit2 className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => confirmDeleteExpense(expense)}
+                            className="text-destructive hover:text-destructive"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -432,6 +487,43 @@ export default function GastosPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* AlertDialog for confirmation of deletion */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Estás seguro de eliminar este gasto?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta acción no se puede deshacer. El gasto será marcado como eliminado y no aparecerá en los listados.
+              {expenseToDelete && (
+                <div className="mt-4 p-4 bg-muted rounded-lg space-y-2">
+                  <p className="font-semibold">Detalles del gasto:</p>
+                  <p className="text-sm">
+                    <span className="font-medium">Código:</span> {expenseToDelete.expense_code}
+                  </p>
+                  <p className="text-sm">
+                    <span className="font-medium">Descripción:</span> {expenseToDelete.description}
+                  </p>
+                  <p className="text-sm">
+                    <span className="font-medium">Monto:</span> $
+                    {Number(expenseToDelete.amount).toLocaleString("es-AR", { minimumFractionDigits: 2 })}
+                  </p>
+                  <p className="text-sm">
+                    <span className="font-medium">Fecha:</span>{" "}
+                    {format(new Date(expenseToDelete.expense_date), "dd/MM/yyyy", { locale: es })}
+                  </p>
+                </div>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteExpense} className="bg-destructive hover:bg-destructive/90">
+              Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

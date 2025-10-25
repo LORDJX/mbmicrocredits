@@ -22,8 +22,12 @@ export async function GET(request: Request) {
     const endDate = searchParams.get("endDate")
     const search = searchParams.get("search")
 
-    // Construir query
-    let query = supabase.from("v_expenses").select("*").order("expense_date", { ascending: false })
+    // Construir query - solo gastos no eliminados
+    let query = supabase
+      .from("v_expenses")
+      .select("*")
+      .is("deleted_at", null)
+      .order("expense_date", { ascending: false })
 
     // Aplicar filtros
     if (category) {
