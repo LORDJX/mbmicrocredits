@@ -27,7 +27,7 @@ const AVAILABLE_ROUTES = [
   { path: "/dashboard/recibos", label: "Recibos", description: "Gestión de recibos" },
   { path: "/dashboard/gastos", label: "Gastos", description: "Gestión de gastos" },
   { path: "/dashboard/socios", label: "Socios", description: "Gestión de socios" },
-  { path: "/dashboard/usuarios", label: "Usuarios", description: "Gestión de usuarios (Admin)" },
+  { path: "/dashboard/users", label: "Usuarios", description: "Gestión de usuarios (Admin)" },
 ]
 
 export function UserPermissionsManager({ userId, userName }: UserPermissionsManagerProps) {
