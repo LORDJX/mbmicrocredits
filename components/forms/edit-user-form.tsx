@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -11,30 +11,67 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { Switch } from "@/components/ui/switch"
 import { useToast } from "@/hooks/use-toast"
 import { Loader2 } from "lucide-react"
+import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
 
-interface User {
+interface UserRole {
+  id: string
+  name: string
+  description: string
+}
+
+interface UserProfile {
   id: string
   email: string
-  name: string
-  role: string
+  first_name: string | null
+  last_name: string | null
+  username: string | null
+  is_admin: boolean
+  is_active: boolean
+  role_id: string | null
+  phone: string | null
+  dni: string | null
 }
 
 interface EditUserFormProps {
-  user: User
+  user: UserProfile
   onSuccess?: () => void
 }
 
 export default function EditUserForm({ user, onSuccess }: EditUserFormProps) {
   const [loading, setLoading] = useState(false)
+  const [roles, setRoles] = useState<UserRole[]>([])
   const [formData, setFormData] = useState({
-    name: user.name,
+    first_name: user.first_name || "",
+    last_name: user.last_name || "",
+    username: user.username || "",
     email: user.email,
-    role: user.role,
+    phone: user.phone || "",
+    dni: user.dni || "",
+    is_admin: user.is_admin,
+    is_active: user.is_active,
+    role_id: user.role_id || "",
     password: "", // Opcional para cambiar contraseña
   })
   const { toast } = useToast()
+  const supabase = createClientComponentClient()
+
+  // Cargar roles disponibles
+  useEffect(() => {
+    const loadRoles = async () => {
+      const { data, error } = await supabase
+        .from('user_roles')
+        .select('*')
+        .order('name')
+
+      if (!error && data) {
+        setRoles(data)
+      }
+    }
+    loadRoles()
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -43,9 +80,15 @@ export default function EditUserForm({ user, onSuccess }: EditUserFormProps) {
     try {
       // Solo enviar password si se ingresó uno nuevo
       const dataToSend = {
-        name: formData.name,
+        first_name: formData.first_name,
+        last_name: formData.last_name,
+        username: formData.username,
         email: formData.email,
-        role: formData.role,
+        phone: formData.phone,
+        dni: formData.dni,
+        is_admin: formData.is_admin,
+        is_active: formData.is_active,
+        role_id: formData.role_id || null,
         ...(formData.password && { password: formData.password }),
       }
 
@@ -83,16 +126,28 @@ export default function EditUserForm({ user, onSuccess }: EditUserFormProps) {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="space-y-2">
-        <Label htmlFor="edit-name">Nombre Completo</Label>
-        <Input
-          id="edit-name"
-          value={formData.name}
-          onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-          placeholder="Juan Pérez"
-          required
-          disabled={loading}
-        />
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="edit-first_name">Nombre</Label>
+          <Input
+            id="edit-first_name"
+            value={formData.first_name}
+            onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
+            placeholder="Juan"
+            disabled={loading}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="edit-last_name">Apellido</Label>
+          <Input
+            id="edit-last_name"
+            value={formData.last_name}
+            onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
+            placeholder="Pérez"
+            disabled={loading}
+          />
+        </div>
       </div>
 
       <div className="space-y-2">
@@ -104,6 +159,18 @@ export default function EditUserForm({ user, onSuccess }: EditUserFormProps) {
           onChange={(e) => setFormData({ ...formData, email: e.target.value })}
           placeholder="juan@ejemplo.com"
           required
+          disabled={loading}
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="edit-username">Usuario</Label>
+        <Input
+          id="edit-username"
+          value={formData.username}
+          onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+          placeholder="juanperez"
+          minLength={3}
           disabled={loading}
         />
       </div>
@@ -123,22 +190,76 @@ export default function EditUserForm({ user, onSuccess }: EditUserFormProps) {
         />
       </div>
 
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="edit-phone">Teléfono</Label>
+          <Input
+            id="edit-phone"
+            type="tel"
+            value={formData.phone}
+            onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+            placeholder="+54 351 123-4567"
+            disabled={loading}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="edit-dni">DNI</Label>
+          <Input
+            id="edit-dni"
+            value={formData.dni}
+            onChange={(e) => setFormData({ ...formData, dni: e.target.value })}
+            placeholder="12345678"
+            disabled={loading}
+          />
+        </div>
+      </div>
+
       <div className="space-y-2">
-        <Label htmlFor="edit-role">Rol</Label>
+        <Label htmlFor="edit-role_id">Rol</Label>
         <Select
-          value={formData.role}
-          onValueChange={(value) => setFormData({ ...formData, role: value })}
+          value={formData.role_id}
+          onValueChange={(value) => setFormData({ ...formData, role_id: value })}
           disabled={loading}
         >
           <SelectTrigger>
-            <SelectValue placeholder="Selecciona un rol" />
+            <SelectValue placeholder="Selecciona un rol (opcional)" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="user">Usuario</SelectItem>
-            <SelectItem value="admin">Administrador</SelectItem>
-            <SelectItem value="manager">Gerente</SelectItem>
+            <SelectItem value="">Sin rol asignado</SelectItem>
+            {roles.map((role) => (
+              <SelectItem key={role.id} value={role.id}>
+                {role.name}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
+      </div>
+
+      <div className="space-y-3">
+        <div className="flex items-center space-x-2">
+          <Switch
+            id="edit-is_admin"
+            checked={formData.is_admin}
+            onCheckedChange={(checked) => setFormData({ ...formData, is_admin: checked })}
+            disabled={loading}
+          />
+          <Label htmlFor="edit-is_admin" className="cursor-pointer">
+            Administrador del sistema
+          </Label>
+        </div>
+
+        <div className="flex items-center space-x-2">
+          <Switch
+            id="edit-is_active"
+            checked={formData.is_active}
+            onCheckedChange={(checked) => setFormData({ ...formData, is_active: checked })}
+            disabled={loading}
+          />
+          <Label htmlFor="edit-is_active" className="cursor-pointer">
+            Usuario activo
+          </Label>
+        </div>
       </div>
 
       <div className="flex gap-2 pt-4">
