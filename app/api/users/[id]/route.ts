@@ -1,210 +1,136 @@
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
-import { NextResponse } from 'next/server'
+import { type NextRequest, NextResponse } from "next/server"
+import { createClient } from "@supabase/supabase-js"
 
-// PUT - Actualizar usuario
-export async function PUT(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const dynamic = "force-dynamic"
+
+const SUPABASE_URL = process.env.SUPABASE_URL
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
+
+type UpdateUserBody = {
+  email?: string // actualizar email en Auth (opcional)
+  username?: string
+  full_name?: string
+  is_admin?: boolean
+}
+
+export async function PATCH(request: NextRequest, context: { params: { id: string } }) {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    console.error("Faltan variables de entorno de Supabase (SUPABASE_URL o SUPABASE_SERVICE_ROLE_KEY).")
+    return NextResponse.json({ detail: "Configuración de Supabase incompleta en el servidor." }, { status: 500 })
+  }
+
+  const userId = context.params?.id
+  if (!userId) {
+    return NextResponse.json({ detail: "Falta el parámetro 'id'." }, { status: 400 })
+  }
+
+  let body: UpdateUserBody
   try {
-    const { id } = await params
-    const cookieStore = await cookies()
-    const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
+    body = await request.json()
+  } catch {
+    return NextResponse.json({ detail: "Cuerpo JSON inválido." }, { status: 400 })
+  }
 
-    // Verificar autenticación
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) {
-      return NextResponse.json(
-        { error: 'No autorizado' },
-        { status: 401 }
-      )
-    }
+  const email = body.email?.trim().toLowerCase()
+  const username = body.username?.trim().toLowerCase()
+  const full_name = body.full_name?.trim()
+  const is_admin = body.is_admin
 
-    // Verificar permisos (admin o el mismo usuario)
-    const { data: currentUser } = await supabase
-      .from('users')
-      .select('role')
-      .eq('id', session.user.id)
-      .single()
+  try {
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+      auth: { persistSession: false },
+    })
 
-    if (currentUser?.role !== 'admin' && session.user.id !== id) {
-      return NextResponse.json(
-        { error: 'No tienes permisos para actualizar este usuario' },
-        { status: 403 }
-      )
-    }
-
-    const body = await request.json()
-    const { name, email, role, password } = body
-
-    // Actualizar en la tabla users
-    const updateData: any = {}
-    if (name) updateData.name = name
-    if (email) updateData.email = email
-    if (role && currentUser?.role === 'admin') updateData.role = role
-
-    const { data: userData, error: userError } = await supabase
-      .from('users')
-      .update(updateData)
-      .eq('id', id)
-      .select()
-      .single()
-
-    if (userError) {
-      console.error('Error al actualizar usuario:', userError)
-      return NextResponse.json(
-        { error: 'Error al actualizar usuario', details: userError.message },
-        { status: 500 }
-      )
-    }
-
-    // Si se proporcionó una nueva contraseña, actualizarla en Auth
-    if (password && currentUser?.role === 'admin') {
-      const { error: passwordError } = await supabase.auth.admin.updateUserById(
-        id,
-        { password }
-      )
-
-      if (passwordError) {
-        console.error('Error al actualizar contraseña:', passwordError)
+    // Si se provee email, actualizar también en Auth
+    if (email) {
+      const { error: authUpdateError, status: authStatus } = await supabase.auth.admin.updateUserById(userId, {
+        email,
+      })
+      if (authUpdateError) {
+        console.error("Error updateUserById (email):", authUpdateError)
         return NextResponse.json(
-          { error: 'Usuario actualizado pero error al cambiar contraseña', details: passwordError.message },
-          { status: 500 }
+          { detail: authUpdateError.message || "No se pudo actualizar el email del usuario." },
+          { status: authStatus || 400 },
         )
       }
     }
 
-    return NextResponse.json(userData)
-  } catch (error) {
-    console.error('Error en PUT /api/users/[id]:', error)
-    return NextResponse.json(
-      { error: 'Error interno del servidor' },
-      { status: 500 }
-    )
-  }
-}
+    const updatePayload: Record<string, any> = {}
+    if (typeof username !== "undefined") updatePayload.username = username || null
+    if (typeof full_name !== "undefined") updatePayload.full_name = full_name || null
+    if (typeof is_admin !== "undefined") updatePayload.is_admin = !!is_admin
 
-// DELETE - Eliminar usuario
-export async function DELETE(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { id } = await params
-    const cookieStore = await cookies()
-    const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
-
-    // Verificar autenticación
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) {
-      return NextResponse.json(
-        { error: 'No autorizado' },
-        { status: 401 }
-      )
+    if (Object.keys(updatePayload).length === 0) {
+      // Si no hay cambios en el perfil, retornar el perfil actual
+      const {
+        data: current,
+        error: currentErr,
+        status: currentStatus,
+      } = await supabase
+        .from("profiles")
+        .select("id, username, full_name, is_admin, updated_at")
+        .eq("id", userId)
+        .single()
+      if (currentErr) {
+        return NextResponse.json(
+          { detail: currentErr.message || "No se pudo recuperar el perfil." },
+          { status: currentStatus || 500 },
+        )
+      }
+      return NextResponse.json(current, { status: 200 })
     }
 
-    // Verificar que el usuario sea admin
-    const { data: currentUser } = await supabase
-      .from('users')
-      .select('role')
-      .eq('id', session.user.id)
-      .single()
-
-    if (currentUser?.role !== 'admin') {
-      return NextResponse.json(
-        { error: 'No tienes permisos para eliminar usuarios' },
-        { status: 403 }
-      )
-    }
-
-    // No permitir que un admin se elimine a sí mismo
-    if (session.user.id === id) {
-      return NextResponse.json(
-        { error: 'No puedes eliminar tu propio usuario' },
-        { status: 400 }
-      )
-    }
-
-    // Eliminar de la tabla users
-    const { error: userError } = await supabase
-      .from('users')
-      .delete()
-      .eq('id', id)
-
-    if (userError) {
-      console.error('Error al eliminar usuario de tabla:', userError)
-      return NextResponse.json(
-        { error: 'Error al eliminar usuario', details: userError.message },
-        { status: 500 }
-      )
-    }
-
-    // Eliminar de Supabase Auth
-    const { error: authError } = await supabase.auth.admin.deleteUser(id)
-
-    if (authError) {
-      console.error('Error al eliminar usuario de Auth:', authError)
-      // El usuario ya fue eliminado de la tabla, reportar pero continuar
-      return NextResponse.json(
-        { 
-          success: true, 
-          warning: 'Usuario eliminado de la tabla pero error al eliminar de Auth',
-          details: authError.message 
-        }
-      )
-    }
-
-    return NextResponse.json({ success: true })
-  } catch (error) {
-    console.error('Error en DELETE /api/users/[id]:', error)
-    return NextResponse.json(
-      { error: 'Error interno del servidor' },
-      { status: 500 }
-    )
-  }
-}
-
-// GET - Obtener un usuario específico
-export async function GET(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { id } = await params
-    const cookieStore = await cookies()
-    const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
-
-    // Verificar autenticación
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) {
-      return NextResponse.json(
-        { error: 'No autorizado' },
-        { status: 401 }
-      )
-    }
-
-    // Obtener usuario
-    const { data: user, error } = await supabase
-      .from('users')
-      .select('*')
-      .eq('id', id)
+    const { data, error, status } = await supabase
+      .from("profiles")
+      .update(updatePayload)
+      .eq("id", userId)
+      .select("id, username, full_name, is_admin, updated_at")
       .single()
 
     if (error) {
-      console.error('Error al obtener usuario:', error)
+      console.error("Error Supabase (PATCH /api/users/[id]):", error)
       return NextResponse.json(
-        { error: 'Usuario no encontrado', details: error.message },
-        { status: 404 }
+        { detail: error.message || "Error al actualizar el perfil del usuario." },
+        { status: status || 500 },
       )
     }
 
-    return NextResponse.json(user)
-  } catch (error) {
-    console.error('Error en GET /api/users/[id]:', error)
-    return NextResponse.json(
-      { error: 'Error interno del servidor' },
-      { status: 500 }
-    )
+    return NextResponse.json(data, { status: 200 })
+  } catch (err: any) {
+    console.error("Error interno (PATCH /api/users/[id]):", err)
+    return NextResponse.json({ detail: "Error interno del servidor al actualizar el usuario." }, { status: 500 })
+  }
+}
+
+export async function DELETE(request: NextRequest, context: { params: { id: string } }) {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    console.error("Faltan variables de entorno de Supabase (SUPABASE_URL o SUPABASE_SERVICE_ROLE_KEY).")
+    return NextResponse.json({ detail: "Configuración de Supabase incompleta en el servidor." }, { status: 500 })
+  }
+
+  const userId = context.params?.id
+  if (!userId) {
+    return NextResponse.json({ detail: "Falta el parámetro 'id'." }, { status: 400 })
+  }
+
+  try {
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+      auth: { persistSession: false },
+    })
+
+    // Eliminar usuario de Auth (esto también eliminará el perfil por CASCADE)
+    const { error: authDeleteError } = await supabase.auth.admin.deleteUser(userId)
+    if (authDeleteError) {
+      console.error("Error deleteUser:", authDeleteError)
+      return NextResponse.json(
+        { detail: authDeleteError.message || "No se pudo eliminar el usuario." },
+        { status: 400 },
+      )
+    }
+
+    return NextResponse.json({ message: "Usuario eliminado correctamente." }, { status: 200 })
+  } catch (err: any) {
+    console.error("Error interno (DELETE /api/users/[id]):", err)
+    return NextResponse.json({ detail: "Error interno del servidor al eliminar el usuario." }, { status: 500 })
   }
 }
