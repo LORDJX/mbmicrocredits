@@ -29,7 +29,7 @@ interface PaymentDistribution {
 // Función principal de distribución de pagos
 export async function distributePayment(
   installments: InstallmentWithBalance[],
-  totalAmount: number
+  totalAmount: number,
 ): Promise<PaymentDistribution> {
   if (!installments.length || totalAmount <= 0) {
     return { imputations: [] as ImputationResult[], remaining: totalAmount }
@@ -97,10 +97,7 @@ export async function createReceipt(data: {
     if (installmentsError) throw installmentsError
 
     // Distribuir el pago
-    const distribution = await distributePayment(
-      installments as InstallmentWithBalance[],
-      data.amount
-    )
+    const distribution = await distributePayment(installments as InstallmentWithBalance[], data.amount)
 
     // Crear el recibo
     const { data: receipt, error: receiptError } = await supabase
@@ -128,21 +125,19 @@ export async function createReceipt(data: {
         amount: imp.imputed_amount,
       }))
 
-      const { error: imputationsError } = await supabase
-        .from("receipt_imputations")
-        .insert(imputations)
+      const { error: imputationsError } = await supabase.from("receipt_imputations").insert(imputations)
 
       if (imputationsError) throw imputationsError
 
       // Actualizar balance de cuotas
       for (const imputation of distribution.imputations) {
         const newBalance = imputation.previous_balance - imputation.imputed_amount
-        
+
         await supabase
           .from("loan_installments")
-          .update({ 
+          .update({
             balance: newBalance,
-            status: newBalance === 0 ? "paid" : "pending"
+            status: newBalance === 0 ? "paid" : "pending",
           })
           .eq("id", imputation.installment_id)
       }
@@ -174,7 +169,7 @@ export async function getReceiptsByLoan(loanId: string) {
             amount
           )
         )
-      `
+      `,
       )
       .eq("loan_id", loanId)
       .order("payment_date", { ascending: false })
@@ -225,9 +220,9 @@ export async function cancelReceipt(receiptId: string) {
 
         await supabase
           .from("loan_installments")
-          .update({ 
+          .update({
             balance: newBalance,
-            status: newBalance >= installment.amount ? "pending" : "partial"
+            status: newBalance >= installment.amount ? "pending" : "partial",
           })
           .eq("id", imputation.installment_id)
       }
@@ -248,5 +243,170 @@ export async function cancelReceipt(receiptId: string) {
   } catch (error: any) {
     console.error("Error cancelling receipt:", error)
     return { error: error.message || "Error al anular el recibo" }
+  }
+}
+
+// Función para obtener préstamos activos de un cliente
+export async function getClientActiveLoans(clientId: string) {
+  try {
+    const cookieStore = await cookies()
+    const supabase = createServerComponentClient({ cookies: () => cookieStore })
+
+    const { data, error } = await supabase
+      .from("loans")
+      .select("id, loan_code, principal, installments_total, status")
+      .eq("client_id", clientId)
+      .eq("status", "active")
+      .order("created_at", { ascending: false })
+
+    if (error) throw error
+
+    return { loans: data || [], error: null }
+  } catch (error: any) {
+    console.error("Error getting client active loans:", error)
+    return { loans: [], error: error.message || "Error al obtener préstamos activos" }
+  }
+}
+
+// Función para obtener cuotas pendientes de préstamos
+export async function getLoansPendingInstallments(loanIds: string[]) {
+  try {
+    const cookieStore = await cookies()
+    const supabase = createServerComponentClient({ cookies: () => cookieStore })
+
+    const { data, error } = await supabase
+      .from("loan_installments")
+      .select(`
+        id,
+        loan_id,
+        installment_number,
+        due_date,
+        amount,
+        balance,
+        status,
+        loans!inner (
+          loan_code
+        )
+      `)
+      .in("loan_id", loanIds)
+      .gt("balance", 0)
+      .order("due_date", { ascending: true })
+
+    if (error) throw error
+
+    // Transformar los datos al formato esperado por el formulario
+    const installments = (data || []).map((item: any) => ({
+      id: item.id,
+      loan_id: item.loan_id,
+      installment_no: item.installment_number,
+      code: `${item.loans.loan_code}-${item.installment_number}`,
+      due_date: item.due_date,
+      amount_due: item.amount,
+      amount_paid: item.amount - item.balance,
+      balance_due: item.balance,
+      loans: { loan_code: item.loans.loan_code },
+    }))
+
+    return { installments, error: null }
+  } catch (error: any) {
+    console.error("Error getting pending installments:", error)
+    return { installments: [], error: error.message || "Error al obtener cuotas pendientes" }
+  }
+}
+
+// Función para obtener próximas cuotas a vencer de un cliente
+export async function getClientUpcomingInstallments(clientId: string, limit = 3) {
+  try {
+    const cookieStore = await cookies()
+    const supabase = createServerComponentClient({ cookies: () => cookieStore })
+
+    const today = new Date().toISOString().split("T")[0]
+
+    const { data, error } = await supabase
+      .from("loan_installments")
+      .select(`
+        id,
+        loan_id,
+        installment_number,
+        due_date,
+        amount,
+        balance,
+        status,
+        loans!inner (
+          loan_code,
+          client_id
+        )
+      `)
+      .eq("loans.client_id", clientId)
+      .gt("balance", 0)
+      .gte("due_date", today)
+      .order("due_date", { ascending: true })
+      .limit(limit)
+
+    if (error) throw error
+
+    // Transformar los datos al formato esperado
+    const installments = (data || []).map((item: any) => ({
+      id: item.id,
+      loan_id: item.loan_id,
+      installment_no: item.installment_number,
+      due_date: item.due_date,
+      amount_due: item.amount,
+      balance_due: item.balance,
+      loans: { loan_code: item.loans.loan_code },
+    }))
+
+    return { installments, error: null }
+  } catch (error: any) {
+    console.error("Error getting upcoming installments:", error)
+    return { installments: [], error: error.message || "Error al obtener próximas cuotas" }
+  }
+}
+
+// Función para obtener cuotas vencidas de un cliente
+export async function getClientOverdueInstallments(clientId: string) {
+  try {
+    const cookieStore = await cookies()
+    const supabase = createServerComponentClient({ cookies: () => cookieStore })
+
+    const today = new Date().toISOString().split("T")[0]
+
+    const { data, error } = await supabase
+      .from("loan_installments")
+      .select(`
+        id,
+        loan_id,
+        installment_number,
+        due_date,
+        amount,
+        balance,
+        status,
+        loans!inner (
+          loan_code,
+          client_id
+        )
+      `)
+      .eq("loans.client_id", clientId)
+      .gt("balance", 0)
+      .lt("due_date", today)
+      .order("due_date", { ascending: true })
+
+    if (error) throw error
+
+    // Transformar los datos al formato esperado
+    const installments = (data || []).map((item: any) => ({
+      id: item.id,
+      loan_id: item.loan_id,
+      installment_no: item.installment_number,
+      due_date: item.due_date,
+      amount_due: item.amount,
+      balance_due: item.balance,
+      loans: { loan_code: item.loans.loan_code },
+    }))
+
+    return { installments, error: null }
+  } catch (error: any) {
+    console.error("Error getting overdue installments:", error)
+    return { installments: [], error: error.message || "Error al obtener cuotas vencidas" }
   }
 }
