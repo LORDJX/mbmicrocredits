@@ -18,8 +18,9 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import { Plus, Pencil, Trash2, Loader2, ShieldCheck, User } from "lucide-react"
+import { Plus, Pencil, Trash2, Loader2, ShieldCheck, User, AlertCircle } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+import { useRouter } from "next/navigation"
 import CreateUserForm from "@/components/forms/create-user-form"
 import EditUserForm from "@/components/forms/edit-user-form"
 
@@ -51,18 +52,33 @@ export default function UsuariosPage() {
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [isEditOpen, setIsEditOpen] = useState(false)
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null)
+  const [authError, setAuthError] = useState(false)
   const { toast } = useToast()
+  const router = useRouter()
 
   // Función para cargar usuarios
   const loadUsers = async () => {
     try {
       setLoading(true)
+      setAuthError(false)
+      
       const response = await fetch('/api/users', {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
         },
+        credentials: 'include', // Importante para cookies
       })
+
+      if (response.status === 401) {
+        setAuthError(true)
+        toast({
+          title: "Sesión expirada",
+          description: "Por favor, inicia sesión nuevamente",
+          variant: "destructive",
+        })
+        return
+      }
 
       if (!response.ok) {
         throw new Error(`Error ${response.status}: ${response.statusText}`)
@@ -94,7 +110,18 @@ export default function UsuariosPage() {
     try {
       const response = await fetch(`/api/users/${userId}`, {
         method: 'DELETE',
+        credentials: 'include',
       })
+
+      if (response.status === 401) {
+        setAuthError(true)
+        toast({
+          title: "Sesión expirada",
+          description: "Por favor, inicia sesión nuevamente",
+          variant: "destructive",
+        })
+        return
+      }
 
       if (!response.ok) {
         throw new Error('Error al eliminar usuario')
@@ -166,6 +193,24 @@ export default function UsuariosPage() {
       <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-gray-100 text-gray-800">
         Usuario
       </span>
+    )
+  }
+
+  // Mostrar mensaje de error de autenticación
+  if (authError) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="text-center space-y-4">
+          <AlertCircle className="h-12 w-12 text-red-500 mx-auto" />
+          <h2 className="text-2xl font-bold">Sesión expirada</h2>
+          <p className="text-muted-foreground">
+            Tu sesión ha expirado. Por favor, inicia sesión nuevamente.
+          </p>
+          <Button onClick={() => router.push('/login')}>
+            Ir a Login
+          </Button>
+        </div>
+      </div>
     )
   }
 
