@@ -4,22 +4,8 @@ import { useState, useEffect } from "react"
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Loader2, Search, UserPlus, FileText, Phone, Mail, Edit, CheckCircle } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
@@ -30,6 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 // --- Interfaces de Datos ---
 interface Client {
   id: string
+  client_code: string | null
   first_name: string
   last_name: string
   full_name: string
@@ -55,7 +42,7 @@ export default function ClientesPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedClient, setSelectedClient] = useState<Client | null>(null)
   const [showPrintModal, setShowPrintModal] = useState(false)
-  
+
   const { toast } = useToast()
   const router = useRouter()
   const supabase = createClientComponentClient()
@@ -77,7 +64,7 @@ export default function ClientesPage() {
           client.dni?.toLowerCase().includes(term) ||
           client.cuil?.toLowerCase().includes(term) ||
           client.phone?.toLowerCase().includes(term) ||
-          client.email?.toLowerCase().includes(term)
+          client.email?.toLowerCase().includes(term),
       )
       setFilteredClients(filtered)
     }
@@ -88,11 +75,11 @@ export default function ClientesPage() {
       setLoading(true)
       const { data, error } = await supabase
         .from("clients")
-        .select("*")
+        .select("*, full_name:first_name || ' ' || last_name")
         .order("created_at", { ascending: false })
 
       if (error) throw error
-      
+
       setClients(data || [])
       setFilteredClients(data || [])
     } catch (error) {
@@ -152,9 +139,7 @@ export default function ClientesPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">Clientes</h1>
-          <p className="text-muted-foreground">
-            Gestiona la información de tus clientes
-          </p>
+          <p className="text-muted-foreground">Gestiona la información de tus clientes</p>
         </div>
         <Button onClick={handleNewClient}>
           <UserPlus className="mr-2 h-4 w-4" />
@@ -183,9 +168,7 @@ export default function ClientesPage() {
           <CardTitle>
             {filteredClients.length} cliente{filteredClients.length !== 1 ? "s" : ""}
           </CardTitle>
-          <CardDescription>
-            {searchTerm && `Mostrando resultados para "${searchTerm}"`}
-          </CardDescription>
+          <CardDescription>{searchTerm && `Mostrando resultados para "${searchTerm}"`}</CardDescription>
         </CardHeader>
         <CardContent>
           {filteredClients.length === 0 ? (
@@ -195,9 +178,7 @@ export default function ClientesPage() {
                 {searchTerm ? "No se encontraron clientes" : "No hay clientes registrados"}
               </h3>
               <p className="text-muted-foreground mb-4">
-                {searchTerm
-                  ? "Intenta con otro término de búsqueda"
-                  : "Comienza agregando tu primer cliente"}
+                {searchTerm ? "Intenta con otro término de búsqueda" : "Comienza agregando tu primer cliente"}
               </p>
               {!searchTerm && (
                 <Button onClick={handleNewClient}>
@@ -211,6 +192,7 @@ export default function ClientesPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead>Código</TableHead>
                     <TableHead>Cliente</TableHead>
                     <TableHead>DNI/CUIL</TableHead>
                     <TableHead>Contacto</TableHead>
@@ -222,25 +204,18 @@ export default function ClientesPage() {
                   {filteredClients.map((client) => (
                     <TableRow key={client.id}>
                       <TableCell>
+                        <div className="font-mono text-sm">{client.client_code || "N/A"}</div>
+                      </TableCell>
+                      <TableCell>
                         <div>
                           <p className="font-medium">{client.full_name}</p>
-                          {client.city && (
-                            <p className="text-sm text-muted-foreground">
-                              {client.city}
-                            </p>
-                          )}
+                          {client.city && <p className="text-sm text-muted-foreground">{client.city}</p>}
                         </div>
                       </TableCell>
                       <TableCell>
                         <div className="space-y-1">
-                          {client.dni && (
-                            <p className="text-sm">DNI: {client.dni}</p>
-                          )}
-                          {client.cuil && (
-                            <p className="text-sm text-muted-foreground">
-                              CUIL: {client.cuil}
-                            </p>
-                          )}
+                          {client.dni && <p className="text-sm">DNI: {client.dni}</p>}
+                          {client.cuil && <p className="text-sm text-muted-foreground">CUIL: {client.cuil}</p>}
                         </div>
                       </TableCell>
                       <TableCell>
@@ -260,25 +235,14 @@ export default function ClientesPage() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <ClientStatusSelector 
-                          clientId={client.id} 
-                          currentStatus={client.status}
-                        />
+                        <ClientStatusSelector clientId={client.id} currentStatus={client.status} />
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handlePrintCard(client)}
-                          >
+                          <Button variant="ghost" size="sm" onClick={() => handlePrintCard(client)}>
                             <FileText className="h-4 w-4" />
                           </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleViewClient(client.id)}
-                          >
+                          <Button variant="ghost" size="sm" onClick={() => handleViewClient(client.id)}>
                             Ver detalles
                           </Button>
                         </div>
@@ -298,23 +262,16 @@ export default function ClientesPage() {
           <Card className="w-full max-w-2xl">
             <CardHeader>
               <CardTitle>Tarjeta de Cliente</CardTitle>
-              <CardDescription>
-                Vista previa para imprimir
-              </CardDescription>
+              <CardDescription>Vista previa para imprimir</CardDescription>
             </CardHeader>
             <CardContent>
               <ClientCardPrint client={selectedClient} />
             </CardContent>
             <CardFooter className="flex justify-end gap-2">
-              <Button
-                variant="outline"
-                onClick={() => setShowPrintModal(false)}
-              >
+              <Button variant="outline" onClick={() => setShowPrintModal(false)}>
                 Cancelar
               </Button>
-              <Button onClick={() => window.print()}>
-                Imprimir
-              </Button>
+              <Button onClick={() => window.print()}>Imprimir</Button>
             </CardFooter>
           </Card>
         </div>
@@ -333,10 +290,7 @@ function ClientStatusSelector({ clientId, currentStatus }: { clientId: string; c
   const handleStatusChange = async (newStatus: string) => {
     setLoading(true)
     try {
-      const { error } = await supabase
-        .from('clients')
-        .update({ status: newStatus })
-        .eq('id', clientId)
+      const { error } = await supabase.from("clients").update({ status: newStatus }).eq("id", clientId)
 
       if (error) throw error
 
@@ -346,7 +300,7 @@ function ClientStatusSelector({ clientId, currentStatus }: { clientId: string; c
         description: "El estado del cliente se actualizó correctamente",
       })
     } catch (error) {
-      console.error('Error updating status:', error)
+      console.error("Error updating status:", error)
       toast({
         title: "Error",
         description: "No se pudo actualizar el estado",
