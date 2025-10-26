@@ -1,97 +1,125 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/server"
+import { createClient } from "@supabase/supabase-js"
 
-async function isAdmin(supabase: ReturnType<typeof createClient>, uid: string) {
-  const { data } = await supabase.from("profiles").select("is_admin").eq("id", uid).maybeSingle()
-  return !!data?.is_admin
-}
+export const dynamic = "force-dynamic"
 
-// (opcional) allowlist de rutas válidas; mantenela sincronizada con tu router
-const ALLOWED_ROUTE_PREFIXES = ["/dashboard"]
-// Si preferís una allowlist estricta, reemplazá por un array de rutas exactas:
-// const ALLOWED_ROUTES = ["/dashboard", "/dashboard/clients", "/dashboard/loans", ...];
+const SUPABASE_URL = process.env.SUPABASE_URL
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
 
-export async function GET(_: NextRequest, { params }: { params: { id: string } }) {
+// Rutas disponibles en el sistema
+const AVAILABLE_ROUTES = [
+  { id: "dashboard", path: "/dashboard", name: "Dashboard Principal" },
+  { id: "clients", path: "/dashboard/clients", name: "Gestión de Clientes" },
+  { id: "loans", path: "/dashboard/loans", name: "Gestión de Préstamos" },
+  { id: "partners", path: "/dashboard/partners", name: "Gestión de Socios" },
+  { id: "transactions", path: "/dashboard/transactions", name: "Transacciones" },
+  { id: "followups", path: "/dashboard/followups", name: "Seguimientos" },
+  { id: "receipts", path: "/dashboard/receipts", name: "Recibos" },
+  { id: "cronograma", path: "/dashboard/cronograma", name: "Cronograma" },
+  { id: "reports", path: "/dashboard/reports", name: "Informe de situación Financiera" },
+  { id: "resumen", path: "/dashboard/resumen", name: "Resumen para Socios" },
+  { id: "users", path: "/dashboard/users", name: "Gestión de Usuarios" },
+]
+
+export async function GET(request: NextRequest) {
+  const userId = request.nextUrl.searchParams.get("userId") || request.nextUrl.searchParams.get("user_id")
+  if (!userId) {
+    return NextResponse.json({ detail: "Falta el parámetro userId." }, { status: 400 })
+  }
+
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    return NextResponse.json({
+      available_routes: AVAILABLE_ROUTES,
+      permissions: ["dashboard", "clients", "loans", "cronograma"], // Default restricted permissions
+      user_routes: ["/dashboard", "/dashboard/clients", "/dashboard/loans", "/dashboard/cronograma"],
+      message: "Usando permisos por defecto - Configurar Supabase para permisos personalizados",
+    })
+  }
+
   try {
-    const supabase = await createClient()
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser()
-    if (authError || !user) return NextResponse.json({ error: "No autorizado" }, { status: 401 })
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+      auth: { persistSession: false },
+    })
 
-    const admin = await isAdmin(supabase, user.id)
-    // Solo el propio usuario o un admin pueden ver permisos
-    if (!admin && user.id !== params.id) {
-      return NextResponse.json({ error: "Prohibido" }, { status: 403 })
-    }
-
-    const { data: permissions, error } = await supabase
-      .from("user_permissions")
-      .select("id, route_path")
-      .eq("user_id", params.id)
+    const { data, error } = await supabase.from("user_permissions").select("route_path").eq("user_id", userId)
 
     if (error) {
-      console.error("Error fetching permissions:", error)
-      return NextResponse.json({ error: "Error al obtener permisos" }, { status: 500 })
+      console.error("Error al obtener permisos:", error)
+      if (error.message.includes("does not exist")) {
+        return NextResponse.json({
+          available_routes: AVAILABLE_ROUTES,
+          permissions: ["dashboard", "clients", "loans", "cronograma"], // Default restricted permissions
+          user_routes: ["/dashboard", "/dashboard/clients", "/dashboard/loans", "/dashboard/cronograma"],
+          message: "Tabla de permisos no existe - Ejecutar migración SQL",
+        })
+      }
+      return NextResponse.json({ detail: error.message }, { status: 500 })
     }
 
-    return NextResponse.json({ permissions: permissions ?? [] })
-  } catch (error) {
-    console.error("Error in GET /api/users/[id]/permissions:", error)
-    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 })
+    const userRoutes = data?.map((p) => p.route_path) || []
+    const permissions = userRoutes.map((path) => {
+      const route = AVAILABLE_ROUTES.find((r) => r.path === path)
+      return route ? route.id : path.replace("/dashboard/", "").replace("/dashboard", "dashboard")
+    })
+
+    return NextResponse.json({
+      available_routes: AVAILABLE_ROUTES,
+      permissions: permissions.length > 0 ? permissions : ["dashboard"], // Always include dashboard
+      user_routes: userRoutes,
+    })
+  } catch (err: any) {
+    console.error("Error interno:", err)
+    return NextResponse.json({
+      available_routes: AVAILABLE_ROUTES,
+      permissions: ["dashboard", "clients", "loans", "cronograma"],
+      user_routes: ["/dashboard", "/dashboard/clients", "/dashboard/loans", "/dashboard/cronograma"],
+      message: "Error de conexión - Usando permisos por defecto",
+    })
   }
 }
 
-export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(request: NextRequest) {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    return NextResponse.json({ detail: "Configuración de Supabase incompleta." }, { status: 500 })
+  }
+
+  let body: { user_id: string; routes: string[] }
   try {
-    const supabase = await createClient()
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser()
-    if (authError || !user) return NextResponse.json({ error: "No autorizado" }, { status: 401 })
+    body = await request.json()
+  } catch {
+    return NextResponse.json({ detail: "Cuerpo JSON inválido." }, { status: 400 })
+  }
 
-    // Solo admin puede modificar permisos de otros (o de sí mismo)
-    const admin = await isAdmin(supabase, user.id)
-    if (!admin) return NextResponse.json({ error: "Prohibido" }, { status: 403 })
+  const { user_id, routes } = body
+  if (!user_id || !Array.isArray(routes)) {
+    return NextResponse.json({ detail: "user_id y routes son requeridos." }, { status: 400 })
+  }
 
-    const body = await request.json()
-    const { route_paths } = body as { route_paths: string[] }
+  try {
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+      auth: { persistSession: false },
+    })
 
-    if (!Array.isArray(route_paths)) {
-      return NextResponse.json({ error: "route_paths debe ser un array" }, { status: 400 })
-    }
+    // Eliminar permisos existentes
+    await supabase.from("user_permissions").delete().eq("user_id", user_id)
 
-    // Validación básica: deben ser strings y coincidir con prefijos permitidos
-    const sanitized = route_paths
-      .filter((p) => typeof p === "string")
-      .map((p) => p.trim())
-      .filter((p) => p.startsWith("/")) // formato básico
-      .filter((p) => ALLOWED_ROUTE_PREFIXES.some((pref) => p === pref || p.startsWith(pref + "/")))
+    // Insertar nuevos permisos
+    if (routes.length > 0) {
+      const permissions = routes.map((route) => ({
+        user_id,
+        route_path: route,
+      }))
 
-    // Eliminar permisos existentes del usuario
-    const { error: delErr } = await supabase.from("user_permissions").delete().eq("user_id", params.id)
-    if (delErr) {
-      console.error("Error deleting permissions:", delErr)
-      return NextResponse.json({ error: "No se pudieron limpiar los permisos" }, { status: 500 })
-    }
-
-    // Insertar nuevos (si hay)
-    let inserted = []
-    if (sanitized.length > 0) {
-      const rows = sanitized.map((route_path) => ({ user_id: params.id, route_path }))
-      const { data: newPermissions, error } = await supabase.from("user_permissions").insert(rows).select("id, route_path")
+      const { error } = await supabase.from("user_permissions").insert(permissions)
       if (error) {
-        console.error("Error updating permissions:", error)
-        return NextResponse.json({ error: "Error al actualizar permisos" }, { status: 500 })
+        console.error("Error al guardar permisos:", error)
+        return NextResponse.json({ detail: error.message }, { status: 500 })
       }
-      inserted = newPermissions ?? []
     }
 
-    return NextResponse.json({ permissions: inserted })
-  } catch (error) {
-    console.error("Error in POST /api/users/[id]/permissions:", error)
-    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 })
+    return NextResponse.json({ message: "Permisos actualizados correctamente." })
+  } catch (err: any) {
+    console.error("Error interno:", err)
+    return NextResponse.json({ detail: "Error interno del servidor." }, { status: 500 })
   }
 }
