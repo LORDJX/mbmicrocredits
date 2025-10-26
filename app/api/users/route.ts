@@ -1,250 +1,143 @@
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
-import { NextResponse } from 'next/server'
+import { type NextRequest, NextResponse } from "next/server"
+import { createClient } from "@supabase/supabase-js"
 
-// PUT - Actualizar usuario
-export async function PUT(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const dynamic = "force-dynamic"
+
+const SUPABASE_URL = process.env.SUPABASE_URL
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
+
+type CreateUserBody = {
+  email: string
+  password?: string
+  full_name?: string
+  username?: string
+  is_admin?: boolean
+}
+
+export async function GET(request: NextRequest) {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    console.error("Faltan variables de entorno de Supabase (SUPABASE_URL o SUPABASE_SERVICE_ROLE_KEY).")
+    return NextResponse.json({ detail: "Configuración de Supabase incompleta en el servidor." }, { status: 500 })
+  }
+
   try {
-    const { id } = await params
-    const cookieStore = await cookies()
-    const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+      auth: { persistSession: false },
+    })
 
-    // Verificar autenticación
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) {
-      return NextResponse.json(
-        { error: 'No autorizado' },
-        { status: 401 }
-      )
+    const search = request.nextUrl.searchParams.get("search")?.trim() ?? ""
+
+    let query = supabase
+      .from("profiles")
+      .select("id, username, full_name, is_admin, updated_at")
+      .order("updated_at", { ascending: false })
+
+    if (search) {
+      query = query.or(`username.ilike.%${search}%,full_name.ilike.%${search}%`)
     }
 
-    // Verificar permisos (admin o el mismo usuario)
-    const { data: currentProfile } = await supabase
-      .from('profiles')
-      .select('is_admin')
-      .eq('id', session.user.id)
-      .single()
-
-    if (!currentProfile?.is_admin && session.user.id !== id) {
-      return NextResponse.json(
-        { error: 'No tienes permisos para actualizar este usuario' },
-        { status: 403 }
-      )
+    const { data, error, status } = await query
+    if (error) {
+      console.error("Error Supabase (GET /api/users):", error)
+      return NextResponse.json({ detail: error.message || "Error al consultar usuarios." }, { status: status || 500 })
     }
 
-    const body = await request.json()
-    const { 
-      first_name, 
-      last_name, 
-      username, 
-      email,
-      is_admin,
-      is_active,
-      role_id,
-      phone,
-      dni,
-      password 
-    } = body
+    return NextResponse.json(data || [], { status: 200 })
+  } catch (err: any) {
+    console.error("Error interno (GET /api/users):", err)
+    return NextResponse.json({ detail: "Error interno del servidor al consultar usuarios." }, { status: 500 })
+  }
+}
 
-    // Actualizar en la tabla profiles
-    const updateData: any = {}
-    if (first_name !== undefined) updateData.first_name = first_name
-    if (last_name !== undefined) updateData.last_name = last_name
-    if (username !== undefined) updateData.username = username
-    if (phone !== undefined) updateData.phone = phone
-    if (dni !== undefined) updateData.dni = dni
-    
-    // Solo admins pueden cambiar estos campos
-    if (currentProfile?.is_admin) {
-      if (is_admin !== undefined) updateData.is_admin = is_admin
-      if (is_active !== undefined) updateData.is_active = is_active
-      if (role_id !== undefined) updateData.role_id = role_id
-    }
+export async function POST(request: NextRequest) {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    console.error("Faltan variables de entorno de Supabase (SUPABASE_URL o SUPABASE_SERVICE_ROLE_KEY).")
+    return NextResponse.json({ detail: "Configuración de Supabase incompleta en el servidor." }, { status: 500 })
+  }
 
-    // Calcular full_name si hay cambios en nombre
-    if (first_name !== undefined || last_name !== undefined) {
-      const finalFirstName = first_name !== undefined ? first_name : ''
-      const finalLastName = last_name !== undefined ? last_name : ''
-      updateData.full_name = finalFirstName && finalLastName 
-        ? `${finalFirstName} ${finalLastName}` 
-        : finalFirstName || finalLastName || username || email
-    }
+  let body: CreateUserBody
+  try {
+    body = await request.json()
+  } catch {
+    return NextResponse.json({ detail: "Cuerpo JSON inválido." }, { status: 400 })
+  }
 
-    const { data: profileData, error: profileError } = await supabase
-      .from('profiles')
-      .update(updateData)
-      .eq('id', id)
-      .select()
-      .single()
+  const email = (body.email || "").trim().toLowerCase()
+  const password = body.password?.trim()
+  const full_name = body.full_name?.trim()
+  const username = (body.username || email).trim().toLowerCase()
+  const is_admin = !!body.is_admin
 
-    if (profileError) {
-      console.error('Error al actualizar profile:', profileError)
-      return NextResponse.json(
-        { error: 'Error al actualizar usuario', details: profileError.message },
-        { status: 500 }
-      )
-    }
+  if (!email) {
+    return NextResponse.json({ detail: "El campo 'email' es requerido." }, { status: 400 })
+  }
 
-    // Si se proporcionó email o contraseña, actualizar en Auth (solo admins)
-    if (currentProfile?.is_admin && (email || password)) {
-      const authUpdateData: any = {}
-      if (email) authUpdateData.email = email
-      if (password) authUpdateData.password = password
+  try {
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+      auth: { persistSession: false },
+    })
 
-      const { error: authError } = await supabase.auth.admin.updateUserById(
-        id,
-        authUpdateData
-      )
+    // Crear usuario en Supabase Auth (con password o invitación por email)
+    let userId: string | undefined
 
-      if (authError) {
-        console.error('Error al actualizar Auth:', authError)
-        return NextResponse.json(
-          { 
-            error: 'Usuario actualizado parcialmente', 
-            details: `Profile actualizado pero error en Auth: ${authError.message}`,
-            profile: profileData
-          },
-          { status: 500 }
-        )
+    if (password && password.length >= 6) {
+      const { data, error } = await supabase.auth.admin.createUser({
+        email,
+        password,
+        email_confirm: true,
+        user_metadata: full_name ? { full_name } : undefined,
+      })
+      if (error) {
+        console.error("Error createUser:", error)
+        return NextResponse.json({ detail: error.message || "No se pudo crear el usuario." }, { status: 400 })
       }
+      userId = data.user?.id
+    } else {
+      // Si no hay password, enviamos invitación
+      const { data, error } = await supabase.auth.admin.inviteUserByEmail(email, {
+        data: full_name ? { full_name } : undefined,
+      })
+      if (error) {
+        console.error("Error inviteUserByEmail:", error)
+        return NextResponse.json({ detail: error.message || "No se pudo invitar al usuario." }, { status: 400 })
+      }
+      userId = data.user?.id
     }
 
-    // Obtener email actualizado
-    const { data: authUser } = await supabase.auth.admin.getUserById(id)
+    if (!userId) {
+      return NextResponse.json({ detail: "No se obtuvo el ID del nuevo usuario." }, { status: 500 })
+    }
 
-    return NextResponse.json({
-      ...profileData,
-      email: authUser.user?.email || email
-    })
-  } catch (error) {
-    console.error('Error en PUT /api/users/[id]:', error)
-    return NextResponse.json(
-      { error: 'Error interno del servidor' },
-      { status: 500 }
-    )
-  }
-}
-
-// DELETE - Eliminar usuario
-export async function DELETE(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { id } = await params
-    const cookieStore = await cookies()
-    const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
-
-    // Verificar autenticación
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) {
-      return NextResponse.json(
-        { error: 'No autorizado' },
-        { status: 401 }
+    // Crear/actualizar perfil
+    const {
+      data: profile,
+      error: profileError,
+      status: profileStatus,
+    } = await supabase
+      .from("profiles")
+      .upsert(
+        {
+          id: userId,
+          username,
+          full_name: full_name || null,
+          is_admin,
+        },
+        { onConflict: "id" },
       )
-    }
-
-    // Verificar que el usuario sea admin
-    const { data: currentProfile } = await supabase
-      .from('profiles')
-      .select('is_admin')
-      .eq('id', session.user.id)
-      .single()
-
-    if (!currentProfile?.is_admin) {
-      return NextResponse.json(
-        { error: 'No tienes permisos para eliminar usuarios' },
-        { status: 403 }
-      )
-    }
-
-    // No permitir que un admin se elimine a sí mismo
-    if (session.user.id === id) {
-      return NextResponse.json(
-        { error: 'No puedes eliminar tu propio usuario' },
-        { status: 400 }
-      )
-    }
-
-    // Eliminar de Supabase Auth (esto también eliminará el profile por CASCADE)
-    const { error: authError } = await supabase.auth.admin.deleteUser(id)
-
-    if (authError) {
-      console.error('Error al eliminar usuario de Auth:', authError)
-      return NextResponse.json(
-        { error: 'Error al eliminar usuario', details: authError.message },
-        { status: 500 }
-      )
-    }
-
-    return NextResponse.json({ success: true })
-  } catch (error) {
-    console.error('Error en DELETE /api/users/[id]:', error)
-    return NextResponse.json(
-      { error: 'Error interno del servidor' },
-      { status: 500 }
-    )
-  }
-}
-
-// GET - Obtener un usuario específico
-export async function GET(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { id } = await params
-    const cookieStore = await cookies()
-    const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
-
-    // Verificar autenticación
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) {
-      return NextResponse.json(
-        { error: 'No autorizado' },
-        { status: 401 }
-      )
-    }
-
-    // Obtener profile con rol
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select(`
-        *,
-        user_roles (
-          id,
-          name,
-          description
-        )
-      `)
-      .eq('id', id)
+      .select("id, username, full_name, is_admin, updated_at")
       .single()
 
     if (profileError) {
-      console.error('Error al obtener profile:', profileError)
+      console.error("Error upsert profile:", profileError)
       return NextResponse.json(
-        { error: 'Usuario no encontrado', details: profileError.message },
-        { status: 404 }
+        { detail: profileError.message || "No se pudo crear el perfil del usuario." },
+        { status: profileStatus || 500 },
       )
     }
 
-    // Obtener email de auth.users
-    const { data: authUser } = await supabase.auth.admin.getUserById(id)
-
-    return NextResponse.json({
-      ...profile,
-      email: authUser.user?.email || '',
-      created_at: authUser.user?.created_at,
-      role: profile.user_roles
-    })
-  } catch (error) {
-    console.error('Error en GET /api/users/[id]:', error)
-    return NextResponse.json(
-      { error: 'Error interno del servidor' },
-      { status: 500 }
-    )
+    return NextResponse.json(profile, { status: 201 })
+  } catch (err: any) {
+    console.error("Error interno (POST /api/users):", err)
+    return NextResponse.json({ detail: "Error interno del servidor al crear usuario." }, { status: 500 })
   }
 }
