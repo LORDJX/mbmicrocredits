@@ -18,32 +18,45 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import { Plus, Pencil, Trash2, Loader2 } from "lucide-react"
+import { Plus, Pencil, Trash2, Loader2, ShieldCheck, User } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import CreateUserForm from "@/components/forms/create-user-form"
 import EditUserForm from "@/components/forms/edit-user-form"
 
-interface User {
+interface UserRole {
+  id: string
+  name: string
+  description: string
+}
+
+interface UserProfile {
   id: string
   email: string
-  name: string
-  role: string
+  first_name: string | null
+  last_name: string | null
+  full_name: string | null
+  username: string | null
+  is_admin: boolean
+  is_active: boolean
+  role_id: string | null
+  phone: string | null
+  dni: string | null
   created_at: string
+  role?: UserRole
 }
 
 export default function UsuariosPage() {
-  const [users, setUsers] = useState<User[]>([])
+  const [users, setUsers] = useState<UserProfile[]>([])
   const [loading, setLoading] = useState(true)
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [isEditOpen, setIsEditOpen] = useState(false)
-  const [selectedUser, setSelectedUser] = useState<User | null>(null)
+  const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null)
   const { toast } = useToast()
 
   // Función para cargar usuarios
   const loadUsers = async () => {
     try {
       setLoading(true)
-      // ✅ CORRECCIÓN: Usar la API route de Next.js en lugar de Supabase directo
       const response = await fetch('/api/users', {
         method: 'GET',
         headers: {
@@ -105,7 +118,7 @@ export default function UsuariosPage() {
   }
 
   // Función para abrir el diálogo de edición
-  const handleEdit = (user: User) => {
+  const handleEdit = (user: UserProfile) => {
     setSelectedUser(user)
     setIsEditOpen(true)
   }
@@ -116,6 +129,44 @@ export default function UsuariosPage() {
     setIsEditOpen(false)
     setSelectedUser(null)
     loadUsers()
+  }
+
+  // Función para obtener el nombre completo
+  const getFullName = (user: UserProfile) => {
+    if (user.full_name) return user.full_name
+    if (user.first_name && user.last_name) {
+      return `${user.first_name} ${user.last_name}`
+    }
+    if (user.first_name) return user.first_name
+    if (user.username) return user.username
+    return user.email
+  }
+
+  // Función para obtener el badge de rol
+  const getRoleBadge = (user: UserProfile) => {
+    if (user.is_admin) {
+      return (
+        <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-red-100 text-red-800">
+          <ShieldCheck className="mr-1 h-3 w-3" />
+          Administrador
+        </span>
+      )
+    }
+    
+    if (user.role?.name) {
+      return (
+        <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-blue-100 text-blue-800">
+          <User className="mr-1 h-3 w-3" />
+          {user.role.name}
+        </span>
+      )
+    }
+
+    return (
+      <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-gray-100 text-gray-800">
+        Usuario
+      </span>
+    )
   }
 
   if (loading) {
@@ -163,15 +214,16 @@ export default function UsuariosPage() {
             <TableRow>
               <TableHead>Nombre</TableHead>
               <TableHead>Email</TableHead>
+              <TableHead>Usuario</TableHead>
               <TableHead>Rol</TableHead>
-              <TableHead>Fecha de Creación</TableHead>
+              <TableHead>Estado</TableHead>
               <TableHead className="text-right">Acciones</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {users.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="text-center py-8">
+                <TableCell colSpan={6} className="text-center py-8">
                   <p className="text-muted-foreground">
                     No hay usuarios registrados
                   </p>
@@ -180,15 +232,24 @@ export default function UsuariosPage() {
             ) : (
               users.map((user) => (
                 <TableRow key={user.id}>
-                  <TableCell className="font-medium">{user.name}</TableCell>
-                  <TableCell>{user.email}</TableCell>
-                  <TableCell>
-                    <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-primary/10 text-primary">
-                      {user.role}
-                    </span>
+                  <TableCell className="font-medium">
+                    {getFullName(user)}
                   </TableCell>
+                  <TableCell>{user.email}</TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {user.username || '-'}
+                  </TableCell>
+                  <TableCell>{getRoleBadge(user)}</TableCell>
                   <TableCell>
-                    {new Date(user.created_at).toLocaleDateString('es-ES')}
+                    {user.is_active ? (
+                      <span className="inline-flex items-center rounded-full px-2 py-1 text-xs font-medium bg-green-100 text-green-800">
+                        Activo
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center rounded-full px-2 py-1 text-xs font-medium bg-gray-100 text-gray-800">
+                        Inactivo
+                      </span>
+                    )}
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-2">
