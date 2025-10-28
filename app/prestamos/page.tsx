@@ -1,5 +1,5 @@
 // app/prestamos/page.tsx
-// ✅ SIN "use client" - Este es un Server Component
+// ✅ Server Component con Client Components wrapper
 
 import { redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
@@ -12,8 +12,8 @@ import { CreditCard, Plus, Search, DollarSign, CheckCircle } from "lucide-react"
 import { PageHeader } from "@/components/page-header"
 import { StatsCard } from "@/components/stats-card"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { CreateLoanForm } from "@/components/forms/create-loan-form"
-import { LoanActionsMenu } from "@/components/loan-actions-menu"
+import { CreateLoanFormWrapper } from "@/components/forms/create-loan-form-wrapper"
+import { LoanActionsMenuWrapper } from "@/components/loan-actions-menu-wrapper"
 
 // --- Interfaces de Datos ---
 interface Client {
@@ -152,7 +152,7 @@ export default async function PrestamosPage() {
               <DialogHeader className="mb-4">
                 <DialogTitle>Crear Nuevo Préstamo</DialogTitle>
               </DialogHeader>
-              <CreateLoanForm onSuccess={() => window.location.reload()} />
+              <CreateLoanFormWrapper />
             </div>
           </DialogContent>
         </Dialog>
@@ -251,7 +251,7 @@ export default async function PrestamosPage() {
                     <TableCell>{getStatusBadge(loan)}</TableCell>
                     <TableCell>
                       <div className="flex gap-2">
-                        <LoanActionsMenu loan={loan} onSuccess={() => window.location.reload()} />
+                        <LoanActionsMenuWrapper loan={loan} />
                       </div>
                     </TableCell>
                   </TableRow>
