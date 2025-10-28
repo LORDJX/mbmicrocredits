@@ -1,4 +1,4 @@
-import { createClient } from "path-to-createClient" // Declare the createClient variable
+import { createClient } from "@/lib/supabase/server" // Declare the createClient variable
 import { NextResponse } from "next/server" // Declare the NextResponse variable
 
 export async function GET() {
