@@ -21,7 +21,7 @@ export default function LoginPage() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
-    const supabase = createClient()
+    const supabase = await createClient()
     setIsLoading(true)
     setError(null)
 
@@ -106,7 +106,10 @@ export default function LoginPage() {
               </form>
               <div className="mt-6 text-center text-sm text-black">
                 ¿No tienes cuenta?{" "}
-                <Link href="/auth/sign-up" className="hover:text-primary/80 underline underline-offset-4 text-background">
+                <Link
+                  href="/auth/sign-up"
+                  className="hover:text-primary/80 underline underline-offset-4 text-background"
+                >
                   Registrarse
                 </Link>
               </div>

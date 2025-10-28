@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { ArrowLeft, Edit, Trash2, CreditCard, FileText } from "lucide-react"
+import { ArrowLeft, Edit, CreditCard, FileText } from "lucide-react"
 import { toast } from "sonner"
 import Image from "next/image"
 
@@ -56,14 +56,14 @@ export default function ClientDetailPage() {
   async function loadClientData(clientId: string) {
     try {
       setLoading(true)
-      const supabase = createClient()
+      const supabase = await createClient()
 
       // Cargar datos del cliente
       const { data: clientData, error: clientError } = await supabase
-        .from('clients')
-        .select('*')
-        .eq('id', clientId)
-        .is('deleted_at', null)
+        .from("clients")
+        .select("*")
+        .eq("id", clientId)
+        .is("deleted_at", null)
         .single()
 
       if (clientError) throw clientError
@@ -71,18 +71,18 @@ export default function ClientDetailPage() {
 
       // Cargar préstamos del cliente
       const { data: loansData, error: loansError } = await supabase
-        .from('loans')
-        .select('*')
-        .eq('client_id', clientId)
-        .is('deleted_at', null)
-        .order('created_at', { ascending: false })
+        .from("loans")
+        .select("*")
+        .eq("client_id", clientId)
+        .is("deleted_at", null)
+        .order("created_at", { ascending: false })
 
       if (loansError) throw loansError
       setLoans(loansData || [])
     } catch (error) {
-      console.error('Error loading client:', error)
-      toast.error('Error al cargar los datos del cliente')
-      router.push('/clientes')
+      console.error("Error loading client:", error)
+      toast.error("Error al cargar los datos del cliente")
+      router.push("/clientes")
     } finally {
       setLoading(false)
     }
@@ -101,9 +101,7 @@ export default function ClientDetailPage() {
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <p className="text-muted-foreground mb-4">Cliente no encontrado</p>
-          <Button onClick={() => router.push('/clientes')}>
-            Volver a Clientes
-          </Button>
+          <Button onClick={() => router.push("/clientes")}>Volver a Clientes</Button>
         </div>
       </div>
     )
@@ -115,11 +113,7 @@ export default function ClientDetailPage() {
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-4">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => router.push('/clientes')}
-            >
+            <Button variant="ghost" size="sm" onClick={() => router.push("/clientes")}>
               <ArrowLeft className="h-4 w-4 mr-2" />
               Volver
             </Button>
@@ -131,17 +125,11 @@ export default function ClientDetailPage() {
             </div>
           </div>
           <div className="flex gap-2">
-            <Button
-              variant="outline"
-              onClick={() => router.push(`/clientes/${client.id}/editar`)}
-            >
+            <Button variant="outline" onClick={() => router.push(`/clientes/${client.id}/editar`)}>
               <Edit className="h-4 w-4 mr-2" />
               Editar
             </Button>
-            <Button
-              variant="outline"
-              onClick={() => router.push(`/prestamos/nuevo?clientId=${client.id}`)}
-            >
+            <Button variant="outline" onClick={() => router.push(`/prestamos/nuevo?clientId=${client.id}`)}>
               <CreditCard className="h-4 w-4 mr-2" />
               Nuevo Préstamo
             </Button>
@@ -162,31 +150,31 @@ export default function ClientDetailPage() {
                 </div>
                 <div>
                   <label className="text-sm font-medium text-muted-foreground">Estado</label>
-                  <p className="text-base text-foreground capitalize">{client.status || 'Activo'}</p>
+                  <p className="text-base text-foreground capitalize">{client.status || "Activo"}</p>
                 </div>
                 <div>
                   <label className="text-sm font-medium text-muted-foreground">Teléfono</label>
-                  <p className="text-base text-foreground">{client.phone || 'N/A'}</p>
+                  <p className="text-base text-foreground">{client.phone || "N/A"}</p>
                 </div>
                 <div>
                   <label className="text-sm font-medium text-muted-foreground">Email</label>
-                  <p className="text-base text-foreground break-all">{client.email || 'N/A'}</p>
+                  <p className="text-base text-foreground break-all">{client.email || "N/A"}</p>
                 </div>
                 <div className="col-span-2">
                   <label className="text-sm font-medium text-muted-foreground">Dirección</label>
-                  <p className="text-base text-foreground">{client.address || 'N/A'}</p>
+                  <p className="text-base text-foreground">{client.address || "N/A"}</p>
                 </div>
                 <div>
                   <label className="text-sm font-medium text-muted-foreground">CBU/CVU</label>
-                  <p className="text-base text-foreground font-mono">{client.cbu_cvu || 'N/A'}</p>
+                  <p className="text-base text-foreground font-mono">{client.cbu_cvu || "N/A"}</p>
                 </div>
                 <div>
                   <label className="text-sm font-medium text-muted-foreground">Alias</label>
-                  <p className="text-base text-foreground">{client.alias || 'N/A'}</p>
+                  <p className="text-base text-foreground">{client.alias || "N/A"}</p>
                 </div>
                 <div className="col-span-2">
                   <label className="text-sm font-medium text-muted-foreground">Referido por</label>
-                  <p className="text-base text-foreground">{client.referred_by || 'N/A'}</p>
+                  <p className="text-base text-foreground">{client.referred_by || "N/A"}</p>
                 </div>
                 {client.observations && (
                   <div className="col-span-2">
@@ -207,12 +195,10 @@ export default function ClientDetailPage() {
               <div className="space-y-4">
                 {client.dni_photo_url && (
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground mb-2 block">
-                      DNI - Frente
-                    </label>
+                    <label className="text-sm font-medium text-muted-foreground mb-2 block">DNI - Frente</label>
                     <div className="relative w-full aspect-[1.6/1] bg-muted rounded overflow-hidden">
                       <Image
-                        src={client.dni_photo_url}
+                        src={client.dni_photo_url || "/placeholder.svg"}
                         alt="DNI Frente"
                         fill
                         className="object-contain"
@@ -223,12 +209,10 @@ export default function ClientDetailPage() {
                 )}
                 {client.dni_back_url && (
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground mb-2 block">
-                      DNI - Dorso
-                    </label>
+                    <label className="text-sm font-medium text-muted-foreground mb-2 block">DNI - Dorso</label>
                     <div className="relative w-full aspect-[1.6/1] bg-muted rounded overflow-hidden">
                       <Image
-                        src={client.dni_back_url}
+                        src={client.dni_back_url || "/placeholder.svg"}
                         alt="DNI Dorso"
                         fill
                         className="object-contain"
@@ -238,9 +222,7 @@ export default function ClientDetailPage() {
                   </div>
                 )}
                 {!client.dni_photo_url && !client.dni_back_url && (
-                  <p className="text-sm text-muted-foreground">
-                    No hay documentación cargada
-                  </p>
+                  <p className="text-sm text-muted-foreground">No hay documentación cargada</p>
                 )}
               </div>
             </CardContent>
@@ -253,9 +235,7 @@ export default function ClientDetailPage() {
             </CardHeader>
             <CardContent>
               {loans.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  Este cliente no tiene préstamos registrados
-                </p>
+                <p className="text-sm text-muted-foreground">Este cliente no tiene préstamos registrados</p>
               ) : (
                 <div className="space-y-4">
                   {loans.map((loan) => (
@@ -266,26 +246,21 @@ export default function ClientDetailPage() {
                       <div>
                         <p className="font-medium text-foreground">{loan.loan_code}</p>
                         <p className="text-sm text-muted-foreground">
-                          ${loan.amount.toLocaleString('es-AR')} - {loan.installments} cuotas
+                          ${loan.amount.toLocaleString("es-AR")} - {loan.installments} cuotas
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          {new Date(loan.start_date).toLocaleDateString('es-AR')} - {new Date(loan.end_date).toLocaleDateString('es-AR')}
+                          {new Date(loan.start_date).toLocaleDateString("es-AR")} -{" "}
+                          {new Date(loan.end_date).toLocaleDateString("es-AR")}
                         </p>
                       </div>
                       <div className="flex items-center gap-4">
                         <div className="text-right">
                           <p className="text-sm font-medium text-foreground">
-                            ${loan.amount_to_repay?.toLocaleString('es-AR') || '0'}
+                            ${loan.amount_to_repay?.toLocaleString("es-AR") || "0"}
                           </p>
-                          <p className="text-xs text-muted-foreground capitalize">
-                            {loan.status}
-                          </p>
+                          <p className="text-xs text-muted-foreground capitalize">{loan.status}</p>
                         </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => router.push(`/prestamos/${loan.id}`)}
-                        >
+                        <Button variant="ghost" size="sm" onClick={() => router.push(`/prestamos/${loan.id}`)}>
                           <FileText className="h-4 w-4" />
                         </Button>
                       </div>

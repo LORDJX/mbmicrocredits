@@ -62,7 +62,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     async function loadDashboard() {
-      const supabase = createClient()
+      const supabase = await createClient()
 
       // Get user
       const {

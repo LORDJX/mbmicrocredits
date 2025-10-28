@@ -42,29 +42,29 @@ export default function ClientesPage() {
   async function loadClients() {
     try {
       setLoading(true)
-      const supabase = createClient()
-      
+      const supabase = await createClient()
+
       const { data, error } = await supabase
-        .from('clients')
-        .select('*')
-        .is('deleted_at', null)
-        .order('created_at', { ascending: false })
+        .from("clients")
+        .select("*")
+        .is("deleted_at", null)
+        .order("created_at", { ascending: false })
 
       if (error) throw error
 
       setClients(data || [])
     } catch (error) {
-      console.error('Error loading clients:', error)
-      toast.error('Error al cargar los clientes')
+      console.error("Error loading clients:", error)
+      toast.error("Error al cargar los clientes")
     } finally {
       setLoading(false)
     }
   }
 
-  const filteredClients = clients.filter(client => {
+  const filteredClients = clients.filter((client) => {
     const searchLower = searchTerm.toLowerCase()
     const fullName = `${client.first_name} ${client.last_name}`.toLowerCase()
-    
+
     return (
       fullName.includes(searchLower) ||
       client.dni?.toLowerCase().includes(searchLower) ||
@@ -78,8 +78,8 @@ export default function ClientesPage() {
     try {
       router.push(`/clientes/${clientId}`)
     } catch (error) {
-      console.error('Error navigating to client details:', error)
-      toast.error('Error al abrir los detalles del cliente')
+      console.error("Error navigating to client details:", error)
+      toast.error("Error al abrir los detalles del cliente")
     }
   }
 
@@ -95,17 +95,10 @@ export default function ClientesPage() {
           {/* Header */}
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-3xl font-bold text-foreground font-work-sans">
-                Clientes
-              </h1>
-              <p className="text-muted-foreground mt-2">
-                Gestiona la información de tus clientes
-              </p>
+              <h1 className="text-3xl font-bold text-foreground font-work-sans">Clientes</h1>
+              <p className="text-muted-foreground mt-2">Gestiona la información de tus clientes</p>
             </div>
-            <Button
-              onClick={() => router.push('/clientes/nuevo')}
-              className="gap-2"
-            >
+            <Button onClick={() => router.push("/clientes/nuevo")} className="gap-2">
               <UserPlus className="h-4 w-4" />
               Nuevo Cliente
             </Button>
@@ -127,7 +120,7 @@ export default function ClientesPage() {
           <div className="rounded-xl border border-border bg-card shadow-sm">
             <div className="p-6">
               <div className="text-sm text-muted-foreground mb-4">
-                {filteredClients.length} cliente{filteredClients.length !== 1 ? 's' : ''}
+                {filteredClients.length} cliente{filteredClients.length !== 1 ? "s" : ""}
               </div>
 
               {loading ? (
@@ -137,7 +130,7 @@ export default function ClientesPage() {
               ) : filteredClients.length === 0 ? (
                 <div className="text-center py-8">
                   <p className="text-muted-foreground">
-                    {searchTerm ? 'No se encontraron clientes' : 'No hay clientes registrados'}
+                    {searchTerm ? "No se encontraron clientes" : "No hay clientes registrados"}
                   </p>
                 </div>
               ) : (
@@ -145,42 +138,25 @@ export default function ClientesPage() {
                   <table className="w-full">
                     <thead>
                       <tr className="border-b border-border">
-                        <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">
-                          Cliente
-                        </th>
-                        <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">
-                          DNI/CUIL
-                        </th>
-                        <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">
-                          Contacto
-                        </th>
-                        <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">
-                          Estado
-                        </th>
-                        <th className="text-right py-3 px-4 text-sm font-medium text-muted-foreground">
-                          Acciones
-                        </th>
+                        <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Cliente</th>
+                        <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">DNI/CUIL</th>
+                        <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Contacto</th>
+                        <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Estado</th>
+                        <th className="text-right py-3 px-4 text-sm font-medium text-muted-foreground">Acciones</th>
                       </tr>
                     </thead>
                     <tbody>
                       {filteredClients.map((client) => (
-                        <tr
-                          key={client.id}
-                          className="border-b border-border hover:bg-muted/50 transition-colors"
-                        >
+                        <tr key={client.id} className="border-b border-border hover:bg-muted/50 transition-colors">
                           <td className="py-4 px-4">
                             <div className="flex flex-col">
                               <span className="font-medium text-foreground">
                                 {client.first_name} {client.last_name}
                               </span>
-                              <span className="text-sm text-muted-foreground">
-                                {client.client_code}
-                              </span>
+                              <span className="text-sm text-muted-foreground">{client.client_code}</span>
                             </div>
                           </td>
-                          <td className="py-4 px-4 text-foreground">
-                            DNI: {client.dni}
-                          </td>
+                          <td className="py-4 px-4 text-foreground">DNI: {client.dni}</td>
                           <td className="py-4 px-4">
                             <div className="flex flex-col gap-1">
                               {client.phone && (
@@ -188,23 +164,17 @@ export default function ClientesPage() {
                                   📞 {client.phone}
                                 </span>
                               )}
-                              {client.email && (
-                                <span className="text-sm text-muted-foreground">
-                                  {client.email}
-                                </span>
-                              )}
+                              {client.email && <span className="text-sm text-muted-foreground">{client.email}</span>}
                             </div>
                           </td>
                           <td className="py-4 px-4">
                             <div className="flex items-center gap-2">
-                              <div className={`h-2 w-2 rounded-full ${
-                                client.status === 'activo' 
-                                  ? 'bg-green-500' 
-                                  : 'bg-gray-400'
-                              }`} />
-                              <span className="text-sm text-foreground capitalize">
-                                {client.status || 'Activo'}
-                              </span>
+                              <div
+                                className={`h-2 w-2 rounded-full ${
+                                  client.status === "activo" ? "bg-green-500" : "bg-gray-400"
+                                }`}
+                              />
+                              <span className="text-sm text-foreground capitalize">{client.status || "Activo"}</span>
                             </div>
                           </td>
                           <td className="py-4 px-4">

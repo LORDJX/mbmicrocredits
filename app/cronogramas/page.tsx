@@ -131,7 +131,7 @@ export default function CronogramasPage() {
     setIsLoading(true)
     try {
       // Verificar autenticación
-      const supabase = createClient()
+      const supabase = await createClient()
       const {
         data: { user },
         error: authError,
