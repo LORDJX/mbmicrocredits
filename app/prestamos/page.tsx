@@ -198,14 +198,14 @@ export default function PrestamosPage() {
                       </div>
                       {loan.amount_to_repay && (
                         <div className="text-xs text-muted-foreground">
-                          Total: ${Number.parseFloat(loan.amount_to_repay).toLocaleString()}
+                          Total: ${Number.parseFloat(loan.amount_to_repay || "0").toLocaleString()}
                         </div>
                       )}
                     </TableCell>
                     <TableCell className="text-center">{loan.installments || "N/A"}</TableCell>
                     <TableCell>
                       <div className={`font-semibold ${loan.balance > 0 ? "text-red-600" : "text-green-600"}`}>
-                        ${loan.balance.toLocaleString()}
+                        ${(loan.balance || 0).toLocaleString()}
                       </div>
                     </TableCell>
                     <TableCell>{getStatusBadge(loan)}</TableCell>
