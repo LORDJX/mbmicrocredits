@@ -4,8 +4,10 @@ import { useState, useEffect } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog"
 import { UserPlus, Search, FileText, Eye } from "lucide-react"
 import { ClientCard } from "@/components/client-card"
+import { CreateClientForm } from "@/components/forms/create-client-form"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 
@@ -34,6 +36,7 @@ export default function ClientesPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedClient, setSelectedClient] = useState<Client | null>(null)
   const [showCard, setShowCard] = useState(false)
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
 
   useEffect(() => {
     loadClients()
@@ -42,7 +45,7 @@ export default function ClientesPage() {
   async function loadClients() {
     try {
       setLoading(true)
-      const supabase = await createClient()
+      const supabase = createClient()
 
       const { data, error } = await supabase
         .from("clients")
@@ -88,6 +91,12 @@ export default function ClientesPage() {
     setShowCard(true)
   }
 
+  const handleClientCreated = (client: Client) => {
+    setIsCreateDialogOpen(false)
+    loadClients()
+    toast.success(`Cliente ${client.first_name} ${client.last_name} creado exitosamente`)
+  }
+
   return (
     <div className="min-h-screen flex items-center justify-center p-6 bg-background">
       <div className="w-full max-w-7xl">
@@ -98,10 +107,21 @@ export default function ClientesPage() {
               <h1 className="text-3xl font-bold text-foreground font-work-sans">Clientes</h1>
               <p className="text-muted-foreground mt-2">Gestiona la información de tus clientes</p>
             </div>
-            <Button onClick={() => router.push("/clientes/nuevo")} className="gap-2">
-              <UserPlus className="h-4 w-4" />
-              Nuevo Cliente
-            </Button>
+            
+            <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+              <DialogTrigger asChild>
+                <Button className="gap-2">
+                  <UserPlus className="h-4 w-4" />
+                  Nuevo Cliente
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+                <CreateClientForm
+                  onSuccess={handleClientCreated}
+                  onCancel={() => setIsCreateDialogOpen(false)}
+                />
+              </DialogContent>
+            </Dialog>
           </div>
 
           {/* Search */}

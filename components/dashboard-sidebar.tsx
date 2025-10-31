@@ -93,24 +93,9 @@ export function DashboardSidebar() {
   const filteredNavItems = navItems.filter((item) => userPermissions.includes(item.route) || item.route === "dashboard")
 
   const handleLogout = async () => {
-    try {
-      const supabase = createClient()
-      const { error } = await supabase.auth.signOut()
-      
-      if (error) {
-        console.error("Error during logout:", error)
-      }
-      
-      // Limpiar cualquier estado local
-      setUserPermissions([])
-      
-      // Forzar recarga completa para limpiar cache
-      window.location.href = "/auth/login"
-    } catch (error) {
-      console.error("Error during logout:", error)
-      // Incluso si hay error, redirigir al login
-      window.location.href = "/auth/login"
-    }
+    const supabase = createClient()
+    await supabase.auth.signOut()
+    window.location.href = "/auth/login"
   }
 
   if (!permissionsLoaded) {
