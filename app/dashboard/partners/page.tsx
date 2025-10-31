@@ -13,7 +13,7 @@ async function getPartnersData() {
   const supabase = await createClient()
 
   const { data: partners, error } = await supabase
-    .from("active_partners")
+    .from("partners")
     .select("*")
     .is("deleted_at", null)
     .order("created_at", { ascending: false })
