@@ -1,65 +1,76 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import type React from "react"
+
+import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
+import { Checkbox } from "@/components/ui/checkbox"
 import { useToast } from "@/hooks/use-toast"
 import { Loader2 } from "lucide-react"
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
-
-interface UserRole {
-  id: string
-  name: string
-  description: string
-}
 
 interface CreateUserFormProps {
   onSuccess?: () => void
 }
 
+const AVAILABLE_PERMISSIONS = [
+  { route: "/dashboard", label: "Dashboard", adminOnly: false, alwaysIncluded: true },
+  { route: "/dashboard/users", label: "Gestión de Usuarios", adminOnly: true },
+  { route: "/dashboard/partners", label: "Gestión de Socios", adminOnly: false },
+  { route: "/clientes", label: "Gestión de Clientes", adminOnly: false },
+  { route: "/prestamos", label: "Gestión de Préstamos", adminOnly: false },
+  { route: "/dashboard/receipts", label: "Recibos", adminOnly: false },
+  { route: "/cronogramas", label: "Cronograma", adminOnly: false },
+  { route: "/gastos", label: "Gastos", adminOnly: false },
+  { route: "/dashboard/followups", label: "Seguimientos", adminOnly: false },
+  { route: "/dashboard/resumen", label: "Resumen para Socios", adminOnly: false },
+  { route: "/reportes", label: "Informes Financieros", adminOnly: false },
+  { route: "/formulas", label: "Fórmulas", adminOnly: false },
+]
+
 export default function CreateUserForm({ onSuccess }: CreateUserFormProps) {
   const [loading, setLoading] = useState(false)
-  const [roles, setRoles] = useState<UserRole[]>([])
   const [formData, setFormData] = useState({
     email: "",
     password: "",
-    first_name: "",
-    last_name: "",
-    username: "",
-    phone: "",
-    dni: "",
+    full_name: "",
     is_admin: false,
-    role_id: "",
   })
+  const [selectedPermissions, setSelectedPermissions] = useState<string[]>(["/dashboard"])
   const { toast } = useToast()
-  const supabase = createClientComponentClient()
-
-  // Cargar roles disponibles
-  useEffect(() => {
-    const loadRoles = async () => {
-      const { data, error } = await supabase
-        .from('user_roles')
-        .select('*')
-        .order('name')
-
-      if (!error && data) {
-        setRoles(data)
-      }
-    }
-    loadRoles()
-  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+
+    if (!formData.email || !formData.password) {
+      toast({
+        title: "Error",
+        description: "Email y contraseña son requeridos",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (formData.password.length < 6) {
+      toast({
+        title: "Error",
+        description: "La contraseña debe tener al menos 6 caracteres",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (!formData.is_admin && selectedPermissions.length < 2) {
+      toast({
+        title: "Error",
+        description: "Selecciona al menos un permiso además de Dashboard",
+        variant: "destructive",
+      })
+      return
+    }
+
     setLoading(true)
 
     try {
@@ -73,28 +84,42 @@ export default function CreateUserForm({ onSuccess }: CreateUserFormProps) {
 
       if (!response.ok) {
         const error = await response.json()
-        throw new Error(error.message || "Error al crear usuario")
+        throw new Error(error.detail || error.message || "Error al crear usuario")
+      }
+
+      const newUser = await response.json()
+
+      if (!formData.is_admin) {
+        const permResponse = await fetch(`/api/users/${newUser.id}/permissions`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            user_id: newUser.id,
+            routes: selectedPermissions,
+          }),
+        })
+
+        if (!permResponse.ok) {
+          console.error("Error al asignar permisos, pero usuario creado")
+        }
       }
 
       toast({
         title: "Éxito",
-        description: "Usuario creado correctamente",
+        description: "Usuario creado exitosamente",
       })
 
       // Reset form
       setFormData({
         email: "",
         password: "",
-        first_name: "",
-        last_name: "",
-        username: "",
-        phone: "",
-        dni: "",
+        full_name: "",
         is_admin: false,
-        role_id: "",
       })
+      setSelectedPermissions(["/dashboard"])
 
-      // Llamar al callback de éxito
       onSuccess?.()
     } catch (error) {
       console.error("Error al crear usuario:", error)
@@ -108,32 +133,17 @@ export default function CreateUserForm({ onSuccess }: CreateUserFormProps) {
     }
   }
 
+  const handlePermissionChange = (route: string, checked: boolean) => {
+    if (checked) {
+      setSelectedPermissions((prev) => [...prev, route])
+    } else if (route !== "/dashboard") {
+      // No permitir desmarcar dashboard
+      setSelectedPermissions((prev) => prev.filter((r) => r !== route))
+    }
+  }
+
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <Label htmlFor="first_name">Nombre</Label>
-          <Input
-            id="first_name"
-            value={formData.first_name}
-            onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
-            placeholder="Juan"
-            disabled={loading}
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="last_name">Apellido</Label>
-          <Input
-            id="last_name"
-            value={formData.last_name}
-            onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
-            placeholder="Pérez"
-            disabled={loading}
-          />
-        </div>
-      </div>
-
       <div className="space-y-2">
         <Label htmlFor="email">Email *</Label>
         <Input
@@ -141,20 +151,8 @@ export default function CreateUserForm({ onSuccess }: CreateUserFormProps) {
           type="email"
           value={formData.email}
           onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-          placeholder="juan@ejemplo.com"
+          placeholder="usuario@ejemplo.com"
           required
-          disabled={loading}
-        />
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="username">Usuario</Label>
-        <Input
-          id="username"
-          value={formData.username}
-          onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-          placeholder="juanperez"
-          minLength={3}
           disabled={loading}
         />
       </div>
@@ -171,65 +169,66 @@ export default function CreateUserForm({ onSuccess }: CreateUserFormProps) {
           minLength={6}
           disabled={loading}
         />
-      </div>
-
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <Label htmlFor="phone">Teléfono</Label>
-          <Input
-            id="phone"
-            type="tel"
-            value={formData.phone}
-            onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-            placeholder="+54 351 123-4567"
-            disabled={loading}
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="dni">DNI</Label>
-          <Input
-            id="dni"
-            value={formData.dni}
-            onChange={(e) => setFormData({ ...formData, dni: e.target.value })}
-            placeholder="12345678"
-            disabled={loading}
-          />
-        </div>
+        <p className="text-xs text-muted-foreground">Mínimo 6 caracteres</p>
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="role_id">Rol</Label>
-        <Select
-          value={formData.role_id}
-          onValueChange={(value) => setFormData({ ...formData, role_id: value })}
+        <Label htmlFor="full_name">Nombre Completo</Label>
+        <Input
+          id="full_name"
+          value={formData.full_name}
+          onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
+          placeholder="Juan Pérez"
           disabled={loading}
-        >
-          <SelectTrigger>
-            <SelectValue placeholder="Selecciona un rol (opcional)" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="">Sin rol asignado</SelectItem>
-            {roles.map((role) => (
-              <SelectItem key={role.id} value={role.id}>
-                {role.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        />
       </div>
 
       <div className="flex items-center space-x-2">
         <Switch
           id="is_admin"
           checked={formData.is_admin}
-          onCheckedChange={(checked) => setFormData({ ...formData, is_admin: checked })}
+          onCheckedChange={(checked) => {
+            setFormData({ ...formData, is_admin: checked })
+            if (checked) {
+              setSelectedPermissions([])
+            } else {
+              setSelectedPermissions(["/dashboard"])
+            }
+          }}
           disabled={loading}
         />
         <Label htmlFor="is_admin" className="cursor-pointer">
           Administrador del sistema
         </Label>
       </div>
+
+      {!formData.is_admin && (
+        <div className="space-y-3 pt-4 border-t">
+          <Label>Permisos de Acceso *</Label>
+          <p className="text-xs text-muted-foreground">Selecciona al menos un permiso además de Dashboard</p>
+          <div className="space-y-2 max-h-60 overflow-y-auto border rounded-lg p-4">
+            {AVAILABLE_PERMISSIONS.filter((p) => !p.adminOnly).map((perm) => (
+              <div key={perm.route} className="flex items-center space-x-2">
+                <Checkbox
+                  id={`perm-${perm.route}`}
+                  checked={selectedPermissions.includes(perm.route)}
+                  onCheckedChange={(checked) => handlePermissionChange(perm.route, checked as boolean)}
+                  disabled={perm.route === "/dashboard" || loading}
+                />
+                <label
+                  htmlFor={`perm-${perm.route}`}
+                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                >
+                  {perm.label}
+                  {perm.route === "/dashboard" && (
+                    <span className="text-xs text-muted-foreground ml-2">(obligatorio)</span>
+                  )}
+                </label>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="flex gap-2 pt-4">
         <Button type="submit" className="flex-1" disabled={loading}>
