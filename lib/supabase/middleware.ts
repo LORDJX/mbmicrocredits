@@ -55,7 +55,7 @@ export async function updateSession(request: NextRequest) {
             try {
               request.cookies.set(name, value)
             } catch (e) {
-              console.error(\`Error setting cookie \${name}:\`, e)
+              console.error(`Error setting cookie ${name}:`, e)
             }
           })
           supabaseResponse = NextResponse.next({ request })
@@ -63,7 +63,7 @@ export async function updateSession(request: NextRequest) {
             try {
               supabaseResponse.cookies.set(name, value, options)
             } catch (e) {
-              console.error(\`Error setting response cookie \${name}:\`, e)
+              console.error(`Error setting response cookie ${name}:`, e)
             }
           })
         },
@@ -108,7 +108,7 @@ export async function updateSession(request: NextRequest) {
     try {
       const hasPermission = await checkUserPermission(supabase, user.id, pathname)
       if (!hasPermission) {
-        console.warn(\`⚠️ Usuario \${user.email} sin permiso para \${pathname}\`)
+        console.warn(`⚠️ Usuario ${user.email} sin permiso para ${pathname}`)
         const url = request.nextUrl.clone()
         url.pathname = "/dashboard"
         return NextResponse.redirect(url)

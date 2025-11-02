@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
       .order("last_updated", { ascending: false })
 
     if (search) {
-      query = query.or(\`username.ilike.%\${search}%,full_name.ilike.%\${search}%\`)
+      query = query.or(`username.ilike.%${search}%,full_name.ilike.%${search}%`)
     }
 
     const { data, error, status } = await query
