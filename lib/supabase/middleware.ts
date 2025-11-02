@@ -1,13 +1,47 @@
 import { createServerClient } from "@supabase/ssr"
 import { NextResponse, type NextRequest } from "next/server"
 
-export async function updateSession(request: NextRequest) {
-  let supabaseResponse = NextResponse.next({
-    request,
-  })
+const PUBLIC_ROUTES = ["/auth/login", "/auth/sign-up", "/auth/callback", "/auth/check-email"]
 
-  // With Fluid compute, don't put this client in a global environment
-  // variable. Always create a new one on each request.
+const PROTECTED_ROUTES: Record<string, string> = {
+  "/dashboard": "dashboard",
+  "/dashboard/users": "users",
+  "/dashboard/partners": "partners",
+  "/clientes": "clients",
+  "/prestamos": "loans",
+  "/dashboard/receipts": "receipts",
+  "/cronogramas": "cronograma",
+  "/gastos": "expenses",
+  "/dashboard/followups": "followups",
+  "/dashboard/resumen": "resumen",
+  "/reportes": "reports",
+  "/formulas": "formulas",
+}
+
+async function checkUserPermission(supabase: any, userId: string, pathname: string): Promise<boolean> {
+  if (pathname === "/dashboard") return true
+
+  try {
+    const { data: profile } = await supabase.from("profiles").select("is_admin").eq("id", userId).single()
+    if (profile?.is_admin) return true
+
+    const requiredPermission = PROTECTED_ROUTES[pathname]
+    if (!requiredPermission) return true
+
+    const { data: permissions } = await supabase.from("user_permissions").select("route_path").eq("user_id", userId)
+    if (!permissions || permissions.length === 0) return false
+
+    const userRoutes = permissions.map((p: any) => p.route_path)
+    return userRoutes.includes(pathname)
+  } catch (error) {
+    console.error("Error checking permissions:", error)
+    return false
+  }
+}
+
+export async function updateSession(request: NextRequest) {
+  let supabaseResponse = NextResponse.next({ request })
+
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -17,38 +51,72 @@ export async function updateSession(request: NextRequest) {
           return request.cookies.getAll()
         },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
-          supabaseResponse = NextResponse.next({
-            request,
+          cookiesToSet.forEach(({ name, value }) => {
+            try {
+              request.cookies.set(name, value)
+            } catch (e) {
+              console.error(\`Error setting cookie \${name}:\`, e)
+            }
           })
-          cookiesToSet.forEach(({ name, value, options }) => supabaseResponse.cookies.set(name, value, options))
+          supabaseResponse = NextResponse.next({ request })
+          cookiesToSet.forEach(({ name, value, options }) => {
+            try {
+              supabaseResponse.cookies.set(name, value, options)
+            } catch (e) {
+              console.error(\`Error setting response cookie \${name}:\`, e)
+            }
+          })
         },
       },
-    },
+    }
   )
 
-  // Do not run code between createServerClient and
-  // supabase.auth.getUser(). A simple mistake could make it very hard to debug
-  // issues with users being randomly logged out.
+  let user = null
+  try {
+    const { data: { user: fetchedUser } } = await supabase.auth.getUser()
+    user = fetchedUser
+  } catch (error) {
+    console.error("Error getting user:", error)
+    const response = NextResponse.redirect(new URL("/auth/login", request.url))
+    response.cookies.delete("sb-access-token")
+    response.cookies.delete("sb-refresh-token")
+    return response
+  }
 
-  // IMPORTANT: If you remove getUser() and you use server-side rendering
-  // with the Supabase client, your users may be randomly logged out.
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const pathname = request.nextUrl.pathname
+  const isPublicRoute = PUBLIC_ROUTES.some(route => pathname.startsWith(route))
 
-  if (
-    request.nextUrl.pathname !== "/" &&
-    !user &&
-    !request.nextUrl.pathname.startsWith("/login") &&
-    !request.nextUrl.pathname.startsWith("/auth")
-  ) {
-    // no user, potentially respond by redirecting the user to the login page
+  if (!user && !isPublicRoute && pathname !== "/") {
     const url = request.nextUrl.clone()
     url.pathname = "/auth/login"
     return NextResponse.redirect(url)
   }
 
-  // IMPORTANT: You *must* return the supabaseResponse object as it is.
+  if (user && (pathname === "/auth/login" || pathname === "/auth/sign-up")) {
+    return NextResponse.redirect(new URL("/dashboard", request.url))
+  }
+
+  if (user && pathname === "/") {
+    return NextResponse.redirect(new URL("/dashboard", request.url))
+  }
+
+  if (!user && pathname === "/") {
+    return NextResponse.redirect(new URL("/auth/login", request.url))
+  }
+
+  if (user && !isPublicRoute && pathname !== "/") {
+    try {
+      const hasPermission = await checkUserPermission(supabase, user.id, pathname)
+      if (!hasPermission) {
+        console.warn(\`⚠️ Usuario \${user.email} sin permiso para \${pathname}\`)
+        const url = request.nextUrl.clone()
+        url.pathname = "/dashboard"
+        return NextResponse.redirect(url)
+      }
+    } catch (error) {
+      console.error("Error checking permissions:", error)
+    }
+  }
+
   return supabaseResponse
 }
