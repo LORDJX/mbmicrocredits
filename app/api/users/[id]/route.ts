@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
+import { requireAdmin } from "@/lib/utils/auth-helpers"
 
 export const dynamic = "force-dynamic"
 
@@ -7,7 +8,7 @@ const SUPABASE_URL = process.env.SUPABASE_URL
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
 
 type UpdateUserBody = {
-  email?: string // actualizar email en Auth (opcional)
+  email?: string
   username?: string
   full_name?: string
   is_admin?: boolean
@@ -17,6 +18,11 @@ export async function PATCH(request: NextRequest, context: { params: { id: strin
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
     console.error("Faltan variables de entorno de Supabase (SUPABASE_URL o SUPABASE_SERVICE_ROLE_KEY).")
     return NextResponse.json({ detail: "Configuración de Supabase incompleta en el servidor." }, { status: 500 })
+  }
+
+  const adminCheck = await requireAdmin()
+  if (!adminCheck.authorized) {
+    return NextResponse.json({ detail: adminCheck.message }, { status: adminCheck.status })
   }
 
   const userId = context.params?.id
@@ -106,6 +112,11 @@ export async function DELETE(request: NextRequest, context: { params: { id: stri
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
     console.error("Faltan variables de entorno de Supabase (SUPABASE_URL o SUPABASE_SERVICE_ROLE_KEY).")
     return NextResponse.json({ detail: "Configuración de Supabase incompleta en el servidor." }, { status: 500 })
+  }
+
+  const adminCheck = await requireAdmin()
+  if (!adminCheck.authorized) {
+    return NextResponse.json({ detail: adminCheck.message }, { status: adminCheck.status })
   }
 
   const userId = context.params?.id

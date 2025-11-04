@@ -64,24 +64,44 @@ export function DashboardSidebar() {
         const {
           data: { user },
         } = await supabase.auth.getUser()
-        if (user) {
-          setUserPermissions([
-            "dashboard",
-            "users",
-            "partners",
-            "clients",
-            "loans",
-            "receipts",
-            "cronograma",
-            "expenses",
-            "followups",
-            "reports",
-            "formulas",
-          ])
+
+        if (!user) {
+          setPermissionsLoaded(true)
+          return
+        }
+
+        const response = await fetch(`/api/users/${user.id}/permissions`)
+        const data = await response.json()
+
+        if (response.ok) {
+          if (data.is_admin) {
+            // Admin has access to all routes
+            setUserPermissions([
+              "dashboard",
+              "users",
+              "partners",
+              "clients",
+              "loans",
+              "receipts",
+              "cronograma",
+              "expenses",
+              "followups",
+              "reports",
+              "formulas",
+            ])
+          } else {
+            // Regular user: map permissions to route paths
+            const routes = data.permissions?.map((p: any) => p.route_path) || []
+            setUserPermissions(routes)
+          }
+        } else {
+          // Fallback to basic permissions on error
+          console.error("Error loading permissions:", data.error)
+          setUserPermissions(["dashboard"])
         }
       } catch (error) {
         console.error("Error loading permissions:", error)
-        setUserPermissions(["dashboard", "users", "clients", "loans", "cronograma", "formulas"])
+        setUserPermissions(["dashboard"])
       } finally {
         setPermissionsLoaded(true)
       }
@@ -93,9 +113,24 @@ export function DashboardSidebar() {
   const filteredNavItems = navItems.filter((item) => userPermissions.includes(item.route) || item.route === "dashboard")
 
   const handleLogout = async () => {
-    const supabase = createClient()
-    await supabase.auth.signOut()
-    window.location.href = "/auth/login"
+    try {
+      const supabase = createClient()
+      await supabase.auth.signOut()
+
+      document.cookie.split(";").forEach((cookie) => {
+        const name = cookie.split("=")[0].trim()
+        if (name.startsWith("sb-")) {
+          document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`
+        }
+      })
+
+      router.push("/auth/login")
+      router.refresh()
+    } catch (error) {
+      console.error("Error during logout:", error)
+      // Fallback: force redirect even if error
+      window.location.href = "/auth/login"
+    }
   }
 
   if (!permissionsLoaded) {

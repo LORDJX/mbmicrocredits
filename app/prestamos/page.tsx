@@ -1,5 +1,4 @@
-// app/prestamos/page.tsx
-'use client' // ✅ AGREGADO - Ahora es Client Component
+"use client"
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
@@ -14,8 +13,8 @@ import { StatsCard } from "@/components/stats-card"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { CreateLoanForm } from "@/components/forms/create-loan-form"
 import { LoanActionsMenu } from "@/components/loan-actions-menu"
+import { TableSkeleton } from "@/components/ui/table-skeleton"
 
-// --- Interfaces de Datos ---
 interface Client {
   first_name: string
   last_name: string
@@ -39,12 +38,14 @@ interface Loan {
   balance: number
   has_pending_installments: boolean
 }
-// --------------------------
 
 export default function PrestamosPage() {
   const router = useRouter()
   const [loans, setLoans] = useState<Loan[]>([])
   const [loading, setLoading] = useState(true)
+  const [searchTerm, setSearchTerm] = useState("")
+  const [page, setPage] = useState(1)
+  const pageSize = 50
 
   useEffect(() => {
     fetchLoans()
@@ -52,35 +53,65 @@ export default function PrestamosPage() {
 
   const fetchLoans = async () => {
     try {
-      const response = await fetch('/api/loans')
+      const response = await fetch("/api/loans")
       const data = await response.json()
-      
+
       if (response.ok) {
         setLoans(data.loans || [])
       } else {
-        console.error('Error fetching loans:', data.error)
+        console.error("Error fetching loans:", data.error)
       }
     } catch (error) {
-      console.error('Error fetching loans:', error)
+      console.error("Error fetching loans:", error)
     } finally {
       setLoading(false)
     }
   }
 
   const handleSuccess = () => {
-    fetchLoans() // Recargar la lista
+    fetchLoans()
   }
+
+  const filteredLoans = loans.filter((loan) => {
+    if (!searchTerm) return true
+
+    const searchLower = searchTerm.toLowerCase()
+    const clientName = `${loan.active_clients?.first_name} ${loan.active_clients?.last_name}`.toLowerCase()
+    const loanCode = loan.loan_code?.toLowerCase() || ""
+    const clientCode = loan.active_clients?.client_code?.toLowerCase() || ""
+
+    return loanCode.includes(searchLower) || clientName.includes(searchLower) || clientCode.includes(searchLower)
+  })
+
+  const totalPages = Math.ceil(filteredLoans.length / pageSize)
+  const paginatedLoans = filteredLoans.slice((page - 1) * pageSize, page * pageSize)
 
   if (loading) {
-    return <div className="flex items-center justify-center min-h-screen">Cargando...</div>
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Préstamos" description="Cargando préstamos..." />
+        <div className="grid gap-4 md:grid-cols-4">
+          {[...Array(4)].map((_, i) => (
+            <Card key={i} className="animate-pulse">
+              <CardContent className="p-6">
+                <div className="h-20 bg-muted rounded" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+        <Card>
+          <CardContent className="p-6">
+            <TableSkeleton rows={10} columns={7} />
+          </CardContent>
+        </Card>
+      </div>
+    )
   }
 
-  // --- CÁLCULO DE ESTADÍSTICAS ---
   const totalAmount = loans.reduce((sum, loan) => sum + (Number.parseFloat(loan.amount || "0") || 0), 0)
   const activeLoansCount = loans.filter((loan) => loan.has_pending_installments).length
   const completedLoansCount = loans.filter((loan) => !loan.has_pending_installments).length
 
-  // Badge dinámico basado en cuotas pendientes
   const getStatusBadge = (loan: Loan) => {
     if (loan.has_pending_installments) {
       return (
@@ -118,7 +149,6 @@ export default function PrestamosPage() {
         </Dialog>
       </PageHeader>
 
-      {/* Stats Cards */}
       <div className="grid gap-4 md:grid-cols-4">
         <StatsCard title="Total Préstamos" value={loans.length} description="Préstamos registrados" icon={CreditCard} />
         <StatsCard title="Préstamos Activos" value={activeLoansCount} description="En curso" icon={CreditCard} />
@@ -136,7 +166,6 @@ export default function PrestamosPage() {
         />
       </div>
 
-      {/* Search and Filters */}
       <Card className="border-border bg-card">
         <CardHeader>
           <CardTitle className="text-card-foreground font-work-sans">Buscar Préstamos</CardTitle>
@@ -147,18 +176,25 @@ export default function PrestamosPage() {
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
+                value={searchTerm}
+                onChange={(e) => {
+                  setSearchTerm(e.target.value)
+                  setPage(1) // Reset to first page on search
+                }}
                 placeholder="Buscar por código de préstamo o cliente..."
                 className="pl-10 bg-input border-border"
               />
             </div>
-            <Button variant="outline" className="border-border bg-transparent">
-              Filtros
-            </Button>
           </div>
+          {searchTerm && (
+            <p className="text-sm text-muted-foreground mt-2">
+              {filteredLoans.length} resultado{filteredLoans.length !== 1 ? "s" : ""} encontrado
+              {filteredLoans.length !== 1 ? "s" : ""}
+            </p>
+          )}
         </CardContent>
       </Card>
 
-      {/* Loans Table */}
       <Card className="border-border bg-card">
         <CardHeader>
           <CardTitle className="text-card-foreground font-work-sans">Lista de Préstamos</CardTitle>
@@ -179,7 +215,7 @@ export default function PrestamosPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {loans.map((loan) => (
+                {paginatedLoans.map((loan) => (
                   <TableRow key={loan.id} className="border-border">
                     <TableCell className="font-mono text-sm">{loan.loan_code || "N/A"}</TableCell>
                     <TableCell>
@@ -219,27 +255,66 @@ export default function PrestamosPage() {
               </TableBody>
             </Table>
           </div>
-          {loans.length === 0 && (
+
+          {filteredLoans.length > pageSize && (
+            <div className="flex items-center justify-between px-2 py-4">
+              <div className="text-sm text-muted-foreground">
+                Mostrando {(page - 1) * pageSize + 1} a {Math.min(page * pageSize, filteredLoans.length)} de{" "}
+                {filteredLoans.length} préstamos
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={page === 1}
+                >
+                  Anterior
+                </Button>
+                <div className="flex items-center gap-2 px-3">
+                  <span className="text-sm">
+                    Página {page} de {totalPages}
+                  </span>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={page >= totalPages}
+                >
+                  Siguiente
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {paginatedLoans.length === 0 && (
             <div className="text-center py-8">
               <CreditCard className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-lg font-semibold text-card-foreground">No hay préstamos</h3>
-              <p className="text-muted-foreground">Comienza otorgando tu primer préstamo</p>
-              <Dialog>
-                <DialogTrigger asChild>
-                  <Button className="mt-4 bg-primary hover:bg-primary/90 text-primary-foreground">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Nuevo Préstamo
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="!max-w-none w-[95vw] max-h-[95vh] h-[95vh] p-0 gap-0">
-                  <div className="overflow-y-auto h-full p-6">
-                    <DialogHeader className="mb-4">
-                      <DialogTitle>Crear Nuevo Préstamo</DialogTitle>
-                    </DialogHeader>
-                    <CreateLoanForm onSuccess={handleSuccess} />
-                  </div>
-                </DialogContent>
-              </Dialog>
+              <h3 className="text-lg font-semibold text-card-foreground">
+                {searchTerm ? "No se encontraron préstamos" : "No hay préstamos"}
+              </h3>
+              <p className="text-muted-foreground">
+                {searchTerm ? "Intenta con otros términos de búsqueda" : "Comienza otorgando tu primer préstamo"}
+              </p>
+              {!searchTerm && (
+                <Dialog>
+                  <DialogTrigger asChild>
+                    <Button className="mt-4 bg-primary hover:bg-primary/90 text-primary-foreground">
+                      <Plus className="h-4 w-4 mr-2" />
+                      Nuevo Préstamo
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="!max-w-none w-[95vw] max-h-[95vh] h-[95vh] p-0 gap-0">
+                    <div className="overflow-y-auto h-full p-6">
+                      <DialogHeader className="mb-4">
+                        <DialogTitle>Crear Nuevo Préstamo</DialogTitle>
+                      </DialogHeader>
+                      <CreateLoanForm onSuccess={handleSuccess} />
+                    </div>
+                  </DialogContent>
+                </Dialog>
+              )}
             </div>
           )}
         </CardContent>

@@ -22,20 +22,49 @@ async function checkUserPermission(supabase: any, userId: string, pathname: stri
   if (pathname === "/dashboard") return true
 
   try {
-    const { data: profile } = await supabase.from("profiles").select("is_admin").eq("id", userId).single()
+    // Create abort controller for timeout
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 5000) // 5 second timeout
+
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("is_admin")
+      .eq("id", userId)
+      .abortSignal(controller.signal)
+      .single()
+
+    clearTimeout(timeoutId)
+
+    if (profileError) {
+      console.error("Error fetching profile:", profileError)
+      // On DB error, allow access to dashboard only
+      return pathname === "/dashboard"
+    }
+
     if (profile?.is_admin) return true
 
     const requiredPermission = PROTECTED_ROUTES[pathname]
     if (!requiredPermission) return true
 
-    const { data: permissions } = await supabase.from("user_permissions").select("route_path").eq("user_id", userId)
+    const { data: permissions, error: permError } = await supabase
+      .from("user_permissions")
+      .select("route_path")
+      .eq("user_id", userId)
+
+    if (permError) {
+      console.error("Error fetching permissions:", permError)
+      // On DB error, allow access to dashboard only
+      return pathname === "/dashboard"
+    }
+
     if (!permissions || permissions.length === 0) return false
 
     const userRoutes = permissions.map((p: any) => p.route_path)
     return userRoutes.includes(pathname)
   } catch (error) {
-    console.error("Error checking permissions:", error)
-    return false
+    console.error("Unexpected error checking permissions:", error)
+    // Fallback: allow access to dashboard
+    return pathname === "/dashboard"
   }
 }
 
@@ -68,12 +97,14 @@ export async function updateSession(request: NextRequest) {
           })
         },
       },
-    }
+    },
   )
 
   let user = null
   try {
-    const { data: { user: fetchedUser } } = await supabase.auth.getUser()
+    const {
+      data: { user: fetchedUser },
+    } = await supabase.auth.getUser()
     user = fetchedUser
   } catch (error) {
     console.error("Error getting user:", error)
@@ -84,7 +115,7 @@ export async function updateSession(request: NextRequest) {
   }
 
   const pathname = request.nextUrl.pathname
-  const isPublicRoute = PUBLIC_ROUTES.some(route => pathname.startsWith(route))
+  const isPublicRoute = PUBLIC_ROUTES.some((route) => pathname.startsWith(route))
 
   if (!user && !isPublicRoute && pathname !== "/") {
     const url = request.nextUrl.clone()

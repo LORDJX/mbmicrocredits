@@ -8,6 +8,7 @@ import { PageHeader } from "@/components/page-header"
 import { StatsCard } from "@/components/stats-card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { formatDate } from "@/lib/utils/date-utils"
 
 async function getPartnersData() {
   const supabase = await createClient()
@@ -129,9 +130,7 @@ export default async function PartnersPage() {
                         ${Number(partner.generated_interest || 0).toLocaleString()}
                       </div>
                     </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {new Date(partner.created_at).toLocaleDateString()}
-                    </TableCell>
+                    <TableCell className="text-muted-foreground">{formatDate(partner.created_at)}</TableCell>
                     <TableCell className="text-right">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>

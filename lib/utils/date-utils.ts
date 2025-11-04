@@ -154,3 +154,47 @@ export function formatArgentinaDateTime(date: Date | string | null | undefined):
 export function getArgentinaTimestamp(): string {
   return nowInArgentina().toISOString()
 }
+
+/**
+ * Alias for formatArgentinaDate for backward compatibility
+ * Formats a date in short format (DD/MM/YYYY)
+ */
+export const formatDate = (date: string | Date | null | undefined, format: "short" | "long" = "short"): string => {
+  if (!date) return ""
+
+  if (format === "long") {
+    return formatArgentinaDate(date, "dd 'de' MMMM 'de' yyyy")
+  }
+
+  return formatArgentinaDate(date, "dd/MM/yyyy")
+}
+
+/**
+ * Alias for formatArgentinaDateTime for backward compatibility
+ * Formats a date with time (DD/MM/YYYY HH:MM)
+ */
+export const formatDateTime = formatArgentinaDateTime
+
+/**
+ * Alias for toArgentinaDateString for backward compatibility
+ * Formats a date for input fields (YYYY-MM-DD)
+ */
+export const formatDateForInput = toArgentinaDateString
+
+/**
+ * Gets relative time (e.g., "hace 2 días")
+ */
+export const getRelativeTime = (date: string | Date): string => {
+  const dateObj = typeof date === "string" ? parseISO(date) : date
+  const argDate = toArgentinaTime(dateObj)
+  const now = nowInArgentina()
+  const diffMs = now.getTime() - argDate.getTime()
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+
+  if (diffDays === 0) return "Hoy"
+  if (diffDays === 1) return "Ayer"
+  if (diffDays < 7) return `Hace ${diffDays} días`
+  if (diffDays < 30) return `Hace ${Math.floor(diffDays / 7)} semanas`
+  if (diffDays < 365) return `Hace ${Math.floor(diffDays / 30)} meses`
+  return `Hace ${Math.floor(diffDays / 365)} años`
+}

@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
+import { requireAdmin } from "@/lib/utils/auth-helpers"
 
 export const dynamic = "force-dynamic"
 
@@ -27,26 +28,24 @@ export async function GET(request: NextRequest) {
 
     const search = request.nextUrl.searchParams.get("search")?.trim() ?? ""
 
-    let query = supabase
-      .from("v_users")
-      .select("*")
-      .order("last_updated", { ascending: false })
+    let query = supabase.from("v_users").select("*").order("last_updated", { ascending: false })
 
     if (search) {
       query = query.or(`username.ilike.%${search}%,full_name.ilike.%${search}%`)
     }
 
     const { data, error, status } = await query
-    
+
     if (error) {
       console.error("Error Supabase (GET /api/users):", error)
       return NextResponse.json({ detail: error.message || "Error al consultar usuarios" }, { status: status || 500 })
     }
 
-    const users = data?.map(user => ({
-      ...user,
-      email: user.username,
-    })) || []
+    const users =
+      data?.map((user) => ({
+        ...user,
+        email: user.username,
+      })) || []
 
     return NextResponse.json(users, { status: 200 })
   } catch (err: any) {
@@ -58,6 +57,11 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
     return NextResponse.json({ detail: "Configuración de Supabase incompleta" }, { status: 500 })
+  }
+
+  const adminCheck = await requireAdmin()
+  if (!adminCheck.authorized) {
+    return NextResponse.json({ detail: adminCheck.message }, { status: adminCheck.status })
   }
 
   let body: CreateUserBody

@@ -1,5 +1,3 @@
-// components/forms/create-loan-form.tsx
-
 "use client"
 
 import { useState, useEffect, type FormEvent } from "react"
@@ -11,7 +9,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Loader2, CreditCard, DollarSign, Calendar, User } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 
-// Clases CSS para ocultar las flechas de input type="number"
 const INPUT_NUMBER_NO_SPINNER =
   " [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
 
@@ -41,7 +38,6 @@ export function CreateLoanForm({ onSuccess, onCancel, preselectedClientId, initi
   })
   const { toast } = useToast()
 
-  // Lógica para filtrar clientes
   const filteredClients = clients.filter(
     (client) =>
       client.first_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -81,7 +77,6 @@ export function CreateLoanForm({ onSuccess, onCancel, preselectedClientId, initi
     return ""
   }
 
-  // Función de formato de moneda (ajustada para 1 decimal para interés, pero se usará para valores monetarios)
   const formatCurrency = (amount: number | string, decimals = 2) => {
     const num = typeof amount === "string" ? Number.parseFloat(amount) : amount
     if (isNaN(num)) return "$0.00"
@@ -117,7 +112,6 @@ export function CreateLoanForm({ onSuccess, onCancel, preselectedClientId, initi
     e.preventDefault()
     setIsLoading(true)
 
-    // Validación extra
     if (
       !formData.client_id ||
       !formData.amount ||
@@ -130,14 +124,60 @@ export function CreateLoanForm({ onSuccess, onCancel, preselectedClientId, initi
       return
     }
 
-    // Si el monto total a pagar es 0 o NaN
+    const principal = Number.parseFloat(formData.amount)
+    const installmentAmount = Number.parseFloat(formData.installment_amount)
+    const totalInstallments = Number.parseInt(formData.installments)
+    const totalRepayAmount = installmentAmount * totalInstallments
+
+    // Validate total repayment is greater than principal
+    if (totalRepayAmount < principal) {
+      toast({
+        title: "Error de validación",
+        description: `El monto total a pagar ($${totalRepayAmount.toFixed(2)}) debe ser mayor o igual al principal ($${principal.toFixed(2)})`,
+        variant: "destructive",
+      })
+      setIsLoading(false)
+      return
+    }
+
+    // Validate start date is not too far in the past
+    const startDate = new Date(formData.start_date)
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+
+    if (startDate < today) {
+      const daysDiff = Math.floor((today.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))
+      if (daysDiff > 30) {
+        toast({
+          title: "Advertencia",
+          description: `La fecha de inicio es ${daysDiff} días en el pasado. Verifica que sea correcta.`,
+          variant: "destructive",
+        })
+        setIsLoading(false)
+        return
+      }
+    }
+
+    // Validate interest rate is reasonable (max 200%)
+    const interest = totalRepayAmount - principal
+    const interestRate = (interest / principal) * 100
+
+    if (interestRate > 200) {
+      toast({
+        title: "Advertencia",
+        description: `La tasa de interés calculada (${interestRate.toFixed(2)}%) es muy alta. Verifica los montos.`,
+        variant: "destructive",
+      })
+      setIsLoading(false)
+      return
+    }
+
     if (isNaN(totalRepay) || totalRepay <= 0) {
       toast({ title: "Error", description: "El monto principal y/o la cuota son inválidos.", variant: "destructive" })
       setIsLoading(false)
       return
     }
 
-    // En el POST, enviamos el monto de cuota calculado o ingresado y la tasa de interés fija (0)
     const url = isEditMode ? `/api/loans/${initialData.id}` : "/api/loans"
     const method = isEditMode ? "PUT" : "POST"
 
@@ -145,7 +185,7 @@ export function CreateLoanForm({ onSuccess, onCancel, preselectedClientId, initi
       ...formData,
       amount: Number.parseFloat(formData.amount).toFixed(2),
       installment_amount: Number.isNaN(calculatedInstallmentAmount) ? "0" : calculatedInstallmentAmount.toFixed(2),
-      interest_rate: "0", // Se envía como 0 por requisito
+      interest_rate: "0",
     }
 
     try {
@@ -182,34 +222,24 @@ export function CreateLoanForm({ onSuccess, onCancel, preselectedClientId, initi
 
   return (
     <Card className="w-full max-w-2xl mx-auto">
-           {" "}
       <CardHeader>
-               {" "}
         <CardTitle className="flex items-center gap-2">
-                    <CreditCard className="h-5 w-5" />          {isEditMode ? "Editar Préstamo" : "Nuevo Préstamo"}     
-           {" "}
+          <CreditCard className="h-5 w-5" /> {isEditMode ? "Editar Préstamo" : "Nuevo Préstamo"}
         </CardTitle>
-               {" "}
         <CardDescription>
           {isEditMode ? "Actualiza los datos del préstamo" : "Registra un nuevo préstamo en el sistema"}
         </CardDescription>
-             {" "}
       </CardHeader>
-           {" "}
       <CardContent>
-               {" "}
         <form onSubmit={handleSubmit} className="space-y-6">
-                    {/* Información del Cliente */}         {" "}
+          {/* Información del Cliente */}
           <div className="space-y-4">
-                       {" "}
             <h3 className="text-lg font-semibold flex items-center gap-2">
-                            <User className="h-4 w-4" />              Cliente            {" "}
+              <User className="h-4 w-4" /> Cliente
             </h3>
-                       {" "}
             <div className="space-y-2">
-                           {" "}
               <Label htmlFor="client_id">
-                                Cliente <span className="text-destructive">*</span>             {" "}
+                Cliente <span className="text-destructive">*</span>
               </Label>
               {/* Buscador de Cliente - Ajuste para ser más ancho */}
               <Input
@@ -218,54 +248,38 @@ export function CreateLoanForm({ onSuccess, onCancel, preselectedClientId, initi
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="mb-2 w-full"
               />
-              {/* Desplegable de selección - Ahora sigue el ancho del Input de búsqueda */}             {" "}
+              {/* Desplegable de selección - Ahora sigue el ancho del Input de búsqueda */}
               <Select
                 value={formData.client_id}
                 onValueChange={(value) => handleInputChange("client_id", value)}
                 disabled={loadingClients || !!preselectedClientId}
               >
-                               {" "}
                 <SelectTrigger>
-                                   {" "}
-                  <SelectValue placeholder={loadingClients ? "Cargando clientes..." : "Selecciona un cliente"} />       
-                         {" "}
+                  <SelectValue placeholder={loadingClients ? "Cargando clientes..." : "Selecciona un cliente"} />
                 </SelectTrigger>
-                               {" "}
                 <SelectContent>
-                                   {" "}
                   {filteredClients.map((client) => (
                     <SelectItem key={client.id} value={client.id}>
-                                            {client.first_name} {client.last_name} - {client.client_code}               
-                         {" "}
+                      {client.first_name} {client.last_name} - {client.client_code}
                     </SelectItem>
                   ))}
-                                 {" "}
                 </SelectContent>
-                             {" "}
               </Select>
-                         {" "}
             </div>
-                     {" "}
           </div>
-                    {/* Información del Préstamo */}         {" "}
+          {/* Información del Préstamo */}
           <div className="space-y-4">
-                       {" "}
             <h3 className="text-lg font-semibold flex items-center gap-2">
-                            <DollarSign className="h-4 w-4" />              Detalles del Préstamo            {" "}
+              <DollarSign className="h-4 w-4" /> Detalles del Préstamo
             </h3>
-                       {" "}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Monto Principal */}             {" "}
+              {/* Monto Principal */}
               <div className="space-y-2">
-                               {" "}
                 <Label htmlFor="amount">
-                                    Monto Principal <span className="text-destructive">*</span>               {" "}
+                  Monto Principal <span className="text-destructive">*</span>
                 </Label>
-                               {" "}
                 <div className="relative">
-                                   {" "}
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>             
-                     {" "}
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
                   <Input
                     id="amount"
                     type="number"
@@ -276,21 +290,15 @@ export function CreateLoanForm({ onSuccess, onCancel, preselectedClientId, initi
                     className={`pl-6 ${INPUT_NUMBER_NO_SPINNER}`}
                     required
                   />
-                                 {" "}
                 </div>
-                             {" "}
               </div>
-              {/* Monto de Cuota */}             {" "}
+              {/* Monto de Cuota */}
               <div className="space-y-2">
-                               {" "}
                 <Label htmlFor="installment_amount">
-                                    Monto de Cuota <span className="text-destructive">*</span>               {" "}
+                  Monto de Cuota <span className="text-destructive">*</span>
                 </Label>
-                               {" "}
                 <div className="relative">
-                                   {" "}
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>             
-                     {" "}
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
                   <Input
                     id="installment_amount"
                     type="number"
@@ -301,21 +309,14 @@ export function CreateLoanForm({ onSuccess, onCancel, preselectedClientId, initi
                     className={`pl-6 ${INPUT_NUMBER_NO_SPINNER}`}
                     required
                   />
-                                 {" "}
                 </div>
-                             {" "}
               </div>
-                         {" "}
             </div>
-                       {" "}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                           {" "}
               <div className="space-y-2">
-                               {" "}
                 <Label htmlFor="installments">
-                                    Número de Cuotas <span className="text-destructive">*</span>               {" "}
+                  Número de Cuotas <span className="text-destructive">*</span>
                 </Label>
-                               {" "}
                 <Input
                   id="installments"
                   type="number"
@@ -325,51 +326,35 @@ export function CreateLoanForm({ onSuccess, onCancel, preselectedClientId, initi
                   className={INPUT_NUMBER_NO_SPINNER}
                   required
                 />
-                             {" "}
               </div>
-                              {/* Selector de Frecuencia */}               {" "}
+              {/* Selector de Frecuencia */}
               <div className="space-y-2">
-                                   {" "}
                 <Label htmlFor="frequency">
-                                          Frecuencia de Pago <span className="text-destructive">*</span>               
-                     {" "}
+                  Frecuencia de Pago <span className="text-destructive">*</span>
                 </Label>
-                                   {" "}
                 <Select value={formData.frequency} onValueChange={(value) => handleInputChange("frequency", value)}>
-                                         {" "}
                   <SelectTrigger>
-                                                <SelectValue placeholder="Selecciona la frecuencia" />                 
-                         {" "}
+                    <SelectValue placeholder="Selecciona la frecuencia" />
                   </SelectTrigger>
-                                         {" "}
                   <SelectContent>
-                                                <SelectItem value="monthly">Mensual</SelectItem>                       
-                        <SelectItem value="biweekly">Quincenal</SelectItem>                           {" "}
-                    <SelectItem value="weekly">Semanal</SelectItem>                       {" "}
+                    <SelectItem value="monthly">Mensual</SelectItem>
+                    <SelectItem value="biweekly">Quincenal</SelectItem>
+                    <SelectItem value="weekly">Semanal</SelectItem>
                   </SelectContent>
-                                     {" "}
                 </Select>
-                               {" "}
               </div>
-                         {" "}
             </div>
-                     {" "}
           </div>
-                    {/* Fechas */}         {" "}
+          {/* Fechas */}
           <div className="space-y-4">
-                       {" "}
             <h3 className="text-lg font-semibold flex items-center gap-2">
-                            <Calendar className="h-4 w-4" />              Fechas            {" "}
+              <Calendar className="h-4 w-4" /> Fechas
             </h3>
-                       {" "}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                           {" "}
               <div className="space-y-2">
-                               {" "}
                 <Label htmlFor="start_date">
-                                    Fecha de 1° Cuota <span className="text-destructive">*</span>               {" "}
+                  Fecha de 1° Cuota <span className="text-destructive">*</span>
                 </Label>
-                               {" "}
                 <Input
                   id="start_date"
                   type="date"
@@ -377,80 +362,60 @@ export function CreateLoanForm({ onSuccess, onCancel, preselectedClientId, initi
                   onChange={(e) => handleInputChange("start_date", e.target.value)}
                   required
                 />
-                             {" "}
               </div>
-                           {" "}
               <div className="space-y-2">
-                                <Label htmlFor="end_date">Fecha de Fin (Calculada)</Label>               {" "}
-                <Input id="end_date" type="date" value={calculateEndDate()} disabled />             {" "}
+                <Label htmlFor="end_date">Fecha de Fin (Calculada)</Label>
+                <Input id="end_date" type="date" value={calculateEndDate()} disabled />
               </div>
-                         {" "}
             </div>
-                     {" "}
           </div>
-                    {/* Resumen */}         {" "}
+          {/* Resumen */}
           {formData.amount && formData.installments && (
             <div className="bg-muted p-4 rounded-lg">
-                            <h4 className="font-semibold mb-2">Resumen del Préstamo</h4>             {" "}
+              <h4 className="font-semibold mb-2">Resumen del Préstamo</h4>
               <div className="grid grid-cols-2 gap-4 text-sm">
-                               {" "}
                 <div>
-                                    <span className="text-muted-foreground">Monto Principal (Préstamo):</span>         
-                          <div className="font-medium">{formatCurrency(formData.amount)}</div>               {" "}
+                  <span className="text-muted-foreground">Monto Principal (Préstamo):</span>
+                  <div className="font-medium">{formatCurrency(formData.amount)}</div>
                 </div>
-                               {" "}
                 <div>
-                                    <span className="text-muted-foreground">Monto Total a Pagar:</span>                 {" "}
-                  <div className="font-medium">{formatCurrency(totalRepay)}</div>               {" "}
+                  <span className="text-muted-foreground">Monto Total a Pagar:</span>
+                  <div className="font-medium">{formatCurrency(totalRepay)}</div>
                 </div>
-                               {" "}
                 <div>
-                                    <span className="text-muted-foreground">Interés Estimado:</span>                 {" "}
-                  <div className="font-medium">
-                                        {formatCurrency(calculatedInterest, 2)}                 {" "}
-                  </div>
-                                 {" "}
+                  <span className="text-muted-foreground">Interés Estimado:</span>
+                  <div className="font-medium">{formatCurrency(calculatedInterest, 2)}</div>
                 </div>
                 <div className="space-y-1">
                   <span className="text-muted-foreground">Cuota Estimada:</span>
                   <div className="font-medium text-primary text-lg">{formatCurrency(calculatedInstallmentAmount)}</div>
                 </div>
-                             {" "}
               </div>
-                         {" "}
             </div>
           )}
-                    {/* Botones */}         {" "}
+          {/* Botones */}
           <div className="flex gap-4 pt-4">
-                       {" "}
             <Button type="submit" disabled={isLoading} className="flex-1">
-                           {" "}
               {isLoading ? (
                 <>
-                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />                 {" "}
-                  {isEditMode ? "Actualizando..." : "Creando..."}               {" "}
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  {isEditMode ? "Actualizando..." : "Creando..."}
                 </>
               ) : (
                 <>
-                                    <CreditCard className="h-4 w-4 mr-2" />                 {" "}
-                  {isEditMode ? "Actualizar Préstamo" : "Crear Préstamo"}               {" "}
+                  <CreditCard className="h-4 w-4 mr-2" />
+                  {isEditMode ? "Actualizar Préstamo" : "Crear Préstamo"}
                 </>
               )}
-                         {" "}
             </Button>
-                       {" "}
             {onCancel && (
               <Button type="button" variant="outline" onClick={onCancel} disabled={isLoading}>
-                                Cancelar              {" "}
+                Cancelar
               </Button>
             )}
-                     {" "}
           </div>
-                 {" "}
         </form>
-             {" "}
       </CardContent>
-         {" "}
     </Card>
   )
 }
