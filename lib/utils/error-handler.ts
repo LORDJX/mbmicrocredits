@@ -1,53 +1,69 @@
-/**
- * Extracts a readable error message from various error types
- */
 export function getErrorMessage(error: unknown): string {
   if (error instanceof Error) {
     return error.message
   }
-
-  if (typeof error === "string") {
+  
+  if (typeof error === 'string') {
     return error
   }
-
-  if (error && typeof error === "object" && "message" in error) {
+  
+  if (error && typeof error === 'object' && 'message' in error) {
     return String(error.message)
   }
-
-  return "Ha ocurrido un error inesperado. Por favor, intenta nuevamente."
+  
+  return 'Ha ocurrido un error inesperado. Por favor, intenta nuevamente.'
 }
 
-/**
- * Handles API errors with context and returns formatted error info
- */
-export function handleApiError(error: unknown, context: string) {
+export interface ErrorInfo {
+  title: string
+  description: string
+  action?: string
+  variant: 'destructive' | 'default'
+}
+
+export function handleApiError(error: unknown, context: string): ErrorInfo {
   const message = getErrorMessage(error)
   console.error(`[${context}]`, error)
-
+  
+  if (message.includes('401') || message.includes('No autorizado')) {
+    return {
+      title: 'Sesión expirada',
+      description: 'Tu sesión ha expirado. Por favor, inicia sesión nuevamente.',
+      action: 'Ir a Login',
+      variant: 'destructive'
+    }
+  }
+  
+  if (message.includes('403') || message.includes('Acceso denegado')) {
+    return {
+      title: 'Acceso denegado',
+      description: 'No tienes permisos para realizar esta acción.',
+      variant: 'destructive'
+    }
+  }
+  
+  if (message.includes('404') || message.includes('No encontrado')) {
+    return {
+      title: 'No encontrado',
+      description: `No se encontró el recurso solicitado en ${context}.`,
+      action: 'Reintentar',
+      variant: 'destructive'
+    }
+  }
+  
+  if (message.includes('Network') || message.includes('fetch')) {
+    return {
+      title: 'Error de conexión',
+      description: 'No se pudo conectar con el servidor. Verifica tu conexión a internet.',
+      action: 'Reintentar',
+      variant: 'destructive'
+    }
+  }
+  
   return {
     title: `Error en ${context}`,
     description: message,
-    action: "Reintentar",
+    action: 'Reintentar',
+    variant: 'destructive'
   }
-}
-
-/**
- * Formats Supabase errors for user display
- */
-export function formatSupabaseError(error: any): string {
-  if (!error) return "Error desconocido"
-
-  // Common Supabase error codes
-  const errorMessages: Record<string, string> = {
-    "23505": "Este registro ya existe en el sistema",
-    "23503": "No se puede eliminar porque tiene registros relacionados",
-    "42501": "No tienes permisos para realizar esta acción",
-    PGRST116: "No se encontró el registro solicitado",
-  }
-
-  if (error.code && errorMessages[error.code]) {
-    return errorMessages[error.code]
-  }
-
-  return error.message || "Error en la base de datos"
 }
