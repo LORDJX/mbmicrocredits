@@ -2,10 +2,16 @@
 
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription, // Added for accessibility
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { CreateLoanForm } from "@/components/forms/create-loan-form"
 import { LoanDetailsModal } from "@/components/loan-details-modal"
 import { LoanPrintView } from "@/components/loan-print-view"
@@ -151,29 +157,54 @@ Saludos!`
       `}</style>
 
       <DropdownMenu>
-        <DropdownMenuTrigger asChild>
+        <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
           <Button variant="ghost" size="icon">
             <MoreHorizontal className="h-4 w-4" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuItem onClick={() => setShowDetails(true)}>
+        <DropdownMenuContent align="end" aria-label="Acciones del préstamo">
+          <DropdownMenuItem
+            onClick={(e) => {
+              e.stopPropagation()
+              setShowDetails(true)
+            }}
+          >
             <Eye className="h-4 w-4 mr-2" />
             Ver
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => setShowPrint(true)}>
+          <DropdownMenuItem
+            onClick={(e) => {
+              e.stopPropagation()
+              setShowPrint(true)
+            }}
+          >
             <Printer className="h-4 w-4 mr-2" />
             Imprimir
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={handleWhatsApp}>
+          <DropdownMenuItem
+            onClick={(e) => {
+              e.stopPropagation()
+              handleWhatsApp()
+            }}
+          >
             <MessageCircle className="h-4 w-4 mr-2" />
             WhatsApp
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={handleDownloadSchedule}>
+          <DropdownMenuItem
+            onClick={(e) => {
+              e.stopPropagation()
+              handleDownloadSchedule()
+            }}
+          >
             <Download className="h-4 w-4 mr-2" />
             Cronograma
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => setShowEdit(true)}>
+          <DropdownMenuItem
+            onClick={(e) => {
+              e.stopPropagation()
+              setShowEdit(true)
+            }}
+          >
             <Edit className="h-4 w-4 mr-2" />
             Editar
           </DropdownMenuItem>
@@ -189,6 +220,9 @@ Saludos!`
           <div className="custom-scrollbar overflow-y-auto h-full p-6">
             <DialogHeader className="mb-4">
               <DialogTitle>Editar Préstamo {loan.loan_code}</DialogTitle>
+              <DialogDescription className="sr-only">
+                Formulario para editar los datos del préstamo {loan.loan_code}
+              </DialogDescription>
             </DialogHeader>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

@@ -31,7 +31,13 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { 
+  DropdownMenu, 
+  DropdownMenuContent, 
+  DropdownMenuItem, 
+  DropdownMenuLabel, // ✅ AGREGADO
+  DropdownMenuTrigger 
+} from "@/components/ui/dropdown-menu"
 import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
@@ -56,6 +62,7 @@ export function DashboardSidebar() {
   const router = useRouter()
   const [userPermissions, setUserPermissions] = useState<string[]>([])
   const [permissionsLoaded, setPermissionsLoaded] = useState(false)
+  const [isLoggingOut, setIsLoggingOut] = useState(false)
 
   useEffect(() => {
     const loadUserPermissions = async () => {
@@ -66,41 +73,53 @@ export function DashboardSidebar() {
         } = await supabase.auth.getUser()
 
         if (!user) {
+          console.log("[v0] No user found, setting default permissions")
+          setUserPermissions(["dashboard"])
           setPermissionsLoaded(true)
           return
         }
 
+        console.log("[v0] Fetching permissions for user:", user.id)
         const response = await fetch(`/api/users/${user.id}/permissions`)
-        const data = await response.json()
 
-        if (response.ok) {
-          if (data.is_admin) {
-            // Admin has access to all routes
-            setUserPermissions([
-              "dashboard",
-              "users",
-              "partners",
-              "clients",
-              "loans",
-              "receipts",
-              "cronograma",
-              "expenses",
-              "followups",
-              "reports",
-              "formulas",
-            ])
-          } else {
-            // Regular user: map permissions to route paths
-            const routes = data.permissions?.map((p: any) => p.route_path) || []
-            setUserPermissions(routes)
-          }
-        } else {
-          // Fallback to basic permissions on error
-          console.error("Error loading permissions:", data.error)
+        if (!response.ok) {
+          const errorText = await response.text()
+          console.error("[v0] API error response:", response.status, errorText)
           setUserPermissions(["dashboard"])
+          setPermissionsLoaded(true)
+          return
+        }
+
+        const data = await response.json()
+        console.log("[v0] Permissions data received:", data)
+
+        if (data.is_admin) {
+          console.log("[v0] User is admin, granting all permissions")
+          setUserPermissions([
+            "dashboard",
+            "users",
+            "partners",
+            "clients",
+            "loans",
+            "receipts",
+            "cronograma",
+            "expenses",
+            "followups",
+            "reports",
+            "formulas",
+          ])
+        } else {
+          const routes = data.permissions?.map((p: any) => p.route_path) || []
+          console.log("[v0] User permissions:", routes)
+          // Always include dashboard
+          setUserPermissions(routes.length > 0 ? ["dashboard", ...routes] : ["dashboard"])
         }
       } catch (error) {
-        console.error("Error loading permissions:", error)
+        console.error("[v0] Error loading permissions:", error)
+        console.error("[v0] Error details:", {
+          message: error instanceof Error ? error.message : "Unknown error",
+          stack: error instanceof Error ? error.stack : undefined,
+        })
         setUserPermissions(["dashboard"])
       } finally {
         setPermissionsLoaded(true)
@@ -113,22 +132,42 @@ export function DashboardSidebar() {
   const filteredNavItems = navItems.filter((item) => userPermissions.includes(item.route) || item.route === "dashboard")
 
   const handleLogout = async () => {
-    try {
-      const supabase = createClient()
-      await supabase.auth.signOut()
+    if (isLoggingOut) {
+      console.log("[v0] Logout already in progress, ignoring duplicate click")
+      return
+    }
 
-      document.cookie.split(";").forEach((cookie) => {
-        const name = cookie.split("=")[0].trim()
-        if (name.startsWith("sb-")) {
-          document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`
-        }
+    console.log("[v0] Logout initiated")
+    setIsLoggingOut(true)
+
+    try {
+      console.log("[v0] Calling server-side logout API")
+      const response = await fetch("/api/auth/logout", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
       })
 
-      router.push("/auth/login")
-      router.refresh()
+      if (!response.ok) {
+        console.error("[v0] Server logout failed:", response.status)
+        throw new Error("Server logout failed")
+      }
+
+      console.log("[v0] Server-side logout successful")
+
+      // Also sign out on client side
+      const supabase = createClient()
+      await supabase.auth.signOut()
+      console.log("[v0] Client-side signOut completed")
+
+      // Force a hard redirect to ensure all state is cleared
+      console.log("[v0] Performing hard redirect to /auth/login")
+      window.location.href = "/auth/login"
     } catch (error) {
-      console.error("Error during logout:", error)
-      // Fallback: force redirect even if error
+      console.error("[v0] Error during logout:", error)
+      // Fallback: force redirect even if error occurs
+      console.log("[v0] Forcing hard redirect to login page")
       window.location.href = "/auth/login"
     }
   }
@@ -181,26 +220,37 @@ export function DashboardSidebar() {
       <SidebarFooter className="p-4 border-t border-border bg-muted/30">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="w-full justify-start text-left hover:bg-primary/10">
+            <Button
+              variant="ghost"
+              className="w-full justify-start text-left hover:bg-primary/10"
+              disabled={isLoggingOut}
+            >
               <User2 className="mr-2 size-5" />
-              <span className="flex-grow">Mi Cuenta</span>
-              <ChevronDown className="size-4" />
+              <span className="flex-1">{isLoggingOut ? "Cerrando sesión..." : "Mi Cuenta"}</span>
+              <ChevronDown className="size-4 text-muted-foreground" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent
-            side="top"
-            align="start"
-            className="w-(--radix-popper-anchor-width) bg-popover text-popover-foreground border-border"
-          >
-            <DropdownMenuItem className="cursor-pointer hover:!bg-primary/10">
+          <DropdownMenuContent side="top" align="start" className="w-56">
+          <DropdownMenuLabel className="sr-only">
+            Opciones de cuenta de usuario
+          </DropdownMenuLabel>
+            {/* ✅ AGREGADO: Label oculto para accesibilidad */}
+            <DropdownMenuLabel className="sr-only">
+              Opciones de cuenta de usuario
+            </DropdownMenuLabel>
+            
+            <DropdownMenuItem className="cursor-pointer">
+              <User2 className="mr-2 size-4" />
               <span>Perfil</span>
             </DropdownMenuItem>
             <DropdownMenuItem
               onClick={handleLogout}
-              className="cursor-pointer text-red-400 hover:!bg-red-500/10 hover:!text-red-400"
+              variant="destructive"
+              className="cursor-pointer"
+              disabled={isLoggingOut}
             >
               <LogOut className="mr-2 size-4" />
-              <span>Cerrar Sesión</span>
+              <span>{isLoggingOut ? "Cerrando..." : "Cerrar Sesión"}</span>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
