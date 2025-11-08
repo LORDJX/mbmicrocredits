@@ -31,12 +31,12 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
-import { 
-  DropdownMenu, 
-  DropdownMenuContent, 
-  DropdownMenuItem, 
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
   DropdownMenuLabel, // ✅ AGREGADO
-  DropdownMenuTrigger 
+  DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
@@ -80,7 +80,7 @@ export function DashboardSidebar() {
         }
 
         console.log("[v0] Fetching permissions for user:", user.id)
-        const response = await fetch(`/api/users/${user.id}/permissions`)
+        const response = await fetch(`/api/users/${user.id}/permissions?userId=${user.id}`)
 
         if (!response.ok) {
           const errorText = await response.text()
@@ -93,26 +93,12 @@ export function DashboardSidebar() {
         const data = await response.json()
         console.log("[v0] Permissions data received:", data)
 
-        if (data.is_admin) {
-          console.log("[v0] User is admin, granting all permissions")
-          setUserPermissions([
-            "dashboard",
-            "users",
-            "partners",
-            "clients",
-            "loans",
-            "receipts",
-            "cronograma",
-            "expenses",
-            "followups",
-            "reports",
-            "formulas",
-          ])
+        if (data.permissions && Array.isArray(data.permissions)) {
+          console.log("[v0] User permissions:", data.permissions)
+          setUserPermissions(data.permissions.length > 0 ? data.permissions : ["dashboard"])
         } else {
-          const routes = data.permissions?.map((p: any) => p.route_path) || []
-          console.log("[v0] User permissions:", routes)
-          // Always include dashboard
-          setUserPermissions(routes.length > 0 ? ["dashboard", ...routes] : ["dashboard"])
+          console.log("[v0] No permissions found, using default")
+          setUserPermissions(["dashboard"])
         }
       } catch (error) {
         console.error("[v0] Error loading permissions:", error)
@@ -231,14 +217,7 @@ export function DashboardSidebar() {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent side="top" align="start" className="w-56">
-          <DropdownMenuLabel className="sr-only">
-            Opciones de cuenta de usuario
-          </DropdownMenuLabel>
-            {/* ✅ AGREGADO: Label oculto para accesibilidad */}
-            <DropdownMenuLabel className="sr-only">
-              Opciones de cuenta de usuario
-            </DropdownMenuLabel>
-            
+            <DropdownMenuLabel className="sr-only">Opciones de cuenta de usuario</DropdownMenuLabel>
             <DropdownMenuItem className="cursor-pointer">
               <User2 className="mr-2 size-4" />
               <span>Perfil</span>

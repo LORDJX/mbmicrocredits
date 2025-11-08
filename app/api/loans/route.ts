@@ -5,19 +5,18 @@ import { z } from "zod"
 // Schema de validación con Zod
 const loanSchema = z.object({
   client_id: z.string().uuid("ID de cliente inválido"),
-  amount: z.number()
+  amount: z
+    .number()
     .positive("El monto debe ser positivo")
     .min(1, "El monto mínimo es $1")
     .max(10000000, "El monto máximo es $10,000,000"),
-  installments: z.number()
+  installments: z
+    .number()
     .int("Las cuotas deben ser un número entero")
     .min(1, "Mínimo 1 cuota")
     .max(360, "Máximo 360 cuotas"),
-  interest_rate: z.number()
-    .min(0, "La tasa no puede ser negativa")
-    .max(100, "La tasa máxima es 100%"),
-  start_date: z.string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, "Formato de fecha inválido (YYYY-MM-DD)"),
+  interest_rate: z.number().min(0, "La tasa no puede ser negativa").max(100, "La tasa máxima es 100%"),
+  start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Formato de fecha inválido (YYYY-MM-DD)"),
   loan_type: z.enum(["personal", "business", "mortgage"]).optional().default("personal"),
   frequency: z.enum(["weekly", "biweekly", "monthly"]).default("monthly"),
   status: z.enum(["active", "completed", "defaulted"]).optional().default("active"),
@@ -47,7 +46,14 @@ export async function GET(request: NextRequest) {
 
     let query = supabase
       .from("loans")
-      .select(`*, clients!inner(first_name, last_name, client_code)`, { count: 'exact' })
+      .select(
+        `
+        *,
+        clients!inner(first_name, last_name, client_code, phone, email),
+        installments(amount_paid)
+      `,
+        { count: "exact" },
+      )
       .range(from, to)
       .order("created_at", { ascending: false })
 
@@ -70,16 +76,35 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Error al obtener préstamos" }, { status: 500 })
     }
 
-    const mappedLoans = (loans || []).map((loan) => ({
-      ...loan,
-      active_clients: loan.clients,
-    }))
+    const mappedLoans = (loans || []).map((loan) => {
+      // Sumamos todos los pagos realizados en las cuotas
+      const totalPaid = (loan.installments || []).reduce(
+        (sum: number, inst: any) => sum + (Number(inst.amount_paid) || 0),
+        0,
+      )
 
-    return NextResponse.json({ 
+      // Calculamos el saldo pendiente
+      const amountToRepay = Number(loan.amount_to_repay) || 0
+      const balance = amountToRepay - totalPaid
+
+      // Determinamos si tiene cuotas pendientes (considerando margen de error de $0.01)
+      const hasPendingInstallments = balance > 0.01
+
+      return {
+        ...loan,
+        active_clients: loan.clients,
+        balance: Math.max(0, balance), // Nunca negativo
+        has_pending_installments: hasPendingInstallments,
+        // Removemos installments del objeto para no enviar data innecesaria
+        installments: loan.installments?.length || 0,
+      }
+    })
+
+    return NextResponse.json({
       loans: mappedLoans,
       total: count || 0,
       page,
-      pageSize
+      pageSize,
     })
   } catch (error) {
     console.error("Error in GET /api/loans:", error)
@@ -114,26 +139,29 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           error: "Datos inválidos",
-          details: validation.error.errors.map(e => ({
-            field: e.path.join('.'),
-            message: e.message
-          }))
+          details: validation.error.errors.map((e) => ({
+            field: e.path.join("."),
+            message: e.message,
+          })),
         },
         { status: 400 },
       )
     }
 
     const validatedData = validation.data
-    
+
     // Validación adicional: fecha no muy antigua
     const startDate = new Date(validatedData.start_date)
     const oneYearAgo = new Date()
     oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1)
-    
+
     if (startDate < oneYearAgo) {
-      return NextResponse.json({
-        error: 'La fecha de inicio no puede ser anterior a un año'
-      }, { status: 400 })
+      return NextResponse.json(
+        {
+          error: "La fecha de inicio no puede ser anterior a un año",
+        },
+        { status: 400 },
+      )
     }
 
     const { client_id, amount, installments, interest_rate, start_date, loan_type, status, frequency } = validatedData
