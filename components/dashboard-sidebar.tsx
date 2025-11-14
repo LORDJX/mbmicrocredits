@@ -29,7 +29,7 @@ import {
   SidebarSeparator,
 } from "@/components/ui/sidebar"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { supabase } from "@/lib/supabaseClient"
+import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
 
 // Definimos los elementos de navegación
@@ -87,7 +87,8 @@ export function DashboardSidebar() {
         method: "POST",
       })
 
-      // Luego hacer signOut en el cliente
+      // Crear cliente y hacer signOut
+      const supabase = createClient()
       const { error } = await supabase.auth.signOut()
       
       if (error) {
