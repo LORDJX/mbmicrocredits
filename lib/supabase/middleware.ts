@@ -56,7 +56,6 @@ export async function updateSession(request: NextRequest) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
-  // If env vars are not available in Edge Runtime, skip middleware auth
   if (!supabaseUrl || !supabaseKey) {
     console.warn("[v0] Supabase env vars not available in middleware, skipping auth check")
     return NextResponse.next({ request })
@@ -79,54 +78,51 @@ export async function updateSession(request: NextRequest) {
     },
   })
 
+  const pathname = request.nextUrl.pathname
+  const isPublicRoute = PUBLIC_ROUTES.some((route) => pathname.startsWith(route))
+
   let user = null
   try {
     const { data, error } = await supabase.auth.getUser()
 
-    // FIX: Si hay error de refresh token inválido, limpiar sesión y redirigir
     if (error) {
       const errorMessage = error.message?.toLowerCase() || ""
-      const isRefreshTokenError = 
+      const isRefreshTokenError =
         errorMessage.includes("refresh_token_not_found") ||
         errorMessage.includes("invalid refresh token") ||
         error.status === 400
 
       if (isRefreshTokenError) {
-        console.log("[v0] Invalid refresh token detected, clearing session")
+        console.log("[v0] Invalid refresh token detected on:", pathname)
         
-        // Crear respuesta de redirect
-        const redirectUrl = new URL("/auth/login", request.url)
-        const redirectResponse = NextResponse.redirect(redirectUrl)
-        
-        // Limpiar todas las cookies de autenticación
-        const cookiesToClear = [
-          'sb-access-token',
-          'sb-refresh-token',
-          'supabase-auth-token'
-        ]
-        
-        cookiesToClear.forEach(cookieName => {
-          redirectResponse.cookies.set(cookieName, '', {
-            maxAge: 0,
-            path: '/',
+        // Si ya estamos en ruta pública, NO redirigir (evita loop)
+        if (isPublicRoute) {
+          console.log("[v0] Already on public route, continuing without user")
+          user = null
+        } else {
+          // Solo redirigir si estamos en ruta protegida
+          console.log("[v0] Redirecting to login and clearing session")
+          const redirectUrl = new URL("/auth/login", request.url)
+          const redirectResponse = NextResponse.redirect(redirectUrl)
+          
+          const cookiesToClear = ['sb-access-token', 'sb-refresh-token', 'supabase-auth-token']
+          cookiesToClear.forEach(cookieName => {
+            redirectResponse.cookies.set(cookieName, '', { maxAge: 0, path: '/' })
           })
-        })
-        
-        return redirectResponse
+          
+          return redirectResponse
+        }
+      } else {
+        console.error("[v0] Error getting user in middleware:", error)
+        user = null
       }
-      
-      // Para otros errores, continuar sin usuario
-      console.error("[v0] Error getting user in middleware:", error)
+    } else {
+      user = data?.user || null
     }
-
-    user = data?.user || null
   } catch (error) {
     console.error("[v0] Unexpected error in middleware:", error)
-    // Continue without user if auth check fails
+    user = null
   }
-
-  const pathname = request.nextUrl.pathname
-  const isPublicRoute = PUBLIC_ROUTES.some((route) => pathname.startsWith(route))
 
   // Redirect to login if not authenticated and trying to access protected route
   if (!user && !isPublicRoute && pathname !== "/") {
