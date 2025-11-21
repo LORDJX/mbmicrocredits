@@ -33,8 +33,10 @@ export function Header() {
 
         <div className="flex items-center gap-2">
           <Button variant="ghost" size="icon" className="relative">
-            
-            
+            <Bell className="h-4 w-4" />
+            <span className="absolute -top-1 -right-1 h-3 w-3 bg-destructive rounded-full text-[10px] font-medium text-destructive-foreground flex items-center justify-center">
+              3
+            </span>
           </Button>
 
           <DropdownMenu>

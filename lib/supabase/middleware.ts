@@ -71,34 +71,38 @@ async function checkUserPermission(supabase: any, userId: string, pathname: stri
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll()
-        },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) => {
-            try {
-              request.cookies.set(name, value)
-            } catch (e) {
-              console.error(`Error setting cookie ${name}:`, e)
-            }
-          })
-          supabaseResponse = NextResponse.next({ request })
-          cookiesToSet.forEach(({ name, value, options }) => {
-            try {
-              supabaseResponse.cookies.set(name, value, options)
-            } catch (e) {
-              console.error(`Error setting response cookie ${name}:`, e)
-            }
-          })
-        },
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseKey = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+  if (!supabaseUrl || !supabaseKey) {
+    console.error("Missing Supabase environment variables in middleware")
+    return supabaseResponse
+  }
+
+  const supabase = createServerClient(supabaseUrl, supabaseKey, {
+    cookies: {
+      getAll() {
+        return request.cookies.getAll()
+      },
+      setAll(cookiesToSet) {
+        cookiesToSet.forEach(({ name, value }) => {
+          try {
+            request.cookies.set(name, value)
+          } catch (e) {
+            console.error(`Error setting cookie ${name}:`, e)
+          }
+        })
+        supabaseResponse = NextResponse.next({ request })
+        cookiesToSet.forEach(({ name, value, options }) => {
+          try {
+            supabaseResponse.cookies.set(name, value, options)
+          } catch (e) {
+            console.error(`Error setting response cookie ${name}:`, e)
+          }
+        })
       },
     },
-  )
+  })
 
   let user = null
   try {
