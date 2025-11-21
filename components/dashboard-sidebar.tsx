@@ -35,7 +35,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel, // ✅ AGREGADO
+  DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { createClient } from "@/lib/supabase/client"
@@ -216,7 +216,15 @@ export function DashboardSidebar() {
               <ChevronDown className="size-4 text-muted-foreground" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent side="top" align="start" className="w-56">
+          <DropdownMenuContent 
+            side="bottom" 
+            align="start" 
+            className="w-56"
+            style={{
+                position: 'fixed',
+                zIndex: 9999,
+            }}
+          >
             <DropdownMenuLabel className="sr-only">Opciones de cuenta de usuario</DropdownMenuLabel>
             <DropdownMenuItem className="cursor-pointer">
               <User2 className="mr-2 size-4" />

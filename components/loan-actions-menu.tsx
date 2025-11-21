@@ -5,13 +5,19 @@ import { Button } from "@/components/ui/button"
 import {
   Dialog,
   DialogContent,
-  DialogDescription, // Added for accessibility
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { CreateLoanForm } from "@/components/forms/create-loan-form"
 import { LoanDetailsModal } from "@/components/loan-details-modal"
 import { LoanPrintView } from "@/components/loan-print-view"
@@ -28,6 +34,7 @@ export function LoanActionsMenu({ loan, onSuccess }: LoanActionsMenuProps) {
   const [showDetails, setShowDetails] = useState(false)
   const [showPrint, setShowPrint] = useState(false)
   const [showEdit, setShowEdit] = useState(false)
+  const [sheetOpen, setSheetOpen] = useState(false)
 
   const handleWhatsApp = () => {
     const phone = loan.active_clients?.phone?.replace(/\D/g, "")
@@ -62,6 +69,7 @@ Saludos!`
 
     const whatsappUrl = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`
     window.open(whatsappUrl, "_blank")
+    setSheetOpen(false)
   }
 
   const handleDownloadSchedule = async () => {
@@ -132,6 +140,7 @@ Saludos!`
       doc.text("Gracias por su confianza", 40, y + 8, { align: "center" })
 
       doc.save(`cronograma-${loan.loan_code}.pdf`)
+      setSheetOpen(false)
     } catch (error) {
       console.error("Error downloading schedule:", error)
       alert("Error al descargar el cronograma")
@@ -156,60 +165,78 @@ Saludos!`
         }
       `}</style>
 
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+      <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
+        <SheetTrigger asChild onClick={(e) => e.stopPropagation()}>
           <Button variant="ghost" size="icon">
             <MoreHorizontal className="h-4 w-4" />
           </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" aria-label="Acciones del préstamo">
-          <DropdownMenuItem
-            onClick={(e) => {
-              e.stopPropagation()
-              setShowDetails(true)
-            }}
-          >
-            <Eye className="h-4 w-4 mr-2" />
-            Ver
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            onClick={(e) => {
-              e.stopPropagation()
-              setShowPrint(true)
-            }}
-          >
-            <Printer className="h-4 w-4 mr-2" />
-            Imprimir
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            onClick={(e) => {
-              e.stopPropagation()
-              handleWhatsApp()
-            }}
-          >
-            <MessageCircle className="h-4 w-4 mr-2" />
-            WhatsApp
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            onClick={(e) => {
-              e.stopPropagation()
-              handleDownloadSchedule()
-            }}
-          >
-            <Download className="h-4 w-4 mr-2" />
-            Cronograma
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            onClick={(e) => {
-              e.stopPropagation()
-              setShowEdit(true)
-            }}
-          >
-            <Edit className="h-4 w-4 mr-2" />
-            Editar
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+        </SheetTrigger>
+        <SheetContent side="right" className="w-[300px] sm:w-[400px]">
+          <SheetHeader>
+            <SheetTitle>Acciones del Préstamo</SheetTitle>
+          </SheetHeader>
+          <div className="mt-6 space-y-2">
+            <Button
+              variant="outline"
+              className="w-full justify-start"
+              onClick={(e) => {
+                e.stopPropagation()
+                setShowDetails(true)
+                setSheetOpen(false)
+              }}
+            >
+              <Eye className="h-4 w-4 mr-2" />
+              Ver Detalles
+            </Button>
+            <Button
+              variant="outline"
+              className="w-full justify-start"
+              onClick={(e) => {
+                e.stopPropagation()
+                setShowPrint(true)
+                setSheetOpen(false)
+              }}
+            >
+              <Printer className="h-4 w-4 mr-2" />
+              Imprimir
+            </Button>
+            <Button
+              variant="outline"
+              className="w-full justify-start"
+              onClick={(e) => {
+                e.stopPropagation()
+                handleWhatsApp()
+              }}
+            >
+              <MessageCircle className="h-4 w-4 mr-2" />
+              Enviar por WhatsApp
+            </Button>
+            <Button
+              variant="outline"
+              className="w-full justify-start"
+              onClick={(e) => {
+                e.stopPropagation()
+                handleDownloadSchedule()
+              }}
+            >
+              <Download className="h-4 w-4 mr-2" />
+              Descargar Cronograma
+            </Button>
+            <Button
+              variant="outline"
+              className="w-full justify-start"
+              onClick={(e) => {
+                e.stopPropagation()
+                setShowEdit(true)
+                setSheetOpen(false)
+              }}
+            >
+              <Edit className="h-4 w-4 mr-2" />
+              Editar Préstamo
+            </Button>
+          </div>
+        </SheetContent>
+      </Sheet>
 
       <LoanDetailsModal loanId={loan.id} open={showDetails} onOpenChange={setShowDetails} />
 
