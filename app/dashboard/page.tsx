@@ -39,18 +39,6 @@ export default function DashboardPage() {
     }
   }, [router])
 
-  // El botón de cerrar sesión se ha movido al sidebar para una mejor UX
-  // const handleLogout = async () => {
-  //   setLoading(true)
-  //   const { error } = await supabase.auth.signOut()
-  //   if (error) {
-  //     console.error("Error al cerrar sesión:", error.message)
-  //     setLoading(false)
-  //   } else {
-  //     router.push("/login")
-  //   }
-  // }
-
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-900 text-gray-100">
