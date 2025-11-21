@@ -29,7 +29,7 @@ import {
   SidebarSeparator,
 } from "@/components/ui/sidebar"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { supabase } from "@/lib/supabaseClient"
+import { getSupabaseClient } from "@/lib/supabase/client-singleton"
 import { useRouter } from "next/navigation"
 
 // Definimos los elementos de navegación
@@ -81,11 +81,26 @@ export function DashboardSidebar() {
   const router = useRouter()
 
   const handleLogout = async () => {
-    const { error } = await supabase.auth.signOut()
-    if (error) {
-      console.error("Error al cerrar sesión:", error.message)
-    } else {
-      router.push("/login")
+    try {
+      // Call server-side logout endpoint first to clear cookies properly
+      await fetch("/api/auth/logout", {
+        method: "POST",
+      })
+
+      // Then sign out from Supabase client
+      const supabase = getSupabaseClient()
+      const { error } = await supabase.auth.signOut()
+
+      if (error) {
+        console.error("Error al cerrar sesión:", error.message)
+      }
+
+      // Redirect to login page
+      router.push("/auth/login")
+    } catch (error) {
+      console.error("Error durante logout:", error)
+      // Force redirect even on error
+      router.push("/auth/login")
     }
   }
 

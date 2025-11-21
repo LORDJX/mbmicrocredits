@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { supabase } from "@/lib/supabaseClient"
+import { getSupabaseClient } from "@/lib/supabase/client-singleton"
 
 export default function UpdatePasswordPage() {
   const [password, setPassword] = useState("")
@@ -31,6 +31,7 @@ export default function UpdatePasswordPage() {
       return
     }
 
+    const supabase = getSupabaseClient()
     const { error: updateError } = await supabase.auth.updateUser({
       password: password,
     })

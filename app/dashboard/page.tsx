@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { supabase } from "@/lib/supabaseClient"
+import { getSupabaseClient } from "@/lib/supabase/client-singleton"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 
 export default function DashboardPage() {
@@ -11,12 +11,14 @@ export default function DashboardPage() {
   const router = useRouter()
 
   useEffect(() => {
+    const supabase = getSupabaseClient()
+
     const checkUser = async () => {
       const {
         data: { user },
       } = await supabase.auth.getUser()
       if (!user) {
-        router.push("/login") // Si no hay usuario, redirigir al login
+        router.push("/auth/login") // Si no hay usuario, redirigir al login
       } else {
         setUser(user)
       }
@@ -28,7 +30,7 @@ export default function DashboardPage() {
     // Escuchar cambios en el estado de autenticación
     const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!session) {
-        router.push("/login")
+        router.push("/auth/login")
       } else {
         setUser(session.user)
       }

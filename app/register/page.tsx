@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { supabase } from "@/lib/supabaseClient"
+import { getSupabaseClient } from "@/lib/supabase/client-singleton"
 
 export default function RegisterPage() {
   const [email, setEmail] = useState("")
@@ -25,6 +25,7 @@ export default function RegisterPage() {
     setError(null)
     setMessage(null)
 
+    const supabase = getSupabaseClient()
     const { error } = await supabase.auth.signUp({
       email,
       password,

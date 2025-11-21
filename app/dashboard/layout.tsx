@@ -1,13 +1,13 @@
 import type React from "react"
 import { cookies } from "next/headers"
 import { redirect } from "next/navigation"
-import { createServerClient } from "@/lib/supabaseServerClient"
+import { createClient } from "@/lib/supabase/server"
 import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar"
 import { DashboardSidebar } from "@/components/dashboard-sidebar"
 import { Separator } from "@/components/ui/separator"
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const supabase = createServerClient()
+  const supabase = await createClient()
 
   const {
     data: { user },
