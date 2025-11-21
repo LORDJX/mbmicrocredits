@@ -18,66 +18,51 @@ const PROTECTED_ROUTES: Record<string, string> = {
   "/formulas": "formulas",
 }
 
-async function checkUserPermission(supabase: any, userId: string, pathname: string): Promise<boolean> {
+async function checkUserPermission(
+  supabase: any,
+  userId: string,
+  pathname: string
+): Promise<boolean> {
   if (pathname === "/dashboard") return true
 
   try {
-    // Create abort controller for timeout
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 5000) // 5 second timeout
-
-    const { data: profile, error: profileError } = await supabase
+    const { data: profile } = await supabase
       .from("profiles")
       .select("is_admin")
       .eq("id", userId)
-      .abortSignal(controller.signal)
       .single()
-
-    clearTimeout(timeoutId)
-
-    if (profileError) {
-      console.error("Error fetching profile:", profileError)
-      // On DB error, allow access to dashboard only
-      return pathname === "/dashboard"
-    }
 
     if (profile?.is_admin) return true
 
     const requiredPermission = PROTECTED_ROUTES[pathname]
     if (!requiredPermission) return true
 
-    const { data: permissions, error: permError } = await supabase
+    const { data: permissions } = await supabase
       .from("user_permissions")
       .select("route_path")
       .eq("user_id", userId)
-
-    if (permError) {
-      console.error("Error fetching permissions:", permError)
-      // On DB error, allow access to dashboard only
-      return pathname === "/dashboard"
-    }
 
     if (!permissions || permissions.length === 0) return false
 
     const userRoutes = permissions.map((p: any) => p.route_path)
     return userRoutes.includes(pathname)
   } catch (error) {
-    console.error("Unexpected error checking permissions:", error)
-    // Fallback: allow access to dashboard
+    console.error("[v0] Error checking permissions:", error)
     return pathname === "/dashboard"
   }
 }
 
 export async function updateSession(request: NextRequest) {
-  let supabaseResponse = NextResponse.next({ request })
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
-  const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL
-  const supabaseKey = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-
+  // If env vars are not available in Edge Runtime, skip middleware auth
   if (!supabaseUrl || !supabaseKey) {
-    console.error("Missing Supabase environment variables in middleware")
-    return supabaseResponse
+    console.warn("[v0] Supabase env vars not available in middleware, skipping auth check")
+    return NextResponse.next({ request })
   }
+
+  let supabaseResponse = NextResponse.next({ request })
 
   const supabase = createServerClient(supabaseUrl, supabaseKey, {
     cookies: {
@@ -85,71 +70,92 @@ export async function updateSession(request: NextRequest) {
         return request.cookies.getAll()
       },
       setAll(cookiesToSet) {
-        cookiesToSet.forEach(({ name, value }) => {
-          try {
-            request.cookies.set(name, value)
-          } catch (e) {
-            console.error(`Error setting cookie ${name}:`, e)
-          }
-        })
+        cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
         supabaseResponse = NextResponse.next({ request })
-        cookiesToSet.forEach(({ name, value, options }) => {
-          try {
-            supabaseResponse.cookies.set(name, value, options)
-          } catch (e) {
-            console.error(`Error setting response cookie ${name}:`, e)
-          }
-        })
+        cookiesToSet.forEach(({ name, value, options }) =>
+          supabaseResponse.cookies.set(name, value, options)
+        )
       },
     },
   })
 
   let user = null
   try {
-    const {
-      data: { user: fetchedUser },
-    } = await supabase.auth.getUser()
-    user = fetchedUser
+    const { data, error } = await supabase.auth.getUser()
+
+    // FIX: Si hay error de refresh token inválido, limpiar sesión y redirigir
+    if (error) {
+      const errorMessage = error.message?.toLowerCase() || ""
+      const isRefreshTokenError = 
+        errorMessage.includes("refresh_token_not_found") ||
+        errorMessage.includes("invalid refresh token") ||
+        error.status === 400
+
+      if (isRefreshTokenError) {
+        console.log("[v0] Invalid refresh token detected, clearing session")
+        
+        // Crear respuesta de redirect
+        const redirectUrl = new URL("/auth/login", request.url)
+        const redirectResponse = NextResponse.redirect(redirectUrl)
+        
+        // Limpiar todas las cookies de autenticación
+        const cookiesToClear = [
+          'sb-access-token',
+          'sb-refresh-token',
+          'supabase-auth-token'
+        ]
+        
+        cookiesToClear.forEach(cookieName => {
+          redirectResponse.cookies.set(cookieName, '', {
+            maxAge: 0,
+            path: '/',
+          })
+        })
+        
+        return redirectResponse
+      }
+      
+      // Para otros errores, continuar sin usuario
+      console.error("[v0] Error getting user in middleware:", error)
+    }
+
+    user = data?.user || null
   } catch (error) {
-    console.error("Error getting user:", error)
-    const response = NextResponse.redirect(new URL("/auth/login", request.url))
-    response.cookies.delete("sb-access-token")
-    response.cookies.delete("sb-refresh-token")
-    return response
+    console.error("[v0] Unexpected error in middleware:", error)
+    // Continue without user if auth check fails
   }
 
   const pathname = request.nextUrl.pathname
   const isPublicRoute = PUBLIC_ROUTES.some((route) => pathname.startsWith(route))
 
+  // Redirect to login if not authenticated and trying to access protected route
   if (!user && !isPublicRoute && pathname !== "/") {
     const url = request.nextUrl.clone()
     url.pathname = "/auth/login"
     return NextResponse.redirect(url)
   }
 
+  // Redirect authenticated users away from auth pages
   if (user && (pathname === "/auth/login" || pathname === "/auth/sign-up")) {
     return NextResponse.redirect(new URL("/dashboard", request.url))
   }
 
-  if (user && pathname === "/") {
-    return NextResponse.redirect(new URL("/dashboard", request.url))
+  // Handle root path
+  if (pathname === "/") {
+    if (user) {
+      return NextResponse.redirect(new URL("/dashboard", request.url))
+    } else {
+      return NextResponse.redirect(new URL("/auth/login", request.url))
+    }
   }
 
-  if (!user && pathname === "/") {
-    return NextResponse.redirect(new URL("/auth/login", request.url))
-  }
-
+  // Check permissions for protected routes
   if (user && !isPublicRoute && pathname !== "/") {
-    try {
-      const hasPermission = await checkUserPermission(supabase, user.id, pathname)
-      if (!hasPermission) {
-        console.warn(`⚠️ Usuario ${user.email} sin permiso para ${pathname}`)
-        const url = request.nextUrl.clone()
-        url.pathname = "/dashboard"
-        return NextResponse.redirect(url)
-      }
-    } catch (error) {
-      console.error("Error checking permissions:", error)
+    const hasPermission = await checkUserPermission(supabase, user.id, pathname)
+    if (!hasPermission) {
+      const url = request.nextUrl.clone()
+      url.pathname = "/dashboard"
+      return NextResponse.redirect(url)
     }
   }
 
